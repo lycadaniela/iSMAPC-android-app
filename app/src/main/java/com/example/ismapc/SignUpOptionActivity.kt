@@ -15,6 +15,9 @@ import com.example.ismapc.ui.theme.ISMAPCTheme
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.foundation.Image
+import androidx.compose.ui.layout.ContentScale
 
 class SignUpOptionActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -55,8 +58,7 @@ fun SignUpOptionScreen(
         // Back button row at the top
         Row(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 32.dp),
+                .fillMaxWidth(),
             horizontalArrangement = Arrangement.Start
         ) {
             IconButton(
@@ -79,40 +81,100 @@ fun SignUpOptionScreen(
             modifier = Modifier.padding(bottom = 32.dp)
         )
 
-        // Parent Button
-        Button(
-            onClick = onParentSelected,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(64.dp),
-            shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.primary
-            )
+        // Spacer that pushes content to center
+        Spacer(modifier = Modifier.weight(1f))
+
+        // Buttons Column
+        Column(
+            modifier = Modifier.width(280.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
-            Text(
-                "Parent Account",
-                style = MaterialTheme.typography.titleMedium
-            )
+            // Parent Button
+            Button(
+                onClick = onParentSelected,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(120.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary
+                )
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Image(
+                        painter = painterResource(id = R.drawable.parent_image),
+                        contentDescription = "Parent Icon",
+                        modifier = Modifier
+                            .size(48.dp)
+                            .padding(bottom = 8.dp),
+                        contentScale = ContentScale.Fit
+                    )
+                    Text(
+                        "Parent Account",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                }
+            }
+
+            // Or divider
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Divider(
+                    modifier = Modifier.weight(1f),
+                    color = MaterialTheme.colorScheme.outlineVariant
+                )
+                Text(
+                    "OR",
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Divider(
+                    modifier = Modifier.weight(1f),
+                    color = MaterialTheme.colorScheme.outlineVariant
+                )
+            }
+
+            // Child Button
+            Button(
+                onClick = onChildSelected,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(120.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.secondary
+                )
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Image(
+                        painter = painterResource(id = R.drawable.child_image),
+                        contentDescription = "Child Icon",
+                        modifier = Modifier
+                            .size(48.dp)
+                            .padding(bottom = 8.dp),
+                        contentScale = ContentScale.Fit
+                    )
+                    Text(
+                        "Child Account",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                }
+            }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Child Button
-        Button(
-            onClick = onChildSelected,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(64.dp),
-            shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.secondary
-            )
-        ) {
-            Text(
-                "Child Account",
-                style = MaterialTheme.typography.titleMedium
-            )
-        }
+        // Spacer that pushes content to center
+        Spacer(modifier = Modifier.weight(1f))
     }
 } 
