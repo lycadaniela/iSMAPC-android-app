@@ -23,6 +23,27 @@ import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Email
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Surface
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.Divider
 
 class LoginActivity : ComponentActivity() {
     private lateinit var auth: FirebaseAuth
@@ -131,42 +152,89 @@ fun LoginScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+            .padding(24.dp)
+            .verticalScroll(rememberScrollState()),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        Spacer(modifier = Modifier.height(48.dp))
+        
+        // App Logo
+        Image(
+            painter = painterResource(id = R.drawable.splash_logo),
+            contentDescription = "App Logo",
+            modifier = Modifier
+                .size(120.dp)
+                .padding(bottom = 24.dp),
+            contentScale = ContentScale.Fit
+        )
+
+        // Welcome Text
         Text(
-            text = "Welcome Back",
-            style = MaterialTheme.typography.headlineMedium,
+            text = "Welcome Back!",
+            style = MaterialTheme.typography.headlineMedium.copy(
+                fontWeight = FontWeight.Bold
+            ),
+            color = MaterialTheme.colorScheme.primary
+        )
+        
+        Text(
+            text = "Sign in to continue",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 32.dp)
         )
 
+        // Input Fields
         OutlinedTextField(
             value = username,
             onValueChange = { username = it },
-            label = { Text("Username") },
+            label = { Text("Email") },
+            leadingIcon = {
+                Icon(
+                    Icons.Outlined.Email,
+                    contentDescription = "Email",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = 16.dp),
-            isError = isError
+            shape = RoundedCornerShape(12.dp),
+            isError = isError,
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                unfocusedBorderColor = MaterialTheme.colorScheme.outline
+            )
         )
 
         OutlinedTextField(
             value = password,
             onValueChange = { password = it },
             label = { Text("Password") },
+            leadingIcon = {
+                Icon(
+                    Icons.Outlined.Lock,
+                    contentDescription = "Password",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
             visualTransformation = PasswordVisualTransformation(),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = 8.dp),
-            isError = isError
+            shape = RoundedCornerShape(12.dp),
+            isError = isError,
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                unfocusedBorderColor = MaterialTheme.colorScheme.outline
+            )
         )
 
         // Remember Me and Forgot Password row
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 16.dp),
+                .padding(bottom = 24.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -175,15 +243,22 @@ fun LoginScreen(
             ) {
                 Checkbox(
                     checked = rememberMe,
-                    onCheckedChange = { rememberMe = it }
+                    onCheckedChange = { rememberMe = it },
+                    colors = CheckboxDefaults.colors(
+                        checkedColor = MaterialTheme.colorScheme.primary
+                    )
                 )
-                Text("Remember me")
+                Text(
+                    "Remember me",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
             }
             
             TextButton(onClick = { onForgotPassword(username) }) {
                 Text(
                     text = "Forgot Password?",
-                    textDecoration = TextDecoration.Underline,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.primary
                 )
             }
@@ -191,42 +266,50 @@ fun LoginScreen(
 
         if (isError) {
             Text(
-                text = "Invalid username or password",
+                text = "Invalid email or password",
                 color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(bottom = 16.dp)
             )
         }
 
         // Login Button
         Button(
-            onClick = {
-                onLoginSuccess(username, password)
-            },
+            onClick = { onLoginSuccess(username, password) },
             modifier = Modifier
                 .fillMaxWidth()
-                .height(50.dp)
+                .height(56.dp),
+            shape = RoundedCornerShape(12.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.primary
+            )
         ) {
-            Text("Login")
+            Text(
+                "Sign In",
+                style = MaterialTheme.typography.titleMedium
+            )
         }
 
         // Or divider
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
+                .padding(vertical = 24.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Divider(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(end = 8.dp)
+                modifier = Modifier.weight(1f),
+                color = MaterialTheme.colorScheme.outlineVariant
             )
-            Text("OR")
+            Text(
+                "OR",
+                modifier = Modifier.padding(horizontal = 16.dp),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             Divider(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(start = 8.dp)
+                modifier = Modifier.weight(1f),
+                color = MaterialTheme.colorScheme.outlineVariant
             )
         }
 
@@ -235,7 +318,12 @@ fun LoginScreen(
             onClick = onGoogleSignIn,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(50.dp)
+                .height(56.dp),
+            shape = RoundedCornerShape(12.dp),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+            colors = ButtonDefaults.outlinedButtonColors(
+                contentColor = MaterialTheme.colorScheme.onSurface
+            )
         ) {
             Row(
                 horizontalArrangement = Arrangement.Center,
@@ -246,9 +334,12 @@ fun LoginScreen(
                     contentDescription = "Google Logo",
                     modifier = Modifier
                         .size(24.dp)
-                        .padding(end = 8.dp)
+                        .padding(end = 12.dp)
                 )
-                Text("Sign in with Google")
+                Text(
+                    "Continue with Google",
+                    style = MaterialTheme.typography.titleMedium
+                )
             }
         }
     }
