@@ -2,10 +2,14 @@ package com.example.ismapc.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-val Purple80 = Color(0xFFD0BCFF)
-val PurpleGrey80 = Color(0xFFCCC2DC)
-val Pink80 = Color(0xFFEFB8C8)
+// Primary Colors
+val Orange = Color(0xFFE0852D)  // #e0852d - Primary color
+val DarkBlue = Color(0xFF2C414C) // #2c414c - Secondary color
+val LightGray = Color(0xFFD6D7D3) // #d6d7d3 - Background/Surface color
+val DarkOrange = Color(0xFFA84415) // #a84415 - Accent/Tertiary color
 
-val Purple40 = Color(0xFF6650a4)
-val PurpleGrey40 = Color(0xFF625b71)
-val Pink40 = Color(0xFF7D5260)
+// Additional variations for dark theme
+val OrangeLight = Color(0xFFFFB27D)
+val DarkBlueLight = Color(0xFF4A6677)
+val LightGrayDark = Color(0xFF2C2C2C)
+val DarkOrangeDark = Color(0xFFD65D2C)

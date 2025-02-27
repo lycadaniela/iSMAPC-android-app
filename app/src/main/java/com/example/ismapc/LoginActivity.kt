@@ -148,6 +148,7 @@ fun LoginScreen(
     var password by remember { mutableStateOf("") }
     var rememberMe by remember { mutableStateOf(false) }
     var isError by remember { mutableStateOf(false) }
+    val context = LocalContext.current
 
     Column(
         modifier = Modifier
@@ -340,6 +341,29 @@ fun LoginScreen(
                     "Continue with Google",
                     style = MaterialTheme.typography.titleMedium
                 )
+            }
+        }
+
+        // Add this after the Google Sign-In Button in LoginScreen composable
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Sign Up Link
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                "Don't have an account?",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            TextButton(
+                onClick = {
+                    context.startActivity(Intent(context, SignUpOptionActivity::class.java))
+                }
+            ) {
+                Text("Sign Up")
             }
         }
     }
