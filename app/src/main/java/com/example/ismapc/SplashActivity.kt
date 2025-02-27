@@ -29,9 +29,9 @@ class SplashActivity : ComponentActivity() {
             }
         }
 
-        // Navigate to MainActivity after delay
+        // Navigate to LoginActivity after delay
         Handler(Looper.getMainLooper()).postDelayed({
-            startActivity(Intent(this, MainActivity::class.java))
+            startActivity(Intent(this, LoginActivity::class.java))
             finish()
         }, 2000) // 2 seconds delay
     }
