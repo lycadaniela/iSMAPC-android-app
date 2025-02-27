@@ -16,6 +16,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import com.example.ismapc.ui.theme.ISMAPCTheme
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.layout.ContentScale
 
 class SplashActivity : ComponentActivity() {
@@ -44,7 +46,10 @@ fun SplashScreen() {
         Image(
             painter = painterResource(id = R.drawable.splash_logo),
             contentDescription = "App Logo",
-            modifier = Modifier.size(200.dp),
+            modifier = Modifier
+                .size(200.dp)
+                .   alpha(0.9f)
+                .scale(1.2f),
             contentScale = ContentScale.Fit
         )
     }
