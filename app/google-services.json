@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "938791590594",
+    "project_id": "ismapc-e3fc2",
+    "storage_bucket": "ismapc-e3fc2.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:938791590594:android:837d7d9187496ea038f95b",
+        "android_client_info": {
+          "package_name": "com.example.ismapc"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "938791590594-hk4qhadg2t2s62rtb7v3qjpgeur9uksv.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBP0Ffof165_mdfxPICj2gR5ZA2-v8WnTI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "938791590594-hk4qhadg2t2s62rtb7v3qjpgeur9uksv.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
