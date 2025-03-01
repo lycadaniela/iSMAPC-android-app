@@ -39,6 +39,12 @@
         <activity
             android:name=".SignUpOptionActivity"
             android:exported="false"
+            android:theme="@style/Theme.ISMAPC" />
+
+        <activity
+            android:name=".ParentSignUpActivity"
+            android:exported="false"
+            android:label="Parent Sign Up"
             android:theme="@style/Theme.ISMAPC" />         
     </application>
     

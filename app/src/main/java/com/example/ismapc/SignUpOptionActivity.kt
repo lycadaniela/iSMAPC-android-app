@@ -1,5 +1,6 @@
 package com.example.ismapc
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -30,7 +31,7 @@ class SignUpOptionActivity : ComponentActivity() {
                 ) {
                     SignUpOptionScreen(
                         onParentSelected = {
-                            // TODO: Implement parent signup flow
+                            startActivity(Intent(this, ParentSignUpActivity::class.java))
                         },
                         onChildSelected = {
                             // TODO: Implement child signup flow
