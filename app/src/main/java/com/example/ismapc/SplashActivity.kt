@@ -9,6 +9,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -47,9 +48,10 @@ fun SplashScreen() {
             painter = painterResource(id = R.drawable.splash_logo),
             contentDescription = "App Logo",
             modifier = Modifier
-                .size(200.dp)
-                .   alpha(0.9f)
-                .scale(1.2f),
+                .size(180.dp)
+                .padding(16.dp)
+                .alpha(0.9f)
+                .scale(1.1f),
             contentScale = ContentScale.Fit
         )
     }
