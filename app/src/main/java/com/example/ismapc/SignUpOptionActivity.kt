@@ -34,7 +34,7 @@ class SignUpOptionActivity : ComponentActivity() {
                             startActivity(Intent(this, ParentSignUpActivity::class.java))
                         },
                         onChildSelected = {
-                            // TODO: Implement child signup flow
+                            startActivity(Intent(this, ChildSignUpActivity::class.java))
                         }
                     )
                 }
