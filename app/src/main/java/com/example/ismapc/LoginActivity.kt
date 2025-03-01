@@ -44,6 +44,8 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.Divider
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.sp
 
 class LoginActivity : ComponentActivity() {
     private lateinit var auth: FirebaseAuth
@@ -323,20 +325,21 @@ fun LoginScreen(
             shape = RoundedCornerShape(12.dp),
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
             colors = ButtonDefaults.outlinedButtonColors(
-                contentColor = MaterialTheme.colorScheme.onSurface
+                contentColor = MaterialTheme.colorScheme.onBackground
             )
         ) {
             Row(
                 horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Image(
-                    painter = painterResource(id = R.drawable.google_logo),
-                    contentDescription = "Google Logo",
-                    modifier = Modifier
-                        .size(24.dp)
-                        .padding(end = 12.dp)
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_google_logo),
+                    contentDescription = "Google logo",
+                    modifier = Modifier.size(24.dp),
+                    tint = Color.Unspecified
                 )
+                Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     "Continue with Google",
                     style = MaterialTheme.typography.titleMedium
