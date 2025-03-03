@@ -16,13 +16,13 @@ private val DarkColorScheme = darkColorScheme(
     primary = Orange,
     secondary = DarkBlue,
     tertiary = DarkOrange,
-    background = Color(0xFF121212),
-    surface = Color(0xFF121212),
+    background = Color.White,
+    surface = Color.White,
     onPrimary = Color.White,
     onSecondary = Color.White,
     onTertiary = Color.White,
-    onBackground = Color.White,
-    onSurface = Color.White,
+    onBackground = DarkBlue,
+    onSurface = DarkBlue,
     primaryContainer = OrangeLight,
     secondaryContainer = DarkBlueLight,
     tertiaryContainer = DarkOrangeDark
@@ -57,7 +57,7 @@ private val LightColorScheme = lightColorScheme(
 @Composable
 fun ISMAPCTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    // Set dynamicColor default to false to use our custom colors
+    // Dynamic color is turned off
     dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {

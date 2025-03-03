@@ -46,6 +46,10 @@ import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.Divider
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.sp
+import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import android.os.Build
 
 class LoginActivity : ComponentActivity() {
     private lateinit var auth: FirebaseAuth
@@ -74,13 +78,29 @@ class LoginActivity : ComponentActivity() {
                     val context = LocalContext.current
                     LoginScreen(
                         onLoginSuccess = { email, password ->
+                            if (!isNetworkAvailable(context)) {
+                                Toast.makeText(context, "No internet connection. Please check your network settings.", Toast.LENGTH_LONG).show()
+                                return@LoginScreen
+                            }
+                            
                             auth.signInWithEmailAndPassword(email, password)
                                 .addOnCompleteListener { task ->
                                     if (task.isSuccessful) {
                                         startActivity(Intent(context, MainActivity::class.java))
                                         finish()
                                     } else {
-                                        Toast.makeText(context, "Authentication failed", Toast.LENGTH_SHORT).show()
+                                        val errorMessage = when (task.exception) {
+                                            is com.google.firebase.auth.FirebaseAuthInvalidUserException ->
+                                                "No user found with this email"
+                                            is com.google.firebase.auth.FirebaseAuthInvalidCredentialsException ->
+                                                "Invalid email or password"
+                                            is java.net.UnknownHostException ->
+                                                "Network error: Unable to reach authentication server"
+                                            is com.google.firebase.FirebaseNetworkException ->
+                                                "Network error: Please check your internet connection"
+                                            else -> "Authentication failed: ${task.exception?.message}"
+                                        }
+                                        Toast.makeText(context, errorMessage, Toast.LENGTH_LONG).show()
                                     }
                                 }
                         },
@@ -133,6 +153,24 @@ class LoginActivity : ComponentActivity() {
                     Toast.makeText(this, "Authentication failed", Toast.LENGTH_SHORT).show()
                 }
             }
+    }
+
+    private fun isNetworkAvailable(context: Context): Boolean {
+        val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val network = connectivityManager.activeNetwork ?: return false
+            val activeNetwork = connectivityManager.getNetworkCapabilities(network) ?: return false
+            return when {
+                activeNetwork.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> true
+                activeNetwork.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> true
+                else -> false
+            }
+        } else {
+            @Suppress("DEPRECATION")
+            val networkInfo = connectivityManager.activeNetworkInfo ?: return false
+            @Suppress("DEPRECATION")
+            return networkInfo.isConnected
+        }
     }
 
     companion object {
