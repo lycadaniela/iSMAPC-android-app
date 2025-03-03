@@ -37,6 +37,8 @@ import androidx.compose.ui.unit.dp
 import com.example.ismapc.ui.theme.ISMAPCTheme
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.Timestamp
+import java.util.Date
 
 class ParentSignUpActivity : ComponentActivity() {
     private lateinit var auth: FirebaseAuth
@@ -66,11 +68,13 @@ class ParentSignUpActivity : ComponentActivity() {
                                                 "email" to email,
                                                 "phoneNumber" to phoneNumber,
                                                 "userType" to "parent",
-                                                "createdAt" to com.google.firebase.Timestamp.now()
+                                                "createdAt" to Timestamp(Date())
                                             )
                                             
                                             firestore.collection("users")
-                                                .document(user.uid)
+                                                .document("parents")
+                                                .collection(user.uid)
+                                                .document("profile")
                                                 .set(userData)
                                                 .addOnSuccessListener {
                                                     Toast.makeText(this, "Account created successfully!", Toast.LENGTH_LONG).show()

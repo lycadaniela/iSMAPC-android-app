@@ -1,7 +1,9 @@
 package com.example.ismapc
 
+import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -33,17 +35,73 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.example.ismapc.ui.theme.ISMAPCTheme
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.Timestamp
+import java.util.Date
 
 class ChildSignUpActivity : ComponentActivity() {
+    private lateinit var auth: FirebaseAuth
+    private lateinit var firestore: FirebaseFirestore
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        auth = FirebaseAuth.getInstance()
+        firestore = FirebaseFirestore.getInstance()
+
         setContent {
             ISMAPCTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    ChildSignUpScreen()
+                    ChildSignUpScreen(
+                        onSignUp = { email, password, fullName, parentEmail ->
+                            auth.createUserWithEmailAndPassword(email, password)
+                                .addOnCompleteListener { task ->
+                                    if (task.isSuccessful) {
+                                        // Save additional user data to Firestore
+                                        val user = auth.currentUser
+                                        if (user != null) {
+                                            val userData = hashMapOf(
+                                                "fullName" to fullName,
+                                                "email" to email,
+                                                "parentEmail" to parentEmail,
+                                                "userType" to "child",
+                                                "createdAt" to Timestamp(Date())
+                                            )
+                                            
+                                            firestore.collection("users")
+                                                .document("child")
+                                                .collection(user.uid)
+                                                .document("profile")
+                                                .set(userData)
+                                                .addOnSuccessListener {
+                                                    Toast.makeText(this, "Account created successfully!", Toast.LENGTH_LONG).show()
+                                                    startActivity(Intent(this, MainActivity::class.java))
+                                                    finish()
+                                                }
+                                                .addOnFailureListener { e ->
+                                                    // If permission denied, delete the auth account
+                                                    if (e.message?.contains("permission-denied") == true) {
+                                                        user.delete().addOnCompleteListener { deleteTask ->
+                                                            if (deleteTask.isSuccessful) {
+                                                                Toast.makeText(this, "Failed to create account: Permission denied. Please try again.", Toast.LENGTH_LONG).show()
+                                                            }
+                                                        }
+                                                    } else {
+                                                        Toast.makeText(this, "Failed to save user data: ${e.message}", Toast.LENGTH_LONG).show()
+                                                    }
+                                                }
+                                        } else {
+                                            Toast.makeText(this, "Authentication error: User is null", Toast.LENGTH_LONG).show()
+                                        }
+                                    } else {
+                                        Toast.makeText(this, "Sign up failed: ${task.exception?.message}", Toast.LENGTH_LONG).show()
+                                    }
+                                }
+                        }
+                    )
                 }
             }
         }
@@ -52,7 +110,9 @@ class ChildSignUpActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChildSignUpScreen() {
+fun ChildSignUpScreen(
+    onSignUp: (email: String, password: String, fullName: String, parentEmail: String) -> Unit
+) {
     val context = LocalContext.current
     var fullName by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
@@ -60,6 +120,13 @@ fun ChildSignUpScreen() {
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
+
+    // Error states
+    var fullNameError by remember { mutableStateOf(false) }
+    var emailError by remember { mutableStateOf(false) }
+    var parentEmailError by remember { mutableStateOf(false) }
+    var passwordError by remember { mutableStateOf(false) }
+    var confirmPasswordError by remember { mutableStateOf(false) }
 
     val imagePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -209,7 +276,17 @@ fun ChildSignUpScreen() {
 
         Button(
             onClick = {
-                // TODO: Implement sign up logic
+                // Validate all fields
+                fullNameError = fullName.isBlank()
+                emailError = !android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()
+                parentEmailError = !android.util.Patterns.EMAIL_ADDRESS.matcher(parentEmail).matches()
+                passwordError = password.length < 6
+                confirmPasswordError = password != confirmPassword
+
+                if (!fullNameError && !emailError && !parentEmailError && 
+                    !passwordError && !confirmPasswordError) {
+                    onSignUp(email, password, fullName, parentEmail)
+                }
             },
             modifier = Modifier
                 .fillMaxWidth()
