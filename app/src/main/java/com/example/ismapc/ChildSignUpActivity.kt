@@ -246,12 +246,19 @@ fun ChildSignUpScreen(
 
         OutlinedTextField(
             value = password,
-            onValueChange = { password = it },
+            onValueChange = { 
+                password = it
+                passwordError = false
+                if (confirmPassword.isNotEmpty()) {
+                    confirmPasswordError = password != confirmPassword
+                }
+            },
             label = { Text("Password") },
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 16.dp),
+                .padding(bottom = if (passwordError) 4.dp else 16.dp),
             singleLine = true,
+            isError = passwordError,
             visualTransformation = PasswordVisualTransformation(),
             keyboardOptions = KeyboardOptions(
                 keyboardType = KeyboardType.Password,
@@ -259,20 +266,46 @@ fun ChildSignUpScreen(
             )
         )
 
+        if (passwordError) {
+            Text(
+                text = "Password must be at least 6 characters",
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, bottom = 16.dp)
+            )
+        }
+
         OutlinedTextField(
             value = confirmPassword,
-            onValueChange = { confirmPassword = it },
+            onValueChange = { 
+                confirmPassword = it
+                confirmPasswordError = password != it
+            },
             label = { Text("Confirm Password") },
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 32.dp),
+                .padding(bottom = if (confirmPasswordError) 4.dp else 32.dp),
             singleLine = true,
+            isError = confirmPasswordError,
             visualTransformation = PasswordVisualTransformation(),
             keyboardOptions = KeyboardOptions(
                 keyboardType = KeyboardType.Password,
                 imeAction = ImeAction.Done
             )
         )
+
+        if (confirmPasswordError) {
+            Text(
+                text = "Passwords do not match",
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, bottom = 16.dp)
+            )
+        }
 
         Button(
             onClick = {
