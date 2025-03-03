@@ -15,6 +15,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "938791590594-ps3pk91a8to06931rbui32lttaq3uqcv.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.ismapc",
+            "certificate_hash": "409493cf289ead57560966041ca0d8977af3acde"
+          }
+        },
+        {
           "client_id": "938791590594-hk4qhadg2t2s62rtb7v3qjpgeur9uksv.apps.googleusercontent.com",
           "client_type": 3
         }

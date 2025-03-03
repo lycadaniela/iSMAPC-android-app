@@ -34,20 +34,38 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import com.example.ismapc.ui.theme.ISMAPCTheme
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.Timestamp
 import java.util.Date
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInClient
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.common.api.ApiException
+import com.google.firebase.auth.GoogleAuthProvider
 
 class ChildSignUpActivity : ComponentActivity() {
     private lateinit var auth: FirebaseAuth
     private lateinit var firestore: FirebaseFirestore
+    private lateinit var googleSignInClient: GoogleSignInClient
+    private val RC_SIGN_IN = 9001
+    private var showParentEmailDialog by mutableStateOf(false)
+    private var pendingGoogleToken: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         auth = FirebaseAuth.getInstance()
         firestore = FirebaseFirestore.getInstance()
+
+        // Configure Google Sign In
+        val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+            .requestIdToken(getString(R.string.default_web_client_id))
+            .requestEmail()
+            .build()
+
+        googleSignInClient = GoogleSignIn.getClient(this, gso)
 
         setContent {
             ISMAPCTheme {
@@ -55,6 +73,18 @@ class ChildSignUpActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
+                    if (showParentEmailDialog) {
+                        ParentEmailDialog(
+                            onDismiss = { showParentEmailDialog = false },
+                            onConfirm = { parentEmail ->
+                                showParentEmailDialog = false
+                                pendingGoogleToken?.let { token ->
+                                    firebaseAuthWithGoogle(token, parentEmail)
+                                }
+                            }
+                        )
+                    }
+                    
                     ChildSignUpScreen(
                         onSignUp = { email, password, fullName, parentEmail ->
                             auth.createUserWithEmailAndPassword(email, password)
@@ -82,7 +112,6 @@ class ChildSignUpActivity : ComponentActivity() {
                                                     finish()
                                                 }
                                                 .addOnFailureListener { e ->
-                                                    // If permission denied, delete the auth account
                                                     if (e.message?.contains("permission-denied") == true) {
                                                         user.delete().addOnCompleteListener { deleteTask ->
                                                             if (deleteTask.isSuccessful) {
@@ -100,8 +129,145 @@ class ChildSignUpActivity : ComponentActivity() {
                                         Toast.makeText(this, "Sign up failed: ${task.exception?.message}", Toast.LENGTH_LONG).show()
                                     }
                                 }
+                        },
+                        onGoogleSignUp = {
+                            startGoogleSignIn()
                         }
                     )
+                }
+            }
+        }
+    }
+
+    private fun startGoogleSignIn() {
+        val signInIntent = googleSignInClient.signInIntent
+        startActivityForResult(signInIntent, RC_SIGN_IN)
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+
+        if (requestCode == RC_SIGN_IN) {
+            val task = GoogleSignIn.getSignedInAccountFromIntent(data)
+            try {
+                val account = task.getResult(ApiException::class.java)
+                pendingGoogleToken = account.idToken
+                showParentEmailDialog = true
+            } catch (e: ApiException) {
+                Toast.makeText(this, "Google sign in failed: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    private fun firebaseAuthWithGoogle(idToken: String, parentEmail: String) {
+        val credential = GoogleAuthProvider.getCredential(idToken, null)
+        auth.signInWithCredential(credential)
+            .addOnCompleteListener(this) { task ->
+                if (task.isSuccessful) {
+                    val user = auth.currentUser
+                    if (user != null) {
+                        val userData = hashMapOf(
+                            "fullName" to user.displayName,
+                            "email" to user.email,
+                            "parentEmail" to parentEmail,
+                            "userType" to "child",
+                            "createdAt" to Timestamp(Date())
+                        )
+
+                        firestore.collection("users")
+                            .document("child")
+                            .collection(user.uid)
+                            .document("profile")
+                            .set(userData)
+                            .addOnSuccessListener {
+                                Toast.makeText(this, "Account created successfully!", Toast.LENGTH_LONG).show()
+                                startActivity(Intent(this, MainActivity::class.java))
+                                finish()
+                            }
+                            .addOnFailureListener { e ->
+                                Toast.makeText(this, "Failed to save user data: ${e.message}", Toast.LENGTH_LONG).show()
+                            }
+                    }
+                } else {
+                    Toast.makeText(this, "Authentication failed: ${task.exception?.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+    }
+}
+
+@Composable
+fun ParentEmailDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit
+) {
+    var parentEmail by remember { mutableStateOf("") }
+    var isError by remember { mutableStateOf(false) }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            shape = MaterialTheme.shapes.medium,
+            color = MaterialTheme.colorScheme.surface
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "Parent's Email Required",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+
+                OutlinedTextField(
+                    value = parentEmail,
+                    onValueChange = { 
+                        parentEmail = it
+                        isError = false
+                    },
+                    label = { Text("Parent's Email Address") },
+                    isError = isError,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Email,
+                        imeAction = ImeAction.Done
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = if (isError) 4.dp else 16.dp)
+                )
+
+                if (isError) {
+                    Text(
+                        text = "Please enter a valid email address",
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 16.dp)
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text("Cancel")
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = {
+                            if (android.util.Patterns.EMAIL_ADDRESS.matcher(parentEmail).matches()) {
+                                onConfirm(parentEmail)
+                            } else {
+                                isError = true
+                            }
+                        }
+                    ) {
+                        Text("Continue")
+                    }
                 }
             }
         }
@@ -111,7 +277,8 @@ class ChildSignUpActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChildSignUpScreen(
-    onSignUp: (email: String, password: String, fullName: String, parentEmail: String) -> Unit
+    onSignUp: (email: String, password: String, fullName: String, parentEmail: String) -> Unit,
+    onGoogleSignUp: () -> Unit
 ) {
     val context = LocalContext.current
     var fullName by remember { mutableStateOf("") }
@@ -353,9 +520,7 @@ fun ChildSignUpScreen(
 
         // Google Sign Up Button
         OutlinedButton(
-            onClick = {
-                // TODO: Implement Google sign up
-            },
+            onClick = onGoogleSignUp,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(56.dp),
