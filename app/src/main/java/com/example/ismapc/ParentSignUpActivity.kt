@@ -158,26 +158,41 @@ class ParentSignUpActivity : ComponentActivity() {
                 if (task.isSuccessful) {
                     val user = auth.currentUser
                     if (user != null) {
-                        // Save additional user data to Firestore
-                        val userData = hashMapOf(
-                            "fullName" to user.displayName,
-                            "email" to user.email,
-                            "userType" to "parent",
-                            "createdAt" to Timestamp(Date())
-                        )
+                        // Send verification email
+                        user.sendEmailVerification()
+                            .addOnCompleteListener { verificationTask ->
+                                if (verificationTask.isSuccessful) {
+                                    val userData = hashMapOf(
+                                        "fullName" to user.displayName,
+                                        "email" to user.email,
+                                        "userType" to "parent",
+                                        "createdAt" to Timestamp(Date()),
+                                        "isEmailVerified" to false
+                                    )
 
-                        firestore.collection("users")
-                            .document("parents")
-                            .collection(user.uid)
-                            .document("profile")
-                            .set(userData)
-                            .addOnSuccessListener {
-                                Toast.makeText(this, "Account created successfully!", Toast.LENGTH_LONG).show()
-                                startActivity(Intent(this, MainActivity::class.java))
-                                finish()
-                            }
-                            .addOnFailureListener { e ->
-                                Toast.makeText(this, "Failed to save user data: ${e.message}", Toast.LENGTH_LONG).show()
+                                    firestore.collection("users")
+                                        .document("parents")
+                                        .collection(user.uid)
+                                        .document("profile")
+                                        .set(userData)
+                                        .addOnSuccessListener {
+                                            // Redirect to email verification screen
+                                            val intent = Intent(this, EmailVerificationActivity::class.java)
+                                            intent.putExtra("email", user.email)
+                                            intent.putExtra("password", idToken)
+                                            startActivity(intent)
+                                            finish()
+                                        }
+                                        .addOnFailureListener { e ->
+                                            Toast.makeText(this, "Failed to save user data: ${e.message}", Toast.LENGTH_LONG).show()
+                                        }
+                                } else {
+                                    Toast.makeText(
+                                        this,
+                                        "Failed to send verification email: ${verificationTask.exception?.message}",
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                }
                             }
                     }
                 } else {
