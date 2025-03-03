@@ -1,7 +1,9 @@
 package com.example.ismapc
 
+import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -33,17 +35,69 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.example.ismapc.ui.theme.ISMAPCTheme
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 
 class ParentSignUpActivity : ComponentActivity() {
+    private lateinit var auth: FirebaseAuth
+    private lateinit var firestore: FirebaseFirestore
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        auth = FirebaseAuth.getInstance()
+        firestore = FirebaseFirestore.getInstance()
+
         setContent {
             ISMAPCTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    ParentSignUpScreen()
+                    ParentSignUpScreen(
+                        onSignUp = { email, password, fullName, phoneNumber ->
+                            auth.createUserWithEmailAndPassword(email, password)
+                                .addOnCompleteListener { task ->
+                                    if (task.isSuccessful) {
+                                        // Save additional user data to Firestore
+                                        val user = auth.currentUser
+                                        if (user != null) {
+                                            val userData = hashMapOf(
+                                                "fullName" to fullName,
+                                                "email" to email,
+                                                "phoneNumber" to phoneNumber,
+                                                "userType" to "parent",
+                                                "createdAt" to com.google.firebase.Timestamp.now()
+                                            )
+                                            
+                                            firestore.collection("users")
+                                                .document(user.uid)
+                                                .set(userData)
+                                                .addOnSuccessListener {
+                                                    Toast.makeText(this, "Account created successfully!", Toast.LENGTH_LONG).show()
+                                                    startActivity(Intent(this, MainActivity::class.java))
+                                                    finish()
+                                                }
+                                                .addOnFailureListener { e ->
+                                                    // If permission denied, delete the auth account
+                                                    if (e.message?.contains("permission-denied") == true) {
+                                                        user.delete().addOnCompleteListener { deleteTask ->
+                                                            if (deleteTask.isSuccessful) {
+                                                                Toast.makeText(this, "Failed to create account: Permission denied. Please try again.", Toast.LENGTH_LONG).show()
+                                                            }
+                                                        }
+                                                    } else {
+                                                        Toast.makeText(this, "Failed to save user data: ${e.message}", Toast.LENGTH_LONG).show()
+                                                    }
+                                                }
+                                        } else {
+                                            Toast.makeText(this, "Authentication error: User is null", Toast.LENGTH_LONG).show()
+                                        }
+                                    } else {
+                                        Toast.makeText(this, "Sign up failed: ${task.exception?.message}", Toast.LENGTH_LONG).show()
+                                    }
+                                }
+                        }
+                    )
                 }
             }
         }
@@ -52,14 +106,24 @@ class ParentSignUpActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ParentSignUpScreen() {
-    val context = LocalContext.current
+fun ParentSignUpScreen(
+    onSignUp: (email: String, password: String, fullName: String, phoneNumber: String) -> Unit
+) {
     var fullName by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
     var phoneNumber by remember { mutableStateOf("") }
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
+
+    // Error states
+    var fullNameError by remember { mutableStateOf(false) }
+    var emailError by remember { mutableStateOf(false) }
+    var passwordError by remember { mutableStateOf(false) }
+    var confirmPasswordError by remember { mutableStateOf(false) }
+    var phoneNumberError by remember { mutableStateOf(false) }
+
+    val context = LocalContext.current
 
     val imagePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -138,53 +202,105 @@ fun ParentSignUpScreen() {
         // Form fields
         OutlinedTextField(
             value = fullName,
-            onValueChange = { fullName = it },
+            onValueChange = { 
+                fullName = it
+                fullNameError = false
+            },
             label = { Text("Full Name") },
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 16.dp),
+                .padding(bottom = if (fullNameError) 4.dp else 16.dp),
             singleLine = true,
+            isError = fullNameError,
             keyboardOptions = KeyboardOptions(
                 imeAction = ImeAction.Next
             )
         )
 
+        if (fullNameError) {
+            Text(
+                text = "Please enter your full name",
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, bottom = 16.dp)
+            )
+        }
+
         OutlinedTextField(
             value = email,
-            onValueChange = { email = it },
+            onValueChange = { 
+                email = it
+                emailError = false
+            },
             label = { Text("Email") },
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 16.dp),
+                .padding(bottom = if (emailError) 4.dp else 16.dp),
             singleLine = true,
+            isError = emailError,
             keyboardOptions = KeyboardOptions(
                 keyboardType = KeyboardType.Email,
                 imeAction = ImeAction.Next
             )
         )
 
+        if (emailError) {
+            Text(
+                text = "Please enter a valid email address",
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, bottom = 16.dp)
+            )
+        }
+
         OutlinedTextField(
             value = phoneNumber,
-            onValueChange = { phoneNumber = it },
+            onValueChange = { 
+                phoneNumber = it
+                phoneNumberError = false
+            },
             label = { Text("Phone Number") },
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 16.dp),
+                .padding(bottom = if (phoneNumberError) 4.dp else 16.dp),
             singleLine = true,
+            isError = phoneNumberError,
             keyboardOptions = KeyboardOptions(
                 keyboardType = KeyboardType.Phone,
                 imeAction = ImeAction.Next
             )
         )
 
+        if (phoneNumberError) {
+            Text(
+                text = "Please enter a valid phone number",
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, bottom = 16.dp)
+            )
+        }
+
         OutlinedTextField(
             value = password,
-            onValueChange = { password = it },
+            onValueChange = { 
+                password = it
+                passwordError = false
+                if (confirmPassword.isNotEmpty()) {
+                    confirmPasswordError = password != confirmPassword
+                }
+            },
             label = { Text("Password") },
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 16.dp),
+                .padding(bottom = if (passwordError) 4.dp else 16.dp),
             singleLine = true,
+            isError = passwordError,
             visualTransformation = PasswordVisualTransformation(),
             keyboardOptions = KeyboardOptions(
                 keyboardType = KeyboardType.Password,
@@ -192,14 +308,29 @@ fun ParentSignUpScreen() {
             )
         )
 
+        if (passwordError) {
+            Text(
+                text = "Password must be at least 6 characters",
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, bottom = 16.dp)
+            )
+        }
+
         OutlinedTextField(
             value = confirmPassword,
-            onValueChange = { confirmPassword = it },
+            onValueChange = { 
+                confirmPassword = it
+                confirmPasswordError = password != it
+            },
             label = { Text("Confirm Password") },
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 32.dp),
+                .padding(bottom = if (confirmPasswordError) 4.dp else 32.dp),
             singleLine = true,
+            isError = confirmPasswordError,
             visualTransformation = PasswordVisualTransformation(),
             keyboardOptions = KeyboardOptions(
                 keyboardType = KeyboardType.Password,
@@ -207,9 +338,30 @@ fun ParentSignUpScreen() {
             )
         )
 
+        if (confirmPasswordError) {
+            Text(
+                text = "Passwords do not match",
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, bottom = 16.dp)
+            )
+        }
+
         Button(
             onClick = {
-                // TODO: Implement sign up logic
+                // Validate all fields
+                fullNameError = fullName.isBlank()
+                emailError = !android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()
+                phoneNumberError = phoneNumber.length < 10
+                passwordError = password.length < 6
+                confirmPasswordError = password != confirmPassword
+
+                if (!fullNameError && !emailError && !phoneNumberError && 
+                    !passwordError && !confirmPasswordError) {
+                    onSignUp(email, password, fullName, phoneNumber)
+                }
             },
             modifier = Modifier
                 .fillMaxWidth()
