@@ -140,8 +140,15 @@ class ChildSignUpActivity : ComponentActivity() {
     }
 
     private fun startGoogleSignIn() {
-        val signInIntent = googleSignInClient.signInIntent
-        startActivityForResult(signInIntent, RC_SIGN_IN)
+        // Sign out from Firebase
+        auth.signOut()
+        
+        // Sign out from Google
+        googleSignInClient.signOut().addOnCompleteListener(this) {
+            // After signing out, start the Google Sign-In flow
+            val signInIntent = googleSignInClient.signInIntent
+            startActivityForResult(signInIntent, RC_SIGN_IN)
+        }
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
