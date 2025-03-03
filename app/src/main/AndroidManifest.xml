@@ -52,6 +52,11 @@
             android:exported="false"
             android:label="Child Sign Up"
             android:theme="@style/Theme.ISMAPC" />         
+
+        <activity
+            android:name=".ForgotPasswordActivity"
+            android:exported="false"
+            android:theme="@style/Theme.ISMAPC" />
     </application>
     
 </manifest>

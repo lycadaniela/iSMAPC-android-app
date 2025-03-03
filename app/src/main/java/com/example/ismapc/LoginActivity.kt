@@ -104,15 +104,8 @@ class LoginActivity : ComponentActivity() {
                                     }
                                 }
                         },
-                        onForgotPassword = { email ->
-                            auth.sendPasswordResetEmail(email)
-                                .addOnCompleteListener { task ->
-                                    if (task.isSuccessful) {
-                                        Toast.makeText(context, "Reset email sent", Toast.LENGTH_SHORT).show()
-                                    } else {
-                                        Toast.makeText(context, "Failed to send reset email", Toast.LENGTH_SHORT).show()
-                                    }
-                                }
+                        onForgotPassword = {
+                            startActivity(Intent(context, ForgotPasswordActivity::class.java))
                         },
                         onGoogleSignIn = {
                             startGoogleSignIn()
@@ -181,7 +174,7 @@ class LoginActivity : ComponentActivity() {
 @Composable
 fun LoginScreen(
     onLoginSuccess: (String, String) -> Unit,
-    onForgotPassword: (String) -> Unit,
+    onForgotPassword: () -> Unit,
     onGoogleSignIn: () -> Unit
 ) {
     var username by remember { mutableStateOf("") }
@@ -296,7 +289,7 @@ fun LoginScreen(
                 )
             }
             
-            TextButton(onClick = { onForgotPassword(username) }) {
+            TextButton(onClick = { onForgotPassword() }) {
                 Text(
                     text = "Forgot Password?",
                     style = MaterialTheme.typography.bodyMedium,
