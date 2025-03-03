@@ -105,57 +105,70 @@ fun EmailVerificationScreen(
                         if (reloadTask.isSuccessful) {
                             if (currentUser.isEmailVerified) {
                                 isLoading = true
-                                // Update Firestore isEmailVerified field
-                                val userType = if (currentUser.email?.contains("child") == true) "child" else "parents"
-                                val userRef = FirebaseFirestore.getInstance()
+                                // First, check if this is a child account by querying Firestore
+                                FirebaseFirestore.getInstance()
                                     .collection("users")
-                                    .document(userType)
+                                    .document("child")
                                     .collection(currentUser.uid)
                                     .document("profile")
+                                    .get()
+                                    .addOnSuccessListener { childDoc ->
+                                        val userType = if (childDoc.exists()) "child" else "parents"
+                                        val userRef = FirebaseFirestore.getInstance()
+                                            .collection("users")
+                                            .document(userType)
+                                            .collection(currentUser.uid)
+                                            .document("profile")
 
-                                // First check if document exists
-                                userRef.get()
-                                    .addOnSuccessListener { document ->
-                                        if (document.exists()) {
-                                            // Document exists, update it
-                                            FirebaseFirestore.getInstance()
-                                                .collection("users")
-                                                .document(userType)
-                                                .collection(currentUser.uid)
-                                                .document("profile")
-                                                .update("isEmailVerified", true)
-                                                .addOnSuccessListener {
-                                                    onVerificationComplete()
+                                        // First check if document exists
+                                        userRef.get()
+                                            .addOnSuccessListener { document ->
+                                                if (document.exists()) {
+                                                    // Document exists, update it
+                                                    FirebaseFirestore.getInstance()
+                                                        .collection("users")
+                                                        .document(userType)
+                                                        .collection(currentUser.uid)
+                                                        .document("profile")
+                                                        .update("isEmailVerified", true)
+                                                        .addOnSuccessListener {
+                                                            onVerificationComplete()
+                                                        }
+                                                        .addOnFailureListener { e ->
+                                                            handleFirebaseError(e, onError)
+                                                            isCheckingEnabled = false
+                                                            isLoading = false
+                                                        }
+                                                } else {
+                                                    // Document doesn't exist, create it
+                                                    val userData = hashMapOf(
+                                                        "email" to currentUser.email,
+                                                        "displayName" to currentUser.displayName,
+                                                        "isEmailVerified" to true,
+                                                        "createdAt" to com.google.firebase.Timestamp.now(),
+                                                        "userType" to userType
+                                                    )
+                                                    FirebaseFirestore.getInstance()
+                                                        .collection("users")
+                                                        .document(userType)
+                                                        .collection(currentUser.uid)
+                                                        .document("profile")
+                                                        .set(userData)
+                                                        .addOnSuccessListener {
+                                                            onVerificationComplete()
+                                                        }
+                                                        .addOnFailureListener { e ->
+                                                            handleFirebaseError(e, onError)
+                                                            isCheckingEnabled = false
+                                                            isLoading = false
+                                                        }
                                                 }
-                                                .addOnFailureListener { e ->
-                                                    handleFirebaseError(e, onError)
-                                                    isCheckingEnabled = false
-                                                    isLoading = false
-                                                }
-                                        } else {
-                                            // Document doesn't exist, create it
-                                            val userData = hashMapOf(
-                                                "email" to currentUser.email,
-                                                "displayName" to currentUser.displayName,
-                                                "isEmailVerified" to true,
-                                                "createdAt" to com.google.firebase.Timestamp.now(),
-                                                "userType" to userType
-                                            )
-                                            FirebaseFirestore.getInstance()
-                                                .collection("users")
-                                                .document(userType)
-                                                .collection(currentUser.uid)
-                                                .document("profile")
-                                                .set(userData)
-                                                .addOnSuccessListener {
-                                                    onVerificationComplete()
-                                                }
-                                                .addOnFailureListener { e ->
-                                                    handleFirebaseError(e, onError)
-                                                    isCheckingEnabled = false
-                                                    isLoading = false
-                                                }
-                                        }
+                                            }
+                                            .addOnFailureListener { e ->
+                                                handleFirebaseError(e, onError)
+                                                isCheckingEnabled = false
+                                                isLoading = false
+                                            }
                                     }
                                     .addOnFailureListener { e ->
                                         handleFirebaseError(e, onError)
