@@ -50,6 +50,8 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Build
+import com.google.android.gms.auth.api.signin.GoogleSignInStatusCodes
+import com.google.firebase.firestore.FirebaseFirestore
 
 class LoginActivity : ComponentActivity() {
     private lateinit var auth: FirebaseAuth
@@ -117,8 +119,12 @@ class LoginActivity : ComponentActivity() {
     }
 
     private fun startGoogleSignIn() {
-        val signInIntent = googleSignInClient.signInIntent
-        startActivityForResult(signInIntent, RC_SIGN_IN)
+        // Sign out from Firebase and Google to ensure a fresh sign-in
+        auth.signOut()
+        googleSignInClient.signOut().addOnCompleteListener(this) {
+            val signInIntent = googleSignInClient.signInIntent
+            startActivityForResult(signInIntent, RC_SIGN_IN)
+        }
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -128,9 +134,19 @@ class LoginActivity : ComponentActivity() {
             val task = GoogleSignIn.getSignedInAccountFromIntent(data)
             try {
                 val account = task.getResult(ApiException::class.java)
-                firebaseAuthWithGoogle(account.idToken!!)
+                if (account.idToken != null) {
+                    firebaseAuthWithGoogle(account.idToken!!)
+                } else {
+                    Toast.makeText(this, "Google sign in failed: No ID token received", Toast.LENGTH_SHORT).show()
+                }
             } catch (e: ApiException) {
-                Toast.makeText(this, "Google sign in failed", Toast.LENGTH_SHORT).show()
+                val errorMessage = when (e.statusCode) {
+                    GoogleSignInStatusCodes.SIGN_IN_CANCELLED -> "Sign in was cancelled"
+                    GoogleSignInStatusCodes.SIGN_IN_FAILED -> "Sign in failed. Please try again"
+                    GoogleSignInStatusCodes.NETWORK_ERROR -> "Network error. Please check your connection"
+                    else -> "Google sign in failed: ${e.message}"
+                }
+                Toast.makeText(this, errorMessage, Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -140,10 +156,66 @@ class LoginActivity : ComponentActivity() {
         auth.signInWithCredential(credential)
             .addOnCompleteListener(this) { task ->
                 if (task.isSuccessful) {
-                    startActivity(Intent(this, MainActivity::class.java))
-                    finish()
+                    val user = auth.currentUser
+                    if (user != null) {
+                        // Check if user exists in either parent or child collection
+                        val db = FirebaseFirestore.getInstance()
+                        
+                        // First check parents collection
+                        db.collection("users")
+                            .document("parents")
+                            .collection(user.uid)
+                            .document("profile")
+                            .get()
+                            .addOnSuccessListener { parentDoc ->
+                                if (parentDoc.exists()) {
+                                    // User is a parent, proceed to MainActivity
+                                    startActivity(Intent(this, MainActivity::class.java))
+                                    finish()
+                                } else {
+                                    // If not found in parents, check child collection
+                                    db.collection("users")
+                                        .document("child")
+                                        .collection(user.uid)
+                                        .document("profile")
+                                        .get()
+                                        .addOnSuccessListener { childDoc ->
+                                            if (childDoc.exists()) {
+                                                // User is a child, proceed to MainActivity
+                                                startActivity(Intent(this, MainActivity::class.java))
+                                                finish()
+                                            } else {
+                                                // User not found in either collection
+                                                auth.signOut()
+                                                googleSignInClient.signOut()
+                                                Toast.makeText(this, "This Google account is not registered. Please sign up first.", Toast.LENGTH_LONG).show()
+                                            }
+                                        }
+                                        .addOnFailureListener { e ->
+                                            auth.signOut()
+                                            googleSignInClient.signOut()
+                                            Toast.makeText(this, "Error checking child registration: ${e.message}", Toast.LENGTH_LONG).show()
+                                        }
+                                }
+                            }
+                            .addOnFailureListener { e ->
+                                auth.signOut()
+                                googleSignInClient.signOut()
+                                Toast.makeText(this, "Error checking parent registration: ${e.message}", Toast.LENGTH_LONG).show()
+                            }
+                    } else {
+                        // User is null after successful sign in
+                        Toast.makeText(this, "Error: User information not available", Toast.LENGTH_LONG).show()
+                    }
                 } else {
-                    Toast.makeText(this, "Authentication failed", Toast.LENGTH_SHORT).show()
+                    val errorMessage = when (task.exception) {
+                        is com.google.firebase.auth.FirebaseAuthUserCollisionException ->
+                            "This Google account is already linked to another email"
+                        is com.google.firebase.FirebaseNetworkException ->
+                            "Network error. Please check your connection"
+                        else -> "Authentication failed: ${task.exception?.message}"
+                    }
+                    Toast.makeText(this, errorMessage, Toast.LENGTH_LONG).show()
                 }
             }
     }
