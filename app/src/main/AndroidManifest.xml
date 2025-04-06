@@ -54,10 +54,6 @@
             android:theme="@style/Theme.ISMAPC" />
 
         <activity
-            android:name=".EmailVerificationActivity"
-            android:exported="false" />
-
-        <activity
             android:name=".ForgotPasswordActivity"
             android:exported="false"
             android:theme="@style/Theme.ISMAPC" />
