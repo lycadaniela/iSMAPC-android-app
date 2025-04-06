@@ -3,6 +3,7 @@ package com.example.ismapc
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.provider.MediaStore
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -50,6 +51,7 @@ class ChildSignUpActivity : ComponentActivity() {
     private lateinit var auth: FirebaseAuth
     private lateinit var firestore: FirebaseFirestore
     private lateinit var googleSignInClient: GoogleSignInClient
+    private lateinit var profilePictureManager: ProfilePictureManager
     private val RC_SIGN_IN = 9001
     private var showParentEmailDialog by mutableStateOf(false)
     private var pendingGoogleToken: String? = null
@@ -58,6 +60,7 @@ class ChildSignUpActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         auth = FirebaseAuth.getInstance()
         firestore = FirebaseFirestore.getInstance()
+        profilePictureManager = ProfilePictureManager(this)
 
         // Configure Google Sign In
         val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
@@ -86,19 +89,26 @@ class ChildSignUpActivity : ComponentActivity() {
                     }
                     
                     ChildSignUpScreen(
-                        onSignUp = { email, password, fullName, parentEmail ->
+                        onSignUp = { email, password, fullName, parentEmail, selectedImageUri ->
                             auth.createUserWithEmailAndPassword(email, password)
                                 .addOnCompleteListener { task ->
                                     if (task.isSuccessful) {
-                                        // Save additional user data to Firestore
                                         val user = auth.currentUser
                                         if (user != null) {
+                                            // Save profile picture if selected
+                                            var profilePicturePath: String? = null
+                                            if (selectedImageUri != null) {
+                                                val bitmap = MediaStore.Images.Media.getBitmap(contentResolver, selectedImageUri)
+                                                profilePicturePath = profilePictureManager.saveProfilePicture(bitmap, user.uid)
+                                            }
+
                                             val userData = hashMapOf(
                                                 "fullName" to fullName,
                                                 "email" to email,
                                                 "parentEmail" to parentEmail,
                                                 "userType" to "child",
-                                                "createdAt" to Timestamp(Date())
+                                                "createdAt" to Timestamp(Date()),
+                                                "profilePicturePath" to profilePicturePath
                                             )
                                             
                                             firestore.collection("users")
@@ -122,8 +132,6 @@ class ChildSignUpActivity : ComponentActivity() {
                                                         Toast.makeText(this, "Failed to save user data: ${e.message}", Toast.LENGTH_LONG).show()
                                                     }
                                                 }
-                                        } else {
-                                            Toast.makeText(this, "Authentication error: User is null", Toast.LENGTH_LONG).show()
                                         }
                                     } else {
                                         Toast.makeText(this, "Sign up failed: ${task.exception?.message}", Toast.LENGTH_LONG).show()
@@ -131,7 +139,8 @@ class ChildSignUpActivity : ComponentActivity() {
                                 }
                         },
                         onGoogleSignUp = {
-                            startGoogleSignIn()
+                            val signInIntent = googleSignInClient.signInIntent
+                            startActivityForResult(signInIntent, RC_SIGN_IN)
                         }
                     )
                 }
@@ -284,7 +293,7 @@ fun ParentEmailDialog(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChildSignUpScreen(
-    onSignUp: (email: String, password: String, fullName: String, parentEmail: String) -> Unit,
+    onSignUp: (email: String, password: String, fullName: String, parentEmail: String, selectedImageUri: Uri?) -> Unit,
     onGoogleSignUp: () -> Unit
 ) {
     val context = LocalContext.current
@@ -492,7 +501,7 @@ fun ChildSignUpScreen(
 
                 if (!fullNameError && !emailError && !parentEmailError && 
                     !passwordError && !confirmPasswordError) {
-                    onSignUp(email, password, fullName, parentEmail)
+                    onSignUp(email, password, fullName, parentEmail, selectedImageUri)
                 }
             },
             modifier = Modifier

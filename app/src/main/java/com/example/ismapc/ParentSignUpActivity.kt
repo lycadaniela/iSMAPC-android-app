@@ -3,6 +3,7 @@ package com.example.ismapc
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.provider.MediaStore
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -49,12 +50,14 @@ class ParentSignUpActivity : ComponentActivity() {
     private lateinit var auth: FirebaseAuth
     private lateinit var firestore: FirebaseFirestore
     private lateinit var googleSignInClient: GoogleSignInClient
+    private lateinit var profilePictureManager: ProfilePictureManager
     private val RC_SIGN_IN = 9001
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         auth = FirebaseAuth.getInstance()
         firestore = FirebaseFirestore.getInstance()
+        profilePictureManager = ProfilePictureManager(this)
 
         // Configure Google Sign In
         val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
@@ -71,19 +74,26 @@ class ParentSignUpActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     ParentSignUpScreen(
-                        onSignUp = { email, password, fullName, phoneNumber ->
+                        onSignUp = { email, password, fullName, phoneNumber, selectedImageUri ->
                             auth.createUserWithEmailAndPassword(email, password)
                                 .addOnCompleteListener { task ->
                                     if (task.isSuccessful) {
-                                        // Save additional user data to Firestore
                                         val user = auth.currentUser
                                         if (user != null) {
+                                            // Save profile picture if selected
+                                            var profilePicturePath: String? = null
+                                            if (selectedImageUri != null) {
+                                                val bitmap = MediaStore.Images.Media.getBitmap(contentResolver, selectedImageUri)
+                                                profilePicturePath = profilePictureManager.saveProfilePicture(bitmap, user.uid)
+                                            }
+
                                             val userData = hashMapOf(
                                                 "fullName" to fullName,
                                                 "email" to email,
                                                 "phoneNumber" to phoneNumber,
                                                 "userType" to "parent",
-                                                "createdAt" to Timestamp(Date())
+                                                "createdAt" to Timestamp(Date()),
+                                                "profilePicturePath" to profilePicturePath
                                             )
                                             
                                             firestore.collection("users")
@@ -97,7 +107,6 @@ class ParentSignUpActivity : ComponentActivity() {
                                                     finish()
                                                 }
                                                 .addOnFailureListener { e ->
-                                                    // If permission denied, delete the auth account
                                                     if (e.message?.contains("permission-denied") == true) {
                                                         user.delete().addOnCompleteListener { deleteTask ->
                                                             if (deleteTask.isSuccessful) {
@@ -108,32 +117,17 @@ class ParentSignUpActivity : ComponentActivity() {
                                                         Toast.makeText(this, "Failed to save user data: ${e.message}", Toast.LENGTH_LONG).show()
                                                     }
                                                 }
-                                        } else {
-                                            Toast.makeText(this, "Authentication error: User is null", Toast.LENGTH_LONG).show()
                                         }
-                                    } else {
-                                        Toast.makeText(this, "Sign up failed: ${task.exception?.message}", Toast.LENGTH_LONG).show()
                                     }
                                 }
                         },
                         onGoogleSignUp = {
-                            startGoogleSignIn()
+                            val signInIntent = googleSignInClient.signInIntent
+                            startActivityForResult(signInIntent, RC_SIGN_IN)
                         }
                     )
                 }
             }
-        }
-    }
-
-    private fun startGoogleSignIn() {
-        // Sign out from Firebase
-        auth.signOut()
-        
-        // Sign out from Google
-        googleSignInClient.signOut().addOnCompleteListener(this) {
-            // After signing out, start the Google Sign-In flow
-            val signInIntent = googleSignInClient.signInIntent
-            startActivityForResult(signInIntent, RC_SIGN_IN)
         }
     }
 
@@ -189,7 +183,7 @@ class ParentSignUpActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ParentSignUpScreen(
-    onSignUp: (email: String, password: String, fullName: String, phoneNumber: String) -> Unit,
+    onSignUp: (email: String, password: String, fullName: String, phoneNumber: String, selectedImageUri: Uri?) -> Unit,
     onGoogleSignUp: () -> Unit
 ) {
     var fullName by remember { mutableStateOf("") }
@@ -443,7 +437,7 @@ fun ParentSignUpScreen(
 
                 if (!fullNameError && !emailError && !phoneNumberError && 
                     !passwordError && !confirmPasswordError) {
-                    onSignUp(email, password, fullName, phoneNumber)
+                    onSignUp(email, password, fullName, phoneNumber, selectedImageUri)
                 }
             },
             modifier = Modifier
