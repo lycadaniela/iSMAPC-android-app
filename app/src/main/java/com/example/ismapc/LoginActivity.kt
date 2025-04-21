@@ -188,24 +188,40 @@ class LoginActivity : ComponentActivity() {
                                                 // User not found in either collection
                                                 auth.signOut()
                                                 googleSignInClient.signOut()
-                                                Toast.makeText(this, "This Google account is not registered. Please sign up first.", Toast.LENGTH_LONG).show()
+                                                Toast.makeText(
+                                                    this,
+                                                    "This Google account is not registered. Please sign up first.",
+                                                    Toast.LENGTH_LONG
+                                                ).show()
                                             }
                                         }
                                         .addOnFailureListener { e ->
                                             auth.signOut()
                                             googleSignInClient.signOut()
-                                            Toast.makeText(this, "Error checking child registration: ${e.message}", Toast.LENGTH_LONG).show()
+                                            Toast.makeText(
+                                                this,
+                                                "Error checking child registration: ${e.message}",
+                                                Toast.LENGTH_LONG
+                                            ).show()
                                         }
                                 }
                             }
                             .addOnFailureListener { e ->
                                 auth.signOut()
                                 googleSignInClient.signOut()
-                                Toast.makeText(this, "Error checking parent registration: ${e.message}", Toast.LENGTH_LONG).show()
+                                Toast.makeText(
+                                    this,
+                                    "Error checking parent registration: ${e.message}",
+                                    Toast.LENGTH_LONG
+                                ).show()
                             }
                     } else {
                         // User is null after successful sign in
-                        Toast.makeText(this, "Error: User information not available", Toast.LENGTH_LONG).show()
+                        Toast.makeText(
+                            this,
+                            "Error: User information not available",
+                            Toast.LENGTH_LONG
+                        ).show()
                     }
                 } else {
                     val errorMessage = when (task.exception) {
