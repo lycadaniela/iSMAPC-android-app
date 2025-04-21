@@ -91,18 +91,7 @@ class LoginActivity : ComponentActivity() {
                                         startActivity(Intent(context, MainActivity::class.java))
                                         finish()
                                     } else {
-                                        val errorMessage = when (task.exception) {
-                                            is com.google.firebase.auth.FirebaseAuthInvalidUserException ->
-                                                "No user found with this email"
-                                            is com.google.firebase.auth.FirebaseAuthInvalidCredentialsException ->
-                                                "Invalid email or password"
-                                            is java.net.UnknownHostException ->
-                                                "Network error: Unable to reach authentication server"
-                                            is com.google.firebase.FirebaseNetworkException ->
-                                                "Network error: Please check your internet connection"
-                                            else -> "Authentication failed: ${task.exception?.message}"
-                                        }
-                                        Toast.makeText(context, errorMessage, Toast.LENGTH_LONG).show()
+                                        Toast.makeText(context, "Incorrect email or password", Toast.LENGTH_LONG).show()
                                     }
                                 }
                         },
@@ -269,6 +258,7 @@ fun LoginScreen(
     var password by remember { mutableStateOf("") }
     var rememberMe by remember { mutableStateOf(false) }
     var isError by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf("") }
     val context = LocalContext.current
 
     Column(
@@ -386,18 +376,23 @@ fun LoginScreen(
             }
         }
 
-        if (isError) {
-            Text(
-                text = "Invalid email or password",
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.padding(bottom = 16.dp)
-            )
-        }
-
         // Login Button
         Button(
-            onClick = { onLoginSuccess(username, password) },
+            onClick = {
+                if (username.isEmpty() || password.isEmpty()) {
+                    isError = true
+                    errorMessage = if (username.isEmpty() && password.isEmpty()) {
+                        "Please enter your email and password"
+                    } else if (username.isEmpty()) {
+                        "Please enter your email"
+                    } else {
+                        "Please enter your password"
+                    }
+                } else {
+                    isError = false
+                    onLoginSuccess(username, password)
+                }
+            },
             modifier = Modifier
                 .fillMaxWidth()
                 .height(56.dp),
@@ -409,6 +404,15 @@ fun LoginScreen(
             Text(
                 "Sign In",
                 style = MaterialTheme.typography.titleMedium
+            )
+        }
+
+        if (isError) {
+            Text(
+                text = errorMessage,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(bottom = 16.dp)
             )
         }
 
