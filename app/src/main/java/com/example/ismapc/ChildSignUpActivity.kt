@@ -118,7 +118,7 @@ class ChildSignUpActivity : ComponentActivity() {
                                                 .set(userData)
                                                 .addOnSuccessListener {
                                                     Toast.makeText(this, "Account created successfully!", Toast.LENGTH_LONG).show()
-                                                    startActivity(Intent(this, MainActivity::class.java))
+                                                    startActivity(Intent(this, PermissionActivity::class.java))
                                                     finish()
                                                 }
                                                 .addOnFailureListener { e ->
