@@ -1,5 +1,4 @@
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
     // Helper function to check if user is authenticated
@@ -9,28 +8,36 @@ service cloud.firestore {
 
     // Helper function to check if user is accessing their own document
     function isOwner(userId) {
-      return request.auth.uid == userId;
+      return isAuthenticated() && request.auth.uid == userId;
     }
 
-    // Parent collection rules
-    match /users/parents/{userId}/{document=**} {
-      allow read, write: if isAuthenticated() && isOwner(userId);
+    // Rules for parent users
+    match /users/parents/{userId}/profile {
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+      allow read: if isOwner(userId);
+      allow update: if isOwner(userId);
     }
 
-    // Child collection rules
-    match /users/child/{userId}/{document=**} {
-      // Allow children to access their own data
-      allow read, write: if isAuthenticated() && isOwner(userId);
-      
-      // Allow parents to read their children's data
-      // This assumes the child document has a 'parentEmail' field
+    // Rules for child collection
+    match /users/child/{userId}/profile {
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+      allow read: if isOwner(userId) || 
+                 (isAuthenticated() && 
+                  request.auth.token.email == resource.data.parentEmail);
+      allow update: if isOwner(userId);
+    }
+
+    // Allow querying child profiles
+    match /users/child/profile {
       allow read: if isAuthenticated() && 
-        get(/databases/$(database)/documents/users/parents/$(request.auth.uid)).data.email == resource.data.parentEmail;
+                 request.auth.token.email == resource.data.parentEmail;
     }
 
-    // Deny access to all other documents by default
-    match /{document=**} {
-      allow read, write: if false;
+    // Collection group rule for profile collections
+    match /{path=**}/profile {
+      allow read: if isAuthenticated() && 
+                 (request.auth.token.email == resource.data.parentEmail ||
+                  isOwner(resource.data.userId));
     }
   }
-} 
+}

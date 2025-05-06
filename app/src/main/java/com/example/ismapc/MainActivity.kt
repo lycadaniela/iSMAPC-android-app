@@ -1,18 +1,31 @@
 package com.example.ismapc
 
 import android.content.Intent
+import android.graphics.Bitmap
 import android.os.Bundle
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.ExitToApp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -109,16 +122,88 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ParentMainScreen(onLogout: () -> Unit) {
+    val currentUser = FirebaseAuth.getInstance().currentUser
+    var parentData by remember { mutableStateOf<Map<String, Any>?>(null) }
+    var isLoading by remember { mutableStateOf(true) }
+    val context = LocalContext.current
+    val profilePictureManager = remember { ProfilePictureManager(context) }
+    var profileBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    
+    // Fetch parent data from Firestore
+    LaunchedEffect(currentUser?.uid) {
+        currentUser?.uid?.let { uid ->
+            Log.d("ParentMainScreen", "Starting data fetch for parent ID: $uid")
+            FirebaseFirestore.getInstance()
+                .collection("users")
+                .document("parents")
+                .collection(uid)
+                .document("profile")
+                .get()
+                .addOnSuccessListener { document ->
+                    if (document.exists()) {
+                        parentData = document.data
+                        Log.d("ParentMainScreen", "Parent profile found")
+                        Log.d("ParentMainScreen", "Parent data: ${document.data}")
+                    } else {
+                        Log.e("ParentMainScreen", "No parent profile found for user: $uid")
+                    }
+                    isLoading = false
+                }
+                .addOnFailureListener { e ->
+                    Log.e("ParentMainScreen", "Error fetching parent profile", e)
+                    Log.e("ParentMainScreen", "Error message: ${e.message}")
+                    Log.e("ParentMainScreen", "Error cause: ${e.cause}")
+                    isLoading = false
+                }
+            
+            // Load profile picture
+            Log.d("ParentMainScreen", "Loading profile picture for user: $uid")
+            profileBitmap = profilePictureManager.getProfilePictureBitmap(uid)
+            if (profileBitmap != null) {
+                Log.d("ParentMainScreen", "Profile picture loaded successfully")
+            } else {
+                Log.d("ParentMainScreen", "No profile picture found")
+            }
+        }
+    }
+
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
-                title = { Text("Parent Dashboard") },
+                title = { },
+                navigationIcon = {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(start = 8.dp)
+                    ) {
+                        IconButton(onClick = { /* TODO: Handle home click */ }) {
+                            Icon(
+                                imageVector = Icons.Default.Home,
+                                contentDescription = "Home",
+                                tint = MaterialTheme.colorScheme.onPrimary
+                            )
+                        }
+                        Text(
+                            text = "Home",
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                    }
+                },
                 actions = {
+                    IconButton(onClick = { /* TODO: Handle settings click */ }) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "Settings",
+                            tint = MaterialTheme.colorScheme.onPrimary
+                        )
+                    }
                     IconButton(onClick = onLogout) {
                         Icon(
                             imageVector = Icons.Outlined.ExitToApp,
-                            contentDescription = "Logout"
+                            contentDescription = "Logout",
+                            tint = MaterialTheme.colorScheme.onPrimary
                         )
                     }
                 },
@@ -130,26 +215,133 @@ fun ParentMainScreen(onLogout: () -> Unit) {
             )
         }
     ) { innerPadding ->
-        Column(
+        if (isLoading) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator()
+            }
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+                    .padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Top
+            ) {
+                // Profile Picture
+                Box(
+                    modifier = Modifier
+                        .size(120.dp)
+                        .padding(8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (profileBitmap != null) {
+                        Image(
+                            bitmap = profileBitmap!!.asImageBitmap(),
+                            contentDescription = "Profile Picture",
+                            modifier = Modifier
+                                .size(120.dp)
+                                .clip(CircleShape),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.Person,
+                            contentDescription = "Profile Picture",
+                            modifier = Modifier.size(120.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                // Parent Name
+                Text(
+                    text = parentData?.get("fullName") as? String ?: "Parent",
+                    style = MaterialTheme.typography.headlineMedium.copy(
+                        fontWeight = FontWeight.Bold
+                    ),
+                    color = MaterialTheme.colorScheme.primary
+                )
+
+                Spacer(modifier = Modifier.height(32.dp))
+
+                // Children header with lines
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(1.dp)
+                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f))
+                    )
+                    Text(
+                        text = "Children",
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(1.dp)
+                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f))
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ChildProfileCard(childProfile: Map<String, Any>) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Row(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
+                .fillMaxWidth()
                 .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = "Welcome Parent!",
-                style = MaterialTheme.typography.headlineMedium.copy(
-                    fontWeight = FontWeight.Bold
-                ),
-                color = MaterialTheme.colorScheme.primary
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = "This is your parent dashboard",
-                style = MaterialTheme.typography.bodyLarge
-            )
+            // Profile picture or placeholder
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Person,
+                    contentDescription = "Child profile picture",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            
+            Spacer(modifier = Modifier.width(16.dp))
+            
+            // Child info
+            Column {
+                Text(
+                    text = childProfile["fullName"] as? String ?: "Unknown",
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Text(
+                    text = childProfile["email"] as? String ?: "",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                )
+            }
         }
     }
 }
