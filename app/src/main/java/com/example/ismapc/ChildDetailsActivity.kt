@@ -52,7 +52,7 @@ class ChildDetailsActivity : ComponentActivity() {
 @Composable
 fun ChildDetailsScreen(childId: String, childName: String) {
     var selectedTabIndex by remember { mutableStateOf(0) }
-    val tabs = listOf("Overview", "Activity", "Settings")
+    val tabs = listOf("Overview", "Location", "Settings")
     val context = LocalContext.current
     
     Scaffold(
@@ -97,7 +97,7 @@ fun ChildDetailsScreen(childId: String, childName: String) {
             // Tab Content
             when (selectedTabIndex) {
                 0 -> OverviewTab(childId)
-                1 -> ActivityTab(childId)
+                1 -> LocationTab(childId)
                 2 -> SettingsTab(childId)
             }
         }
@@ -221,10 +221,121 @@ private fun ScreenTimeCard(screenTime: Long) {
     }
 }
 
+// Add LocationState sealed class
+sealed class LocationState {
+    object Loading : LocationState()
+    data class Success(val latitude: Double, val longitude: Double) : LocationState()
+    data class Error(val message: String) : LocationState()
+}
+
 @Composable
-fun ActivityTab(childId: String) {
-    Box(modifier = Modifier.fillMaxSize()) {
-        Text("Activity Tab Content")
+fun LocationTab(childId: String) {
+    var locationState by remember { mutableStateOf<LocationState>(LocationState.Loading) }
+    val context = LocalContext.current
+    val firestore = FirebaseFirestore.getInstance()
+
+    LaunchedEffect(childId) {
+        if (childId.isBlank()) {
+            locationState = LocationState.Error("Invalid child ID")
+            return@LaunchedEffect
+        }
+
+        try {
+            Log.d("ChildDetailsActivity", "Fetching location data for child: $childId")
+
+            // Set up real-time listener for location updates
+            firestore.collection("locations")
+                .document(childId)
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null) {
+                        locationState = LocationState.Error("Error fetching location: ${error.message}")
+                        Log.e("ChildDetailsActivity", "Error fetching location data", error)
+                        return@addSnapshotListener
+                    }
+
+                    if (snapshot != null && snapshot.exists()) {
+                        val latitude = snapshot.getDouble("latitude") ?: 0.0
+                        val longitude = snapshot.getDouble("longitude") ?: 0.0
+                        locationState = LocationState.Success(latitude, longitude)
+                        Log.d("ChildDetailsActivity", "Location data found: lat=$latitude, lon=$longitude")
+                    } else {
+                        locationState = LocationState.Error("No location data available")
+                        Log.d("ChildDetailsActivity", "No location data found")
+                    }
+                }
+        } catch (e: Exception) {
+            locationState = LocationState.Error("Error: ${e.message}")
+            Log.e("ChildDetailsActivity", "Error in LocationTab", e)
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        when (locationState) {
+            is LocationState.Loading -> {
+                CircularProgressIndicator()
+            }
+            is LocationState.Success -> {
+                val location = locationState as LocationState.Success
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "Current Location",
+                            style = MaterialTheme.typography.titleLarge,
+                            modifier = Modifier.padding(bottom = 16.dp)
+                        )
+                        Text(
+                            text = "Latitude: ${location.latitude}",
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                        Text(
+                            text = "Longitude: ${location.longitude}",
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                        
+                        Spacer(modifier = Modifier.height(16.dp))
+                        
+                        Button(
+                            onClick = {
+                                // Open location in Google Maps
+                                val gmmIntentUri = android.net.Uri.parse(
+                                    "geo:${location.latitude},${location.longitude}?q=${location.latitude},${location.longitude}"
+                                )
+                                val mapIntent = Intent(Intent.ACTION_VIEW, gmmIntentUri)
+                                mapIntent.setPackage("com.google.android.apps.maps")
+                                context.startActivity(mapIntent)
+                            }
+                        ) {
+                            Text("Open in Google Maps")
+                        }
+                    }
+                }
+            }
+            is LocationState.Error -> {
+                Text(
+                    text = (locationState as LocationState.Error).message,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+        }
     }
 }
 
