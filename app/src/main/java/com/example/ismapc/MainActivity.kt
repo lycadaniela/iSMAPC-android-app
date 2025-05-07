@@ -41,6 +41,7 @@ import android.app.AppOpsManager
 import android.content.Context
 import android.provider.Settings
 import android.app.usage.UsageStatsManager
+import android.app.Activity
 
 class MainActivity : ComponentActivity() {
     companion object {
@@ -472,44 +473,20 @@ fun ChildMainScreen(onLogout: () -> Unit) {
     var hasUsagePermission by remember { mutableStateOf(false) }
     var serviceStarted by remember { mutableStateOf(false) }
 
-    // Check for usage stats permission and start service
+    // Check permissions when the screen is first loaded
     LaunchedEffect(Unit) {
-        val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+        val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as android.app.AppOpsManager
         val mode = appOps.checkOpNoThrow(
-            AppOpsManager.OPSTR_GET_USAGE_STATS,
+            android.app.AppOpsManager.OPSTR_GET_USAGE_STATS,
             android.os.Process.myUid(),
             context.packageName
         )
-        hasUsagePermission = mode == AppOpsManager.MODE_ALLOWED
-        Log.d("ChildMainScreen", "Usage permission status: $hasUsagePermission")
+        hasUsagePermission = mode == android.app.AppOpsManager.MODE_ALLOWED
 
-        if (hasUsagePermission) {
-            try {
-                // Stop any existing service first
-                context.stopService(Intent(context, ScreenTimeService::class.java))
-                // Then start a new instance
-                val serviceIntent = Intent(context, ScreenTimeService::class.java)
-                context.startService(serviceIntent)
-                serviceStarted = true
-                Log.d("ChildMainScreen", "Screen time service started successfully")
-            } catch (e: Exception) {
-                Log.e("ChildMainScreen", "Error starting screen time service", e)
-                serviceStarted = false
-            }
-        }
-    }
-
-    // Restart service when permission is granted
-    LaunchedEffect(hasUsagePermission) {
-        if (hasUsagePermission && !serviceStarted) {
-            try {
-                val serviceIntent = Intent(context, ScreenTimeService::class.java)
-                context.startService(serviceIntent)
-                serviceStarted = true
-                Log.d("ChildMainScreen", "Screen time service started after permission grant")
-            } catch (e: Exception) {
-                Log.e("ChildMainScreen", "Error starting screen time service after permission grant", e)
-                serviceStarted = false
+        if (!hasUsagePermission || !Settings.canDrawOverlays(context)) {
+            // Navigate to permission screen if permissions are not granted
+            (context as? Activity)?.let { activity ->
+                activity.startActivity(Intent(context, ChildPermissionActivity::class.java))
             }
         }
     }
@@ -542,54 +519,19 @@ fun ChildMainScreen(onLogout: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            if (!hasUsagePermission) {
-                Text(
-                    text = "Screen Time Permission Required",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
-                Button(
-                    onClick = {
-                        val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
-                        context.startActivity(intent)
+            // Your existing child dashboard content
+            Text("Welcome to your Dashboard!")
+            
+            // Add a button to check permissions again
+            Button(
+                onClick = {
+                    (context as? Activity)?.let { activity ->
+                        activity.startActivity(Intent(context, ChildPermissionActivity::class.java))
                     }
-                ) {
-                    Text("Grant Permission")
-                }
-            } else if (!serviceStarted) {
-                Text(
-                    text = "Error Starting Screen Time Tracking",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
-                Button(
-                    onClick = {
-                        try {
-                            val serviceIntent = Intent(context, ScreenTimeService::class.java)
-                            context.startService(serviceIntent)
-                            serviceStarted = true
-                            Log.d("ChildMainScreen", "Screen time service started on retry")
-                        } catch (e: Exception) {
-                            Log.e("ChildMainScreen", "Error starting screen time service on retry", e)
-                        }
-                    }
-                ) {
-                    Text("Retry")
-                }
-            } else {
-                Text(
-                    text = "Screen Time Tracking Active",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
-                Text(
-                    text = "Your screen time is being tracked and will be visible to your parent.",
-                    style = MaterialTheme.typography.bodyLarge,
-                    textAlign = TextAlign.Center
-                )
+                },
+                modifier = Modifier.padding(top = 16.dp)
+            ) {
+                Text("Check Permissions")
             }
         }
     }
