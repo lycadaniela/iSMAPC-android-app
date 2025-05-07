@@ -55,6 +55,11 @@ service cloud.firestore {
                    exists(/databases/$(database)/documents/users/child/profile/$(request.auth.uid));
     }
 
+    // Installed apps data - simplified rules for testing
+    match /installedApps/{userId} {
+      allow read, write: if isAuthenticated() && userId == request.auth.uid;
+    }
+
     // Allow collection group queries on any 'profile' subcollection
     match /{document=**}/profile/{profileId} {
       allow read: if request.auth != null 

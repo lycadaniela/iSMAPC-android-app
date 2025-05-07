@@ -61,6 +61,9 @@ class MainActivity : ComponentActivity() {
         auth = FirebaseAuth.getInstance()
         firestore = FirebaseFirestore.getInstance()
         enableEdgeToEdge()
+        
+        // Start the InstalledAppsService
+        startService(Intent(this, InstalledAppsService::class.java))
 
         // Check user type
         val currentUser = auth.currentUser
