@@ -16,6 +16,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import com.example.ismapc.ui.theme.ISMAPCTheme
 import com.google.firebase.firestore.FirebaseFirestore
 import java.util.*
@@ -115,12 +117,14 @@ fun ChildDetailsScreen(childId: String, childName: String) {
 @Composable
 fun OverviewTab(childId: String) {
     var screenTimeState by remember { mutableStateOf<ScreenTimeState>(ScreenTimeState.Loading) }
+    var installedAppsState by remember { mutableStateOf<InstalledAppsState>(InstalledAppsState.Loading) }
     val context = LocalContext.current
     val firestore = FirebaseFirestore.getInstance()
 
     LaunchedEffect(childId) {
         if (childId.isBlank()) {
             screenTimeState = ScreenTimeState.Error("Invalid child ID")
+            installedAppsState = InstalledAppsState.Error("Invalid child ID")
             return@LaunchedEffect
         }
 
@@ -135,17 +139,42 @@ fun OverviewTab(childId: String) {
                         val screenTime = documentSnapshot.getLong("screenTime") ?: 0L
                         screenTimeState = ScreenTimeState.Success(screenTime)
                         Log.d("ChildDetailsActivity", "Screen time data found: $screenTime")
-                                } else {
-                                    screenTimeState = ScreenTimeState.Success(0L)
-                                    Log.d("ChildDetailsActivity", "No screen time data found")
+                    } else {
+                        screenTimeState = ScreenTimeState.Success(0L)
+                        Log.d("ChildDetailsActivity", "No screen time data found")
                     }
                 }
                 .addOnFailureListener { e ->
                     screenTimeState = ScreenTimeState.Error("Error fetching screen time: ${e.message}")
                     Log.e("ChildDetailsActivity", "Error fetching screen time data", e)
                 }
+
+            // Fetch installed apps
+            firestore.collection("installedApps")
+                .document(childId)
+                .get()
+                .addOnSuccessListener { documentSnapshot ->
+                    if (documentSnapshot.exists()) {
+                        val apps = documentSnapshot.get("apps") as? List<Map<String, Any>>
+                        if (apps != null) {
+                            installedAppsState = InstalledAppsState.Success(apps)
+                            Log.d("ChildDetailsActivity", "Installed apps found: ${apps.size}")
+                        } else {
+                            installedAppsState = InstalledAppsState.Success(emptyList())
+                            Log.d("ChildDetailsActivity", "No apps found in document")
+                        }
+                    } else {
+                        installedAppsState = InstalledAppsState.Success(emptyList())
+                        Log.d("ChildDetailsActivity", "No installed apps document found")
+                    }
+                }
+                .addOnFailureListener { e ->
+                    installedAppsState = InstalledAppsState.Error("Error fetching installed apps: ${e.message}")
+                    Log.e("ChildDetailsActivity", "Error fetching installed apps", e)
+                }
         } catch (e: Exception) {
             screenTimeState = ScreenTimeState.Error("Error: ${e.message}")
+            installedAppsState = InstalledAppsState.Error("Error: ${e.message}")
             Log.e("ChildDetailsActivity", "Error in OverviewTab", e)
         }
     }
@@ -156,6 +185,7 @@ fun OverviewTab(childId: String) {
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        // Screen Time Section
         when (screenTimeState) {
             is ScreenTimeState.Loading -> {
                 CircularProgressIndicator()
@@ -175,7 +205,7 @@ fun OverviewTab(childId: String) {
                     )
                 } else {
                     Text(
-                        text = "No data",
+                        text = "No screen time data",
                         style = MaterialTheme.typography.titleLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -188,6 +218,51 @@ fun OverviewTab(childId: String) {
                 )
             }
         }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Installed Apps Section
+        Text(
+            text = "Installed Apps",
+            style = MaterialTheme.typography.titleLarge,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+
+        when (installedAppsState) {
+            is InstalledAppsState.Loading -> {
+                CircularProgressIndicator()
+            }
+            is InstalledAppsState.Success -> {
+                val apps = (installedAppsState as InstalledAppsState.Success).apps
+                if (apps.isNotEmpty()) {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                    ) {
+                        items(apps) { app ->
+                            Text(
+                                text = app["appName"] as? String ?: "Unknown App",
+                                style = MaterialTheme.typography.bodyLarge,
+                                modifier = Modifier.padding(vertical = 4.dp)
+                            )
+                        }
+                    }
+                } else {
+                    Text(
+                        text = "No apps found",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            is InstalledAppsState.Error -> {
+                Text(
+                    text = (installedAppsState as InstalledAppsState.Error).message,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+        }
     }
 }
 
@@ -195,6 +270,12 @@ sealed class ScreenTimeState {
     object Loading : ScreenTimeState()
     data class Success(val screenTime: Long) : ScreenTimeState()
     data class Error(val message: String) : ScreenTimeState()
+}
+
+sealed class InstalledAppsState {
+    object Loading : InstalledAppsState()
+    data class Success(val apps: List<Map<String, Any>>) : InstalledAppsState()
+    data class Error(val message: String) : InstalledAppsState()
 }
 
 @Composable

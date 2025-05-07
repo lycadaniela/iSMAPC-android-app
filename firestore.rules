@@ -55,9 +55,17 @@ service cloud.firestore {
                    exists(/databases/$(database)/documents/users/child/profile/$(request.auth.uid));
     }
 
-    // Installed apps data - simplified rules for testing
+    // Installed apps data
     match /installedApps/{userId} {
-      allow read, write: if isAuthenticated() && userId == request.auth.uid;
+      allow read: if isAuthenticated() && (
+        // Allow users to read their own installed apps data
+        userId == request.auth.uid ||
+        // Allow parents to read their children's installed apps data
+        isParentOfChild(get(/databases/$(database)/documents/users/child/profile/$(userId)).data.parentEmail)
+      );
+      allow write: if isAuthenticated() && 
+                   userId == request.auth.uid &&
+                   exists(/databases/$(database)/documents/users/child/profile/$(request.auth.uid));
     }
 
     // Allow collection group queries on any 'profile' subcollection
