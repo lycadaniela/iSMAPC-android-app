@@ -170,43 +170,48 @@ fun ParentMainScreen(onLogout: () -> Unit) {
     val profilePictureManager = remember { ProfilePictureManager(context) }
     var profileBitmap by remember { mutableStateOf<Bitmap?>(null) }
 
-    // Fetch parent data and children data from Firestore
+    // Fetch parent data and children data from Firestore using real-time listeners
     LaunchedEffect(currentUser?.uid) {
         currentUser?.uid?.let { uid ->
             Log.d("ParentMainScreen", "Starting data fetch for parent ID: $uid")
-            FirebaseFirestore.getInstance()
+            
+            // Real-time listener for parent data
+            val parentListener = FirebaseFirestore.getInstance()
                 .collection(MainActivity.USERS_COLLECTION)
                 .document(MainActivity.PARENTS_COLLECTION)
                 .collection(uid)
                 .document(MainActivity.PROFILE_DOCUMENT)
-                .get()
-                .addOnSuccessListener { document ->
-                    if (document.exists()) {
-                        parentData = document.data
-                        Log.d("ParentMainScreen", "Parent profile found")
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null) {
+                        Log.e("ParentMainScreen", "Error listening to parent data", error)
+                        return@addSnapshotListener
+                    }
 
-                        // After getting parent data, fetch children data
-                        val parentEmail = document.getString("email")
+                    if (snapshot != null && snapshot.exists()) {
+                        parentData = snapshot.data
+                        Log.d("ParentMainScreen", "Parent profile updated")
+
+                        // After getting parent data, set up real-time listener for children
+                        val parentEmail = snapshot.getString("email")
                         if (parentEmail != null) {
-                            Log.d("ParentMainScreen", "Parent email: $parentEmail")
-                            FirebaseFirestore.getInstance()
+                            Log.d("ParentMainScreen", "Setting up children listener for parent email: $parentEmail")
+                            
+                            // Real-time listener for children data
+                            val childrenListener = FirebaseFirestore.getInstance()
                                 .collectionGroup(MainActivity.PROFILE_DOCUMENT)
                                 .whereEqualTo("parentEmail", parentEmail)
-                                .get()
-                                .addOnSuccessListener { querySnapshot ->
-                                    Log.d("ParentMainScreen", "Query path: collectionGroup('${MainActivity.PROFILE_DOCUMENT}')")
-                                    Log.d("ParentMainScreen", "Total documents in query: ${querySnapshot.size()}")
+                                .addSnapshotListener { querySnapshot, error ->
+                                    if (error != null) {
+                                        Log.e("ParentMainScreen", "Error listening to children data", error)
+                                        return@addSnapshotListener
+                                    }
 
-                                    val filteredChildren = querySnapshot.documents.mapNotNull { it.data }
-
-                                    childrenData = filteredChildren
-                                    Log.d("ParentMainScreen", "Found ${filteredChildren.size} children with matching parentEmail")
-                                    isLoading = false
-                                }
-                                .addOnFailureListener { e ->
-                                    Log.e("ParentMainScreen", "Error fetching children", e)
-                                    Log.e("ParentMainScreen", "Error details: ${e.message}")
-                                    isLoading = false
+                                    if (querySnapshot != null) {
+                                        val filteredChildren = querySnapshot.documents.mapNotNull { it.data }
+                                        childrenData = filteredChildren
+                                        Log.d("ParentMainScreen", "Children data updated. Found ${filteredChildren.size} children")
+                                        isLoading = false
+                                    }
                                 }
                         } else {
                             Log.e("ParentMainScreen", "Parent email is null")
@@ -216,10 +221,6 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                         Log.e("ParentMainScreen", "No parent profile found for user: $uid")
                         isLoading = false
                     }
-                }
-                .addOnFailureListener { e ->
-                    Log.e("ParentMainScreen", "Error fetching parent profile", e)
-                    isLoading = false
                 }
 
             // Load profile picture
