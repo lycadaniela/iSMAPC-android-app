@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.provider.MediaStore
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -105,32 +106,28 @@ class ChildSignUpActivity : ComponentActivity() {
                                             val userData = hashMapOf(
                                                 "fullName" to fullName,
                                                 "email" to email,
-                                                "parentEmail" to parentEmail,
                                                 "userType" to "child",
                                                 "createdAt" to Timestamp(Date()),
-                                                "profilePicturePath" to profilePicturePath
+                                                "profilePicturePath" to profilePicturePath,
+                                                "parentEmail" to parentEmail
                                             )
                                             
                                             firestore.collection("users")
                                                 .document("child")
-                                                .collection(user.uid)
-                                                .document("profile")
+                                                .collection("profile")
+                                                .document(user.uid)
                                                 .set(userData)
                                                 .addOnSuccessListener {
-                                                    Toast.makeText(this, "Account created successfully!", Toast.LENGTH_LONG).show()
-                                                    startActivity(Intent(this, PermissionActivity::class.java))
+                                                    Log.d("ChildSignUp", "Child profile created successfully")
+                                                    // Navigate to child main screen
+                                                    val intent = Intent(this, PermissionActivity::class.java)
+                                                    intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                                                    startActivity(intent)
                                                     finish()
                                                 }
                                                 .addOnFailureListener { e ->
-                                                    if (e.message?.contains("permission-denied") == true) {
-                                                        user.delete().addOnCompleteListener { deleteTask ->
-                                                            if (deleteTask.isSuccessful) {
-                                                                Toast.makeText(this, "Failed to create account: Permission denied. Please try again.", Toast.LENGTH_LONG).show()
-                                                            }
-                                                        }
-                                                    } else {
-                                                        Toast.makeText(this, "Failed to save user data: ${e.message}", Toast.LENGTH_LONG).show()
-                                                    }
+                                                    Log.e("ChildSignUp", "Error creating child profile", e)
+                                                    Toast.makeText(this, "Error creating profile: ${e.message}", Toast.LENGTH_LONG).show()
                                                 }
                                         }
                                     } else {
@@ -193,8 +190,8 @@ class ChildSignUpActivity : ComponentActivity() {
 
                         firestore.collection("users")
                             .document("child")
-                            .collection(user.uid)
-                            .document("profile")
+                            .collection("profile")
+                            .document(user.uid)
                             .set(userData)
                             .addOnSuccessListener {
                                 startActivity(Intent(this, MainActivity::class.java))

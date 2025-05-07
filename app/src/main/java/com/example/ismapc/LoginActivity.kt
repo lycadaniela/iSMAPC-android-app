@@ -52,6 +52,7 @@ import android.net.NetworkCapabilities
 import android.os.Build
 import com.google.android.gms.auth.api.signin.GoogleSignInStatusCodes
 import com.google.firebase.firestore.FirebaseFirestore
+import android.util.Log
 
 class LoginActivity : ComponentActivity() {
     private lateinit var auth: FirebaseAuth
@@ -88,9 +89,13 @@ class LoginActivity : ComponentActivity() {
                             auth.signInWithEmailAndPassword(email, password)
                                 .addOnCompleteListener { task ->
                                     if (task.isSuccessful) {
+                                        Log.d("LoginActivity", "Email/password sign in successful")
+                                        val user = auth.currentUser
+                                        Log.d("LoginActivity", "User ID: ${user?.uid}, Email: ${user?.email}")
                                         startActivity(Intent(context, MainActivity::class.java))
                                         finish()
                                     } else {
+                                        Log.e("LoginActivity", "Sign in failed", task.exception)
                                         Toast.makeText(context, "Incorrect email or password", Toast.LENGTH_LONG).show()
                                     }
                                 }
@@ -141,40 +146,49 @@ class LoginActivity : ComponentActivity() {
     }
 
     private fun firebaseAuthWithGoogle(idToken: String) {
+        Log.d("LoginActivity", "Starting Google sign in with token")
         val credential = GoogleAuthProvider.getCredential(idToken, null)
         auth.signInWithCredential(credential)
             .addOnCompleteListener(this) { task ->
                 if (task.isSuccessful) {
                     val user = auth.currentUser
                     if (user != null) {
+                        Log.d("LoginActivity", "Google sign in successful. User ID: ${user.uid}, Email: ${user.email}")
                         // Check if user exists in either parent or child collection
                         val db = FirebaseFirestore.getInstance()
                         
                         // First check parents collection
+                        Log.d("LoginActivity", "Checking parent collection")
                         db.collection("users")
-                            .document("parents")
+                            .document("parent")
                             .collection(user.uid)
                             .document("profile")
                             .get()
                             .addOnSuccessListener { parentDoc ->
+                                Log.d("LoginActivity", "Parent doc exists: ${parentDoc.exists()}")
                                 if (parentDoc.exists()) {
                                     // User is a parent, proceed to MainActivity
+                                    Log.d("LoginActivity", "User is a parent, proceeding to MainActivity")
                                     startActivity(Intent(this, MainActivity::class.java))
                                     finish()
                                 } else {
                                     // If not found in parents, check child collection
+                                    Log.d("LoginActivity", "Checking child collection")
                                     db.collection("users")
                                         .document("child")
-                                        .collection(user.uid)
-                                        .document("profile")
+                                        .collection("profile")
+                                        .document(user.uid)
                                         .get()
                                         .addOnSuccessListener { childDoc ->
+                                            Log.d("LoginActivity", "Child doc exists: ${childDoc.exists()}")
                                             if (childDoc.exists()) {
                                                 // User is a child, proceed to MainActivity
+                                                Log.d("LoginActivity", "User is a child, proceeding to MainActivity")
                                                 startActivity(Intent(this, MainActivity::class.java))
                                                 finish()
                                             } else {
                                                 // User not found in either collection
+                                                Log.e("LoginActivity", "User not found in either collection")
                                                 auth.signOut()
                                                 googleSignInClient.signOut()
                                                 Toast.makeText(
@@ -185,6 +199,7 @@ class LoginActivity : ComponentActivity() {
                                             }
                                         }
                                         .addOnFailureListener { e ->
+                                            Log.e("LoginActivity", "Error checking child collection", e)
                                             auth.signOut()
                                             googleSignInClient.signOut()
                                             Toast.makeText(
@@ -196,6 +211,7 @@ class LoginActivity : ComponentActivity() {
                                 }
                             }
                             .addOnFailureListener { e ->
+                                Log.e("LoginActivity", "Error checking parent collection", e)
                                 auth.signOut()
                                 googleSignInClient.signOut()
                                 Toast.makeText(
@@ -206,6 +222,7 @@ class LoginActivity : ComponentActivity() {
                             }
                     } else {
                         // User is null after successful sign in
+                        Log.e("LoginActivity", "User is null after successful sign in")
                         Toast.makeText(
                             this,
                             "Error: User information not available",
@@ -213,6 +230,7 @@ class LoginActivity : ComponentActivity() {
                         ).show()
                     }
                 } else {
+                    Log.e("LoginActivity", "Google sign in failed", task.exception)
                     val errorMessage = when (task.exception) {
                         is com.google.firebase.auth.FirebaseAuthUserCollisionException ->
                             "This Google account is already linked to another email"

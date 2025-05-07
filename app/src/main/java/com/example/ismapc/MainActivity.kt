@@ -34,6 +34,13 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 
 class MainActivity : ComponentActivity() {
+    companion object {
+        const val USERS_COLLECTION = "users"
+        const val PARENTS_COLLECTION = "parents"
+        const val CHILD_COLLECTION = "child"
+        const val PROFILE_DOCUMENT = "profile"
+    }
+
     private lateinit var auth: FirebaseAuth
     private lateinit var firestore: FirebaseFirestore
     private var userType by mutableStateOf<String?>(null)
@@ -47,37 +54,65 @@ class MainActivity : ComponentActivity() {
         // Check user type
         val currentUser = auth.currentUser
         if (currentUser != null) {
-            // First check parents collection
-            firestore.collection("users")
-                .document("parents")
+            Log.d("MainActivity", "Current user: ${currentUser.uid}, email: ${currentUser.email}")
+            // First check parent collection
+            firestore.collection(USERS_COLLECTION)
+                .document(PARENTS_COLLECTION)
                 .collection(currentUser.uid)
-                .document("profile")
+                .document(PROFILE_DOCUMENT)
                 .get()
                 .addOnSuccessListener { parentDoc ->
+                    Log.d("MainActivity", "Checking parent collection: ${parentDoc.exists()}")
                     if (parentDoc.exists()) {
                         userType = "parent"
+                        Log.d("MainActivity", "User is a parent")
                     } else {
-                        // If not found in parents, check child collection
-                        firestore.collection("users")
-                            .document("child")
-                            .collection(currentUser.uid)
-                            .document("profile")
+                        // If not found in parent, check child collection
+                        Log.d("MainActivity", "Checking child collection")
+                        firestore.collection(USERS_COLLECTION)
+                            .document(CHILD_COLLECTION)
+                            .collection("profile")
+                            .document(currentUser.uid)
                             .get()
                             .addOnSuccessListener { childDoc ->
+                                Log.d("MainActivity", "Child doc exists: ${childDoc.exists()}")
                                 if (childDoc.exists()) {
                                     userType = "child"
+                                    Log.d("MainActivity", "User is a child")
                                 } else {
                                     // User not found in either collection
+                                    Log.e("MainActivity", "User not found in either collection")
                                     Toast.makeText(this, "User type not found. Please sign in again.", Toast.LENGTH_LONG).show()
                                     auth.signOut()
                                     startActivity(Intent(this, LoginActivity::class.java))
                                     finish()
                                 }
                             }
+                            .addOnFailureListener { e ->
+                                Log.e("MainActivity", "Error checking child collection: ${e.message}")
+                                Log.e("MainActivity", "Error details", e)
+                                // Try to get more information about the error
+                                if (e.message?.contains("permission-denied") == true) {
+                                    Log.e("MainActivity", "Permission denied error. Current user: ${currentUser.uid}, email: ${currentUser.email}")
+                                }
+                                Toast.makeText(this, "Error checking user type: ${e.message}", Toast.LENGTH_LONG).show()
+                                auth.signOut()
+                                startActivity(Intent(this, LoginActivity::class.java))
+                                finish()
+                            }
                     }
+                }
+                .addOnFailureListener { e ->
+                    Log.e("MainActivity", "Error checking parent collection: ${e.message}")
+                    Log.e("MainActivity", "Error details", e)
+                    Toast.makeText(this, "Error checking user type: ${e.message}", Toast.LENGTH_LONG).show()
+                    auth.signOut()
+                    startActivity(Intent(this, LoginActivity::class.java))
+                    finish()
                 }
         } else {
             // No user logged in
+            Log.d("MainActivity", "No user logged in")
             startActivity(Intent(this, LoginActivity::class.java))
             finish()
         }
@@ -123,47 +158,68 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun ParentMainScreen(onLogout: () -> Unit) {
     val currentUser = FirebaseAuth.getInstance().currentUser
+    Log.d("AuthCheck", "User email: ${currentUser?.email}")
     var parentData by remember { mutableStateOf<Map<String, Any>?>(null) }
+    var childrenData by remember { mutableStateOf<List<Map<String, Any>>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     val context = LocalContext.current
     val profilePictureManager = remember { ProfilePictureManager(context) }
     var profileBitmap by remember { mutableStateOf<Bitmap?>(null) }
-    
-    // Fetch parent data from Firestore
+
+    // Fetch parent data and children data from Firestore
     LaunchedEffect(currentUser?.uid) {
         currentUser?.uid?.let { uid ->
             Log.d("ParentMainScreen", "Starting data fetch for parent ID: $uid")
             FirebaseFirestore.getInstance()
-                .collection("users")
-                .document("parents")
+                .collection(MainActivity.USERS_COLLECTION)
+                .document(MainActivity.PARENTS_COLLECTION)
                 .collection(uid)
-                .document("profile")
+                .document(MainActivity.PROFILE_DOCUMENT)
                 .get()
                 .addOnSuccessListener { document ->
                     if (document.exists()) {
                         parentData = document.data
                         Log.d("ParentMainScreen", "Parent profile found")
-                        Log.d("ParentMainScreen", "Parent data: ${document.data}")
+
+                        // After getting parent data, fetch children data
+                        val parentEmail = document.getString("email")
+                        if (parentEmail != null) {
+                            Log.d("ParentMainScreen", "Parent email: $parentEmail")
+                            FirebaseFirestore.getInstance()
+                                .collectionGroup(MainActivity.PROFILE_DOCUMENT)
+                                .whereEqualTo("parentEmail", parentEmail)
+                                .get()
+                                .addOnSuccessListener { querySnapshot ->
+                                    Log.d("ParentMainScreen", "Query path: collectionGroup('${MainActivity.PROFILE_DOCUMENT}')")
+                                    Log.d("ParentMainScreen", "Total documents in query: ${querySnapshot.size()}")
+
+                                    val filteredChildren = querySnapshot.documents.mapNotNull { it.data }
+
+                                    childrenData = filteredChildren
+                                    Log.d("ParentMainScreen", "Found ${filteredChildren.size} children with matching parentEmail")
+                                    isLoading = false
+                                }
+                                .addOnFailureListener { e ->
+                                    Log.e("ParentMainScreen", "Error fetching children", e)
+                                    Log.e("ParentMainScreen", "Error details: ${e.message}")
+                                    isLoading = false
+                                }
+                        } else {
+                            Log.e("ParentMainScreen", "Parent email is null")
+                            isLoading = false
+                        }
                     } else {
                         Log.e("ParentMainScreen", "No parent profile found for user: $uid")
+                        isLoading = false
                     }
-                    isLoading = false
                 }
                 .addOnFailureListener { e ->
                     Log.e("ParentMainScreen", "Error fetching parent profile", e)
-                    Log.e("ParentMainScreen", "Error message: ${e.message}")
-                    Log.e("ParentMainScreen", "Error cause: ${e.cause}")
                     isLoading = false
                 }
-            
+
             // Load profile picture
-            Log.d("ParentMainScreen", "Loading profile picture for user: $uid")
             profileBitmap = profilePictureManager.getProfilePictureBitmap(uid)
-            if (profileBitmap != null) {
-                Log.d("ParentMainScreen", "Profile picture loaded successfully")
-            } else {
-                Log.d("ParentMainScreen", "No profile picture found")
-            }
         }
     }
 
@@ -251,48 +307,70 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                         Icon(
                             imageVector = Icons.Default.Person,
                             contentDescription = "Profile Picture",
-                            modifier = Modifier.size(120.dp),
-                            tint = MaterialTheme.colorScheme.primary
+                            modifier = Modifier
+                                .size(120.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.surfaceVariant),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
-                
-                Spacer(modifier = Modifier.height(16.dp))
-                
+
                 // Parent Name
+                parentData?.get("fullName")?.let { name ->
+                    Text(
+                        text = name.toString(),
+                        style = MaterialTheme.typography.headlineSmall,
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    )
+                }
+
+                // Children Section
                 Text(
-                    text = parentData?.get("fullName") as? String ?: "Parent",
-                    style = MaterialTheme.typography.headlineMedium.copy(
-                        fontWeight = FontWeight.Bold
-                    ),
-                    color = MaterialTheme.colorScheme.primary
+                    text = "Your Children",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier
+                        .padding(top = 24.dp, bottom = 16.dp)
+                        .align(Alignment.Start)
                 )
 
-                Spacer(modifier = Modifier.height(32.dp))
-
-                // Children header with lines
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(1.dp)
-                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f))
-                    )
+                if (childrenData.isEmpty()) {
                     Text(
-                        text = "Children",
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.onSurface
+                        text = "No children registered yet",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(vertical = 16.dp)
                     )
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(1.dp)
-                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f))
-                    )
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(childrenData) { child ->
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surface
+                                )
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp)
+                                ) {
+                                    Text(
+                                        text = child["fullName"]?.toString() ?: "Unknown",
+                                        style = MaterialTheme.typography.titleMedium
+                                    )
+                                    Text(
+                                        text = child["email"]?.toString() ?: "No email",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -327,9 +405,9 @@ fun ChildProfileCard(childProfile: Map<String, Any>) {
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            
+
             Spacer(modifier = Modifier.width(16.dp))
-            
+
             // Child info
             Column {
                 Text(

@@ -1,43 +1,48 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Helper function to check if user is authenticated
     function isAuthenticated() {
       return request.auth != null;
     }
 
-    // Helper function to check if user is accessing their own document
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    // Rules for parent users
+    function isParentOfChild(parentEmail) {
+      return isAuthenticated() && 
+        exists(/databases/$(database)/documents/users/parents/$(request.auth.uid)/profile) &&
+        get(/databases/$(database)/documents/users/parents/$(request.auth.uid)/profile).data.email == parentEmail;
+    }
+
+    // Parent profiles
     match /users/parents/{userId}/profile {
-      allow create: if isAuthenticated() && request.auth.uid == userId;
-      allow read: if isOwner(userId);
-      allow update: if isOwner(userId);
+      allow read: if isAuthenticated();
+      allow write: if isOwner(userId);
     }
 
-    // Rules for child collection
-    match /users/child/{userId}/profile {
-      allow create: if isAuthenticated() && request.auth.uid == userId;
-      allow read: if isOwner(userId) || 
-                 (isAuthenticated() && 
-                  request.auth.token.email == resource.data.parentEmail);
-      allow update: if isOwner(userId);
+    // Child profiles with profile as collection
+    match /users/child/profile/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isOwner(userId) ||
+                   (isAuthenticated() && 
+                    request.resource.data.parentEmail == request.auth.token.email);
     }
 
-    // Allow querying child profiles
-    match /users/child/profile {
-      allow read: if isAuthenticated() && 
-                 request.auth.token.email == resource.data.parentEmail;
+    // Allow collection group queries on any 'profile' subcollection
+    match /{document=**}/profile/{profileId} {
+      allow read: if request.auth != null 
+                  && request.auth.token.email == resource.data.parentEmail;
     }
 
-    // Collection group rule for profile collections
-    match /{path=**}/profile {
-      allow read: if isAuthenticated() && 
-                 (request.auth.token.email == resource.data.parentEmail ||
-                  isOwner(resource.data.userId));
+    // Allow listing collections
+    match /users/{document=**} {
+      allow list: if isAuthenticated();
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

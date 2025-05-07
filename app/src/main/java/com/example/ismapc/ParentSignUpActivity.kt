@@ -97,7 +97,7 @@ class ParentSignUpActivity : ComponentActivity() {
                                             )
                                             
                                             firestore.collection("users")
-                                                .document("parents")
+                                                .document("parent")
                                                 .collection(user.uid)
                                                 .document("profile")
                                                 .set(userData)
@@ -161,7 +161,7 @@ class ParentSignUpActivity : ComponentActivity() {
                         )
 
                         firestore.collection("users")
-                            .document("parents")
+                            .document("parent")
                             .collection(user.uid)
                             .document("profile")
                             .set(userData)
