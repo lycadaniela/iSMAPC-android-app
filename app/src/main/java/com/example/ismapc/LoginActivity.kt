@@ -53,16 +53,19 @@ import android.os.Build
 import com.google.android.gms.auth.api.signin.GoogleSignInStatusCodes
 import com.google.firebase.firestore.FirebaseFirestore
 import android.util.Log
+import android.content.SharedPreferences
 
 class LoginActivity : ComponentActivity() {
     private lateinit var auth: FirebaseAuth
     private lateinit var googleSignInClient: GoogleSignInClient
+    private lateinit var sharedPreferences: SharedPreferences
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
         // Initialize Firebase Auth
         auth = FirebaseAuth.getInstance()
+        sharedPreferences = getSharedPreferences("login_prefs", Context.MODE_PRIVATE)
 
         // Configure Google Sign In
         val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
@@ -79,23 +82,41 @@ class LoginActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     val context = LocalContext.current
+                    // Load saved credentials
+                    val savedEmail = sharedPreferences.getString("email", "") ?: ""
+                    val savedPassword = sharedPreferences.getString("password", "") ?: ""
+                    val savedRememberMe = sharedPreferences.getBoolean("rememberMe", false)
+                    var initialLoad by remember { mutableStateOf(true) }
+                    var usernameState by remember { mutableStateOf(savedEmail) }
+                    var passwordState by remember { mutableStateOf(savedPassword) }
+                    var rememberMeState by remember { mutableStateOf(savedRememberMe) }
                     LoginScreen(
+                        username = usernameState,
+                        password = passwordState,
+                        rememberMe = rememberMeState,
+                        onUsernameChange = { usernameState = it },
+                        onPasswordChange = { passwordState = it },
+                        onRememberMeChange = { rememberMeState = it },
                         onLoginSuccess = { email, password ->
                             if (!isNetworkAvailable(context)) {
                                 Toast.makeText(context, "No internet connection. Please check your network settings.", Toast.LENGTH_LONG).show()
                                 return@LoginScreen
                             }
-                            
                             auth.signInWithEmailAndPassword(email, password)
                                 .addOnCompleteListener { task ->
                                     if (task.isSuccessful) {
-                                        Log.d("LoginActivity", "Email/password sign in successful")
-                                        val user = auth.currentUser
-                                        Log.d("LoginActivity", "User ID: ${user?.uid}, Email: ${user?.email}")
+                                        if (rememberMeState) {
+                                            sharedPreferences.edit()
+                                                .putString("email", email)
+                                                .putString("password", password)
+                                                .putBoolean("rememberMe", true)
+                                                .apply()
+                                        } else {
+                                            sharedPreferences.edit().clear().apply()
+                                        }
                                         startActivity(Intent(context, MainActivity::class.java))
                                         finish()
                                     } else {
-                                        Log.e("LoginActivity", "Sign in failed", task.exception)
                                         Toast.makeText(context, "Incorrect email or password", Toast.LENGTH_LONG).show()
                                     }
                                 }
@@ -284,17 +305,19 @@ class LoginActivity : ComponentActivity() {
 
 @Composable
 fun LoginScreen(
+    username: String,
+    password: String,
+    rememberMe: Boolean,
+    onUsernameChange: (String) -> Unit,
+    onPasswordChange: (String) -> Unit,
+    onRememberMeChange: (Boolean) -> Unit,
     onLoginSuccess: (String, String) -> Unit,
     onForgotPassword: () -> Unit,
     onGoogleSignIn: () -> Unit
 ) {
-    var username by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var rememberMe by remember { mutableStateOf(false) }
     var isError by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf("") }
     val context = LocalContext.current
-
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -333,7 +356,7 @@ fun LoginScreen(
         // Input Fields
         OutlinedTextField(
             value = username,
-            onValueChange = { username = it },
+            onValueChange = { onUsernameChange(it) },
             label = { Text("Email") },
             leadingIcon = {
                 Icon(
@@ -355,7 +378,7 @@ fun LoginScreen(
 
         OutlinedTextField(
             value = password,
-            onValueChange = { password = it },
+            onValueChange = { onPasswordChange(it) },
             label = { Text("Password") },
             leadingIcon = {
                 Icon(
@@ -389,7 +412,7 @@ fun LoginScreen(
             ) {
                 Checkbox(
                     checked = rememberMe,
-                    onCheckedChange = { rememberMe = it },
+                    onCheckedChange = { onRememberMeChange(it) },
                     colors = CheckboxDefaults.colors(
                         checkedColor = MaterialTheme.colorScheme.primary
                     )
