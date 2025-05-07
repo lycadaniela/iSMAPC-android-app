@@ -21,7 +21,7 @@ service cloud.firestore {
       allow write: if isOwner(userId);
     }
 
-    // Child profiles with profile as collection
+    // Child profiles
     match /users/child/profile/{userId} {
       allow read: if isAuthenticated();
       allow write: if isOwner(userId) ||

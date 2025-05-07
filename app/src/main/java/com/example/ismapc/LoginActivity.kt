@@ -131,6 +131,7 @@ class LoginActivity : ComponentActivity() {
                 if (account.idToken != null) {
                     firebaseAuthWithGoogle(account.idToken!!)
                 } else {
+                    Log.e("LoginActivity", "Google sign in failed: No ID token received")
                     Toast.makeText(this, "Google sign in failed: No ID token received", Toast.LENGTH_SHORT).show()
                 }
             } catch (e: ApiException) {
@@ -140,6 +141,7 @@ class LoginActivity : ComponentActivity() {
                     GoogleSignInStatusCodes.NETWORK_ERROR -> "Network error. Please check your connection"
                     else -> "Google sign in failed: ${e.message}"
                 }
+                Log.e("LoginActivity", errorMessage, e)
                 Toast.makeText(this, errorMessage, Toast.LENGTH_LONG).show()
             }
         }
@@ -160,7 +162,7 @@ class LoginActivity : ComponentActivity() {
                         // First check parents collection
                         Log.d("LoginActivity", "Checking parent collection")
                         db.collection("users")
-                            .document("parent")
+                            .document("parents")
                             .collection(user.uid)
                             .document("profile")
                             .get()
@@ -189,56 +191,70 @@ class LoginActivity : ComponentActivity() {
                                             } else {
                                                 // User not found in either collection
                                                 Log.e("LoginActivity", "User not found in either collection")
-                                                auth.signOut()
-                                                googleSignInClient.signOut()
-                                                Toast.makeText(
-                                                    this,
-                                                    "This Google account is not registered. Please sign up first.",
-                                                    Toast.LENGTH_LONG
-                                                ).show()
+                                                // Delete the Firebase Auth account since it's not registered
+                                                user.delete().addOnCompleteListener { deleteTask ->
+                                                    if (deleteTask.isSuccessful) {
+                                                        Log.d("LoginActivity", "Deleted unregistered Firebase Auth account")
+                                                    } else {
+                                                        Log.e("LoginActivity", "Failed to delete unregistered account", deleteTask.exception)
+                                                    }
+                                                    // Sign out from both Firebase and Google
+                                                    auth.signOut()
+                                                    googleSignInClient.signOut()
+                                                    Toast.makeText(
+                                                        this,
+                                                        "This Google account is not registered. Please sign up first.",
+                                                        Toast.LENGTH_LONG
+                                                    ).show()
+                                                }
                                             }
                                         }
                                         .addOnFailureListener { e ->
                                             Log.e("LoginActivity", "Error checking child collection", e)
-                                            auth.signOut()
-                                            googleSignInClient.signOut()
-                                            Toast.makeText(
-                                                this,
-                                                "Error checking child registration: ${e.message}",
-                                                Toast.LENGTH_LONG
-                                            ).show()
+                                            // Delete the Firebase Auth account on error
+                                            user.delete().addOnCompleteListener { deleteTask ->
+                                                if (deleteTask.isSuccessful) {
+                                                    Log.d("LoginActivity", "Deleted Firebase Auth account after error")
+                                                } else {
+                                                    Log.e("LoginActivity", "Failed to delete account after error", deleteTask.exception)
+                                                }
+                                                auth.signOut()
+                                                googleSignInClient.signOut()
+                                                Toast.makeText(
+                                                    this,
+                                                    "Error checking account: ${e.message}",
+                                                    Toast.LENGTH_LONG
+                                                ).show()
+                                            }
                                         }
                                 }
                             }
                             .addOnFailureListener { e ->
                                 Log.e("LoginActivity", "Error checking parent collection", e)
-                                auth.signOut()
-                                googleSignInClient.signOut()
-                                Toast.makeText(
-                                    this,
-                                    "Error checking parent registration: ${e.message}",
-                                    Toast.LENGTH_LONG
-                                ).show()
+                                // Delete the Firebase Auth account on error
+                                user.delete().addOnCompleteListener { deleteTask ->
+                                    if (deleteTask.isSuccessful) {
+                                        Log.d("LoginActivity", "Deleted Firebase Auth account after error")
+                                    } else {
+                                        Log.e("LoginActivity", "Failed to delete account after error", deleteTask.exception)
+                                    }
+                                    auth.signOut()
+                                    googleSignInClient.signOut()
+                                    Toast.makeText(
+                                        this,
+                                        "Error checking account: ${e.message}",
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                }
                             }
-                    } else {
-                        // User is null after successful sign in
-                        Log.e("LoginActivity", "User is null after successful sign in")
-                        Toast.makeText(
-                            this,
-                            "Error: User information not available",
-                            Toast.LENGTH_LONG
-                        ).show()
                     }
                 } else {
                     Log.e("LoginActivity", "Google sign in failed", task.exception)
-                    val errorMessage = when (task.exception) {
-                        is com.google.firebase.auth.FirebaseAuthUserCollisionException ->
-                            "This Google account is already linked to another email"
-                        is com.google.firebase.FirebaseNetworkException ->
-                            "Network error. Please check your connection"
-                        else -> "Authentication failed: ${task.exception?.message}"
-                    }
-                    Toast.makeText(this, errorMessage, Toast.LENGTH_LONG).show()
+                    Toast.makeText(
+                        this,
+                        "Authentication failed: ${task.exception?.message}",
+                        Toast.LENGTH_LONG
+                    ).show()
                 }
             }
     }
