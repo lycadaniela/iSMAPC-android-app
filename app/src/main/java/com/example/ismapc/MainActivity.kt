@@ -174,6 +174,8 @@ class MainActivity : ComponentActivity() {
 
     private fun startChildServices() {
         try {
+            Log.d("MainActivity", "Starting child services")
+            
             // Start the InstalledAppsService
             startService(Intent(this, InstalledAppsService::class.java))
 
@@ -220,10 +222,27 @@ class MainActivity : ComponentActivity() {
         try {
             // Only restart services for child users
             if (userType == "child") {
+                Log.d("MainActivity", "Restarting child services in onResume")
                 startChildServices()
             }
         } catch (e: Exception) {
             Log.e("MainActivity", "Error in onResume: ${e.message}")
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        try {
+            // Stop services when activity is destroyed
+            if (userType == "child") {
+                Log.d("MainActivity", "Stopping child services in onDestroy")
+                stopService(Intent(this, LocationService::class.java))
+                stopService(Intent(this, ScreenTimeService::class.java))
+                stopService(Intent(this, AppLockService::class.java))
+                stopService(Intent(this, InstalledAppsService::class.java))
+            }
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Error in onDestroy: ${e.message}")
         }
     }
 }

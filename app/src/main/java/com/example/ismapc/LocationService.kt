@@ -13,6 +13,7 @@ import android.location.LocationManager
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
+import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
@@ -30,6 +31,8 @@ class LocationService : Service() {
     private val CHANNEL_ID = "LocationServiceChannel"
     private val UPDATE_INTERVAL = 5 * 60 * 1000L // 5 minutes
     private val MIN_DISTANCE = 10f // 10 meters
+    private var isRunning = false
+    private var wakeLock: PowerManager.WakeLock? = null
 
     private val locationListener = object : LocationListener {
         override fun onLocationChanged(location: Location) {
@@ -39,6 +42,19 @@ class LocationService : Service() {
         override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
         override fun onProviderEnabled(provider: String) {}
         override fun onProviderDisabled(provider: String) {}
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        try {
+            if (!isRunning) {
+                isRunning = true
+                acquireWakeLock()
+                startLocationUpdates()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in onStartCommand: ${e.message}")
+        }
+        return START_STICKY
     }
 
     override fun onCreate() {
@@ -229,14 +245,37 @@ class LocationService : Service() {
         }
     }
 
+    private fun acquireWakeLock() {
+        try {
+            val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+            wakeLock = powerManager.newWakeLock(
+                PowerManager.PARTIAL_WAKE_LOCK,
+                "iSMAPC:LocationServiceWakeLock"
+            ).apply {
+                setReferenceCounted(false)
+                acquire(10*60*1000L /*10 minutes*/)
+            }
+            Log.d(TAG, "WakeLock acquired")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error acquiring WakeLock: ${e.message}")
+        }
+    }
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
         super.onDestroy()
         try {
+            isRunning = false
             locationManager.removeUpdates(locationListener)
+            wakeLock?.let {
+                if (it.isHeld) {
+                    it.release()
+                }
+            }
+            Log.d(TAG, "Service destroyed")
         } catch (e: Exception) {
-            Log.e(TAG, "Error removing location updates", e)
+            Log.e(TAG, "Error in onDestroy", e)
         }
     }
 } 

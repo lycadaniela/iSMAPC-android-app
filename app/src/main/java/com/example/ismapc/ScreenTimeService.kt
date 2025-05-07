@@ -53,6 +53,7 @@ class ScreenTimeService : Service() {
     private val TAG = "ScreenTimeService"
     private val NOTIFICATION_ID = 1
     private val CHANNEL_ID = "ScreenTimeServiceChannel"
+    private var isRunning = false
 
     private val screenOnReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -271,11 +272,14 @@ class ScreenTimeService : Service() {
                 try {
                     if (isNetworkAvailable) {
                         saveScreenTimeToFirestore()
+                        Log.d(TAG, "Screen time updated successfully")
+                    } else {
+                        Log.d(TAG, "Network not available, skipping update")
                     }
                     delay(CHECK_INTERVAL)
                 } catch (e: Exception) {
                     Log.e(TAG, "Error in update job", e)
-                    delay(5000)
+                    delay(5000) // Wait 5 seconds before retrying
                 }
             }
         }
@@ -325,5 +329,17 @@ class ScreenTimeService : Service() {
         } catch (e: Exception) {
             Log.e(TAG, "Error in onDestroy", e)
         }
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        try {
+            if (!isRunning) {
+                isRunning = true
+                startPeriodicUpdates()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in onStartCommand: ${e.message}")
+        }
+        return START_STICKY
     }
 } 
