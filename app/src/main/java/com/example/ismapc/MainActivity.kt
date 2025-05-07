@@ -212,7 +212,11 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                     }
 
                                     if (querySnapshot != null) {
-                                        val filteredChildren = querySnapshot.documents.mapNotNull { it.data }
+                                        val filteredChildren = querySnapshot.documents.mapNotNull { doc ->
+                                            doc.data?.toMutableMap()?.apply {
+                                                put("documentId", doc.id)  // Add the document ID to the data map
+                                            }
+                                        }
                                         childrenData = filteredChildren
                                         Log.d("ParentMainScreen", "Children data updated. Found ${filteredChildren.size} children")
                                         isLoading = false
@@ -390,8 +394,16 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                     .fillMaxWidth()
                                     .clickable {
                                         val intent = Intent(context, ChildDetailsActivity::class.java).apply {
-                                            putExtra("childId", child["uid"] as? String)
-                                            putExtra("childName", child["fullName"] as? String)
+                                            // Get the document ID which contains the child's UID
+                                            val childDocId = child["documentId"] as? String
+                                            if (childDocId != null) {
+                                                putExtra("childId", childDocId)
+                                                putExtra("childName", child["fullName"] as? String)
+                                                Log.d("ParentMainScreen", "Starting ChildDetailsActivity with childId: $childDocId")
+                                            } else {
+                                                Log.e("ParentMainScreen", "Child document ID is null")
+                                                Toast.makeText(context, "Error: Child ID not found", Toast.LENGTH_SHORT).show()
+                                            }
                                         }
                                         context.startActivity(intent)
                                     },
@@ -404,23 +416,7 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
                                 )
                             ) {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(16.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    Text(
-                                        text = child["fullName"]?.toString() ?: "Unknown",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                    Text(
-                                        text = child["email"]?.toString() ?: "No email",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
+                                ChildProfileCard(child)
                             }
                         }
                     }

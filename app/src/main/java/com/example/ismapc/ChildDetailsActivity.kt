@@ -21,6 +21,7 @@ import java.util.*
 import java.util.concurrent.TimeUnit
 import android.util.Log
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.Query
 
 class ChildDetailsActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -104,72 +105,67 @@ fun ChildDetailsScreen(childId: String, childName: String) {
 
 @Composable
 fun OverviewTab(childId: String) {
-    val context = LocalContext.current
-    var screenTimeData by remember { mutableStateOf<Map<String, Any>?>(null) }
-    var isLoading by remember { mutableStateOf(true) }
-    var error by remember { mutableStateOf<String?>(null) }
+    var screenTimeState by remember { mutableStateOf<ScreenTimeState>(ScreenTimeState.Loading) }
+    val firestore = remember { FirebaseFirestore.getInstance() }
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(childId) {
+        if (childId.isBlank()) {
+            screenTimeState = ScreenTimeState.Error("Invalid child ID")
+            return@LaunchedEffect
+        }
+
         try {
-            val db = FirebaseFirestore.getInstance()
+            Log.d("OverviewTab", "Fetching screen time data for child: $childId")
             val calendar = Calendar.getInstance()
             val dateString = getDateString(calendar)
+            Log.d("OverviewTab", "Date: $dateString")
 
-            Log.d("OverviewTab", "Fetching screen time data for child: $childId, date: $dateString")
+            // Construct the document path
+            val documentPath = "${childId}_$dateString"
+            Log.d("OverviewTab", "Fetching screen time from document: screenTime/$documentPath")
 
-            // Fetch screen time data directly using the child ID
-            val screenTimeDocRef = db.collection("screenTime")
-                .document("${childId}_$dateString")
-            
-            Log.d("OverviewTab", "Fetching screen time from document: ${screenTimeDocRef.path}")
-            
-            screenTimeDocRef.get()
+            // First try to get today's data
+            firestore.collection("screenTime")
+                .document(documentPath)
+                .get()
                 .addOnSuccessListener { document ->
-                    Log.d("OverviewTab", "Document exists: ${document.exists()}")
                     if (document.exists()) {
-                        screenTimeData = document.data
-                        Log.d("OverviewTab", "Screen time data: $screenTimeData")
+                        Log.d("OverviewTab", "Document exists: true")
+                        val screenTime = document.getLong("screenTime") ?: 0L
+                        screenTimeState = ScreenTimeState.Success(screenTime)
                     } else {
-                        // If no data for today, try to get any data for this user
+                        Log.d("OverviewTab", "Document exists: false")
                         Log.d("OverviewTab", "No data for today, searching for any data")
-                        db.collection("screenTime")
+                        // If no data for today, try to get any data for this child
+                        firestore.collection("screenTime")
                             .whereEqualTo("userId", childId)
+                            .orderBy("date", Query.Direction.DESCENDING)
+                            .limit(1)
                             .get()
-                            .addOnSuccessListener { docs ->
-                                Log.d("OverviewTab", "Found ${docs.size()} documents")
-                                if (!docs.isEmpty) {
-                                    // Get the most recent document manually
-                                    val mostRecent = docs.documents.maxByOrNull { 
-                                        (it.get("lastUpdated") as? Long) ?: 0L 
-                                    }
-                                    if (mostRecent != null) {
-                                        screenTimeData = mostRecent.data
-                                        Log.d("OverviewTab", "Found data: $screenTimeData")
-                                    } else {
-                                        Log.d("OverviewTab", "No screen time data found")
-                                    }
-                                } else {
+                            .addOnSuccessListener { documents ->
+                                Log.d("OverviewTab", "Found ${documents.size()} documents")
+                                if (documents.isEmpty) {
                                     Log.d("OverviewTab", "No screen time data found")
+                                    screenTimeState = ScreenTimeState.Success(0L)
+                                } else {
+                                    val screenTime = documents.documents[0].getLong("screenTime") ?: 0L
+                                    screenTimeState = ScreenTimeState.Success(screenTime)
                                 }
-                                isLoading = false
                             }
                             .addOnFailureListener { e ->
-                                Log.e("OverviewTab", "Error fetching data", e)
-                                error = "Error loading screen time data: ${e.message}"
-                                isLoading = false
+                                Log.e("OverviewTab", "Error getting screen time data", e)
+                                screenTimeState = ScreenTimeState.Error("Error loading screen time data")
                             }
                     }
-                    isLoading = false
                 }
                 .addOnFailureListener { e ->
-                    Log.e("OverviewTab", "Error fetching screen time data", e)
-                    error = "Error loading screen time data: ${e.message}"
-                    isLoading = false
+                    Log.e("OverviewTab", "Error getting today's screen time data", e)
+                    screenTimeState = ScreenTimeState.Error("Error loading screen time data")
                 }
         } catch (e: Exception) {
-            Log.e("OverviewTab", "Unexpected error", e)
-            error = "Unexpected error: ${e.message}"
-            isLoading = false
+            Log.e("OverviewTab", "Error in LaunchedEffect", e)
+            screenTimeState = ScreenTimeState.Error("Error loading screen time data")
         }
     }
 
@@ -185,39 +181,42 @@ fun OverviewTab(childId: String) {
             color = MaterialTheme.colorScheme.primary
         )
 
-        if (isLoading) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator()
+        when (screenTimeState) {
+            is ScreenTimeState.Loading -> {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
             }
-        } else if (error != null) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = error!!,
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodyLarge
-                )
+            is ScreenTimeState.Error -> {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = (screenTimeState as ScreenTimeState.Error).message,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
             }
-        } else if (screenTimeData != null) {
-            ScreenTimeCard(screenTimeData)
-        } else {
-            Text(
-                text = "No screen time data available",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            is ScreenTimeState.Success -> {
+                ScreenTimeCard((screenTimeState as ScreenTimeState.Success).screenTime)
+            }
         }
     }
 }
 
+sealed class ScreenTimeState {
+    object Loading : ScreenTimeState()
+    data class Success(val screenTime: Long) : ScreenTimeState()
+    data class Error(val message: String) : ScreenTimeState()
+}
+
 @Composable
-private fun ScreenTimeCard(screenTimeData: Map<String, Any>?) {
-    val screenTime = screenTimeData?.get("screenTime") as? Long ?: 0L
+private fun ScreenTimeCard(screenTime: Long) {
     val hours = TimeUnit.MILLISECONDS.toHours(screenTime)
     val minutes = TimeUnit.MILLISECONDS.toMinutes(screenTime) % 60
 
