@@ -15,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import com.example.ismapc.ui.theme.ISMAPCTheme
 import com.google.firebase.firestore.FirebaseFirestore
 import java.util.*
@@ -23,6 +24,13 @@ import android.util.Log
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.Query
 import java.text.SimpleDateFormat
+import org.osmdroid.config.Configuration
+import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import org.osmdroid.util.GeoPoint
+import org.osmdroid.views.MapView
+import org.osmdroid.views.overlay.Marker
+import android.content.Context
+import java.io.File
 
 class ChildDetailsActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -127,9 +135,9 @@ fun OverviewTab(childId: String) {
                         val screenTime = documentSnapshot.getLong("screenTime") ?: 0L
                         screenTimeState = ScreenTimeState.Success(screenTime)
                         Log.d("ChildDetailsActivity", "Screen time data found: $screenTime")
-                    } else {
-                        screenTimeState = ScreenTimeState.Success(0L)
-                        Log.d("ChildDetailsActivity", "No screen time data found")
+                                } else {
+                                    screenTimeState = ScreenTimeState.Success(0L)
+                                    Log.d("ChildDetailsActivity", "No screen time data found")
                     }
                 }
                 .addOnFailureListener { e ->
@@ -234,6 +242,19 @@ fun LocationTab(childId: String) {
     val context = LocalContext.current
     val firestore = FirebaseFirestore.getInstance()
 
+    // Initialize osmdroid configuration
+    LaunchedEffect(Unit) {
+        Configuration.getInstance().apply {
+            userAgentValue = context.packageName
+            // Set tile download limits
+            tileDownloadThreads = 2
+            tileFileSystemCacheMaxBytes = 1024L * 1024L * 50L // 50MB cache
+            tileFileSystemCacheTrimBytes = 1024L * 1024L * 25L // 25MB trim
+            // Enable tile caching
+            osmdroidTileCache = File(context.getExternalFilesDir(null)?.absolutePath ?: context.cacheDir.absolutePath)
+        }
+    }
+
     LaunchedEffect(childId) {
         if (childId.isBlank()) {
             locationState = LocationState.Error("Invalid child ID")
@@ -281,10 +302,12 @@ fun LocationTab(childId: String) {
             }
             is LocationState.Success -> {
                 val location = locationState as LocationState.Success
+                
+                // Location Card
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(16.dp),
+                        .padding(bottom = 16.dp),
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.surfaceVariant
                     )
@@ -309,23 +332,87 @@ fun LocationTab(childId: String) {
                             text = "Longitude: ${location.longitude}",
                             style = MaterialTheme.typography.bodyLarge
                         )
-                        
-                        Spacer(modifier = Modifier.height(16.dp))
-                        
-                        Button(
-                            onClick = {
-                                // Open location in Google Maps
-                                val gmmIntentUri = android.net.Uri.parse(
-                                    "geo:${location.latitude},${location.longitude}?q=${location.latitude},${location.longitude}"
-                                )
-                                val mapIntent = Intent(Intent.ACTION_VIEW, gmmIntentUri)
-                                mapIntent.setPackage("com.google.android.apps.maps")
-                                context.startActivity(mapIntent)
-                            }
-                        ) {
-                            Text("Open in Google Maps")
-                        }
                     }
+                }
+
+                // Map View
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .padding(bottom = 16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                ) {
+                    AndroidView(
+                        factory = { context ->
+                            MapView(context).apply {
+                                setTileSource(TileSourceFactory.MAPNIK)
+                                setMultiTouchControls(true)
+                                
+                                // Configure map settings
+                                controller.setZoom(15.0)
+                                controller.setCenter(GeoPoint(location.latitude, location.longitude))
+                                
+                                // Add compass overlay
+                                overlays.add(org.osmdroid.views.overlay.compass.CompassOverlay(
+                                    context,
+                                    org.osmdroid.views.overlay.compass.InternalCompassOrientationProvider(context),
+                                    this
+                                ).apply {
+                                    enableCompass()
+                                })
+                                
+                                // Add scale bar
+                                overlays.add(org.osmdroid.views.overlay.ScaleBarOverlay(this).apply {
+                                    setCentred(true)
+                                    setScaleBarOffset(
+                                        context.resources.displayMetrics.widthPixels / 2,
+                                        10
+                                    )
+                                })
+                                
+                                // Add marker for current location
+                                val marker = Marker(this).apply {
+                                    position = GeoPoint(location.latitude, location.longitude)
+                                    title = "Current Location"
+                                    snippet = "Last updated: ${SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())}"
+                                    setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                                }
+                                overlays.add(marker)
+                                
+                                // Add minimap overlay
+                                overlays.add(org.osmdroid.views.overlay.MinimapOverlay(
+                                    context,
+                                    this.tileRequestCompleteHandler
+                                ).apply {
+                                    width = 150
+                                    height = 150
+                                    setZoomDifference(3)
+                                })
+                            }
+                        },
+                        modifier = Modifier.fillMaxSize(),
+                        update = { mapView ->
+                            mapView.controller.setCenter(GeoPoint(location.latitude, location.longitude))
+                            mapView.invalidate()
+                        }
+                    )
+                }
+
+                // Google Maps Button
+                Button(
+                    onClick = {
+                        val gmmIntentUri = android.net.Uri.parse(
+                            "geo:${location.latitude},${location.longitude}?q=${location.latitude},${location.longitude}"
+                        )
+                        val mapIntent = Intent(Intent.ACTION_VIEW, gmmIntentUri)
+                        mapIntent.setPackage("com.google.android.apps.maps")
+                        context.startActivity(mapIntent)
+                    }
+                ) {
+                    Text("Open in Google Maps")
                 }
             }
             is LocationState.Error -> {
