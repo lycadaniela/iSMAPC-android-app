@@ -302,38 +302,6 @@ fun LocationTab(childId: String) {
             }
             is LocationState.Success -> {
                 val location = locationState as LocationState.Success
-                
-                // Location Card
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 16.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            text = "Current Location",
-                            style = MaterialTheme.typography.titleLarge,
-                            modifier = Modifier.padding(bottom = 16.dp)
-                        )
-                        Text(
-                            text = "Latitude: ${location.latitude}",
-                            style = MaterialTheme.typography.bodyLarge,
-                            modifier = Modifier.padding(bottom = 8.dp)
-                        )
-                        Text(
-                            text = "Longitude: ${location.longitude}",
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                    }
-                }
 
                 // Map View
                 Card(

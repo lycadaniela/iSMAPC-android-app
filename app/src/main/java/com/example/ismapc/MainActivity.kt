@@ -441,7 +441,11 @@ fun ChildProfileCard(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+        )
     ) {
         Row(
             modifier = Modifier
@@ -452,30 +456,34 @@ fun ChildProfileCard(
             // Profile picture or placeholder
             Box(
                 modifier = Modifier
-                    .size(48.dp)
+                    .size(56.dp)
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                    .background(MaterialTheme.colorScheme.primary),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Default.Person,
                     contentDescription = "Child profile picture",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    tint = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.size(32.dp)
                 )
             }
 
             Spacer(modifier = Modifier.width(16.dp))
 
             // Child info
-            Column {
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
                 Text(
                     text = childProfile["fullName"] as? String ?: "Unknown",
-                    style = MaterialTheme.typography.titleMedium
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Color.Black
                 )
                 Text(
                     text = childProfile["email"] as? String ?: "",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    color = Color.DarkGray
                 )
             }
         }
