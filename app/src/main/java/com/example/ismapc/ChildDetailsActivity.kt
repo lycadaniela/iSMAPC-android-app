@@ -117,14 +117,10 @@ fun OverviewTab(childId: String) {
         }
 
         try {
-            val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-            val dateString = dateFormat.format(Date())
-            val document = "${childId}_$dateString"
-
-            Log.d("ChildDetailsActivity", "Fetching screen time data for document: $document")
+            Log.d("ChildDetailsActivity", "Fetching screen time data for child: $childId")
 
             firestore.collection("screenTime")
-                .document(document)
+                .document(childId)
                 .get()
                 .addOnSuccessListener { documentSnapshot ->
                     if (documentSnapshot.exists()) {
@@ -132,36 +128,17 @@ fun OverviewTab(childId: String) {
                         screenTimeState = ScreenTimeState.Success(screenTime)
                         Log.d("ChildDetailsActivity", "Screen time data found: $screenTime")
                     } else {
-                        // Try to get any available data for this child
-                        firestore.collection("screenTime")
-                            .whereEqualTo("userId", childId)
-                            .orderBy("date", Query.Direction.DESCENDING)
-                            .limit(1)
-                            .get()
-                            .addOnSuccessListener { querySnapshot ->
-                                if (!querySnapshot.isEmpty) {
-                                    val latestDoc = querySnapshot.documents[0]
-                                    val screenTime = latestDoc.getLong("screenTime") ?: 0L
-                                    screenTimeState = ScreenTimeState.Success(screenTime)
-                                    Log.d("ChildDetailsActivity", "Found previous screen time data: $screenTime")
-                                } else {
-                                    screenTimeState = ScreenTimeState.Success(0L)
-                                    Log.d("ChildDetailsActivity", "No screen time data found")
-                                }
-                            }
-                            .addOnFailureListener { e ->
-                                screenTimeState = ScreenTimeState.Success(0L)
-                                Log.e("ChildDetailsActivity", "Error querying screen time data", e)
-                            }
+                        screenTimeState = ScreenTimeState.Success(0L)
+                        Log.d("ChildDetailsActivity", "No screen time data found")
                     }
                 }
                 .addOnFailureListener { e ->
-                    screenTimeState = ScreenTimeState.Success(0L)
+                    screenTimeState = ScreenTimeState.Error("Error fetching screen time: ${e.message}")
                     Log.e("ChildDetailsActivity", "Error fetching screen time data", e)
                 }
         } catch (e: Exception) {
-            screenTimeState = ScreenTimeState.Success(0L)
-            Log.e("ChildDetailsActivity", "Error in screen time data fetch", e)
+            screenTimeState = ScreenTimeState.Error("Error: ${e.message}")
+            Log.e("ChildDetailsActivity", "Error in OverviewTab", e)
         }
     }
 

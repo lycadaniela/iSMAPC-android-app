@@ -30,10 +30,29 @@ service cloud.firestore {
     }
 
     // Screen time data - simplified structure
-    match /screenTime/{document} {
-      allow read: if isAuthenticated();
+    match /screenTime/{userId} {
+      allow read: if isAuthenticated() && (
+        // Allow users to read their own screen time data
+        userId == request.auth.uid ||
+        // Allow parents to read their children's screen time data
+        isParentOfChild(get(/databases/$(database)/documents/users/child/profile/$(userId)).data.parentEmail)
+      );
       allow write: if isAuthenticated() && 
-                   request.resource.data.userId == request.auth.uid;
+                   userId == request.auth.uid &&
+                   exists(/databases/$(database)/documents/users/child/profile/$(request.auth.uid));
+    }
+
+    // Location data
+    match /locations/{userId} {
+      allow read: if isAuthenticated() && (
+        // Allow users to read their own location data
+        userId == request.auth.uid ||
+        // Allow parents to read their children's location data
+        isParentOfChild(get(/databases/$(database)/documents/users/child/profile/$(userId)).data.parentEmail)
+      );
+      allow write: if isAuthenticated() && 
+                   userId == request.auth.uid &&
+                   exists(/databases/$(database)/documents/users/child/profile/$(request.auth.uid));
     }
 
     // Allow collection group queries on any 'profile' subcollection

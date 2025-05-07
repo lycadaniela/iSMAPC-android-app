@@ -29,6 +29,8 @@ class ChildPermissionActivity : ComponentActivity() {
     private val requiredPermissions = arrayOf(
         Manifest.permission.ACCESS_FINE_LOCATION,
         Manifest.permission.ACCESS_COARSE_LOCATION,
+        Manifest.permission.FOREGROUND_SERVICE_LOCATION,
+        Manifest.permission.FOREGROUND_SERVICE_DATA_SYNC,
         Manifest.permission.READ_PHONE_STATE,
         Manifest.permission.READ_CALL_LOG,
         Manifest.permission.READ_SMS,

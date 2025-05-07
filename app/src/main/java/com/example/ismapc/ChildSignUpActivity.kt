@@ -119,8 +119,8 @@ class ChildSignUpActivity : ComponentActivity() {
                                                 .set(userData)
                                                 .addOnSuccessListener {
                                                     Log.d("ChildSignUp", "Child profile created successfully")
-                                                    // Navigate to child main screen
-                                                    val intent = Intent(this, PermissionActivity::class.java)
+                                                    // Navigate directly to MainActivity
+                                                    val intent = Intent(this, MainActivity::class.java)
                                                     intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
                                                     startActivity(intent)
                                                     finish()

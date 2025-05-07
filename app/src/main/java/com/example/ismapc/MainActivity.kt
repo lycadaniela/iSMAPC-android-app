@@ -42,6 +42,7 @@ import android.content.Context
 import android.provider.Settings
 import android.app.usage.UsageStatsManager
 import android.app.Activity
+import android.os.Build
 
 class MainActivity : ComponentActivity() {
     companion object {
@@ -89,6 +90,21 @@ class MainActivity : ComponentActivity() {
                                 if (childDoc.exists()) {
                                     userType = "child"
                                     Log.d("MainActivity", "User is a child")
+                                    // Start location service for child users
+                                    val locationServiceIntent = Intent(this, LocationService::class.java)
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                        startForegroundService(locationServiceIntent)
+                                    } else {
+                                        startService(locationServiceIntent)
+                                    }
+                                    
+                                    // Start screen time service for child users
+                                    val screenTimeServiceIntent = Intent(this, ScreenTimeService::class.java)
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                        startForegroundService(screenTimeServiceIntent)
+                                    } else {
+                                        startService(screenTimeServiceIntent)
+                                    }
                                 } else {
                                     // User not found in either collection
                                     Log.e("MainActivity", "User not found in either collection")
