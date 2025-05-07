@@ -22,6 +22,7 @@ import java.util.concurrent.TimeUnit
 import android.util.Log
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.Query
+import java.text.SimpleDateFormat
 
 class ChildDetailsActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -106,8 +107,8 @@ fun ChildDetailsScreen(childId: String, childName: String) {
 @Composable
 fun OverviewTab(childId: String) {
     var screenTimeState by remember { mutableStateOf<ScreenTimeState>(ScreenTimeState.Loading) }
-    val firestore = remember { FirebaseFirestore.getInstance() }
-    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val firestore = FirebaseFirestore.getInstance()
 
     LaunchedEffect(childId) {
         if (childId.isBlank()) {
@@ -116,56 +117,51 @@ fun OverviewTab(childId: String) {
         }
 
         try {
-            Log.d("OverviewTab", "Fetching screen time data for child: $childId")
-            val calendar = Calendar.getInstance()
-            val dateString = getDateString(calendar)
-            Log.d("OverviewTab", "Date: $dateString")
+            val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+            val dateString = dateFormat.format(Date())
+            val document = "${childId}_$dateString"
 
-            // Construct the document path
-            val documentPath = "${childId}_$dateString"
-            Log.d("OverviewTab", "Fetching screen time from document: screenTime/$documentPath")
+            Log.d("ChildDetailsActivity", "Fetching screen time data for document: $document")
 
-            // First try to get today's data
             firestore.collection("screenTime")
-                .document(documentPath)
+                .document(document)
                 .get()
-                .addOnSuccessListener { document ->
-                    if (document.exists()) {
-                        Log.d("OverviewTab", "Document exists: true")
-                        val screenTime = document.getLong("screenTime") ?: 0L
+                .addOnSuccessListener { documentSnapshot ->
+                    if (documentSnapshot.exists()) {
+                        val screenTime = documentSnapshot.getLong("screenTime") ?: 0L
                         screenTimeState = ScreenTimeState.Success(screenTime)
+                        Log.d("ChildDetailsActivity", "Screen time data found: $screenTime")
                     } else {
-                        Log.d("OverviewTab", "Document exists: false")
-                        Log.d("OverviewTab", "No data for today, searching for any data")
-                        // If no data for today, try to get any data for this child
+                        // Try to get any available data for this child
                         firestore.collection("screenTime")
                             .whereEqualTo("userId", childId)
                             .orderBy("date", Query.Direction.DESCENDING)
                             .limit(1)
                             .get()
-                            .addOnSuccessListener { documents ->
-                                Log.d("OverviewTab", "Found ${documents.size()} documents")
-                                if (documents.isEmpty) {
-                                    Log.d("OverviewTab", "No screen time data found")
-                                    screenTimeState = ScreenTimeState.Success(0L)
-                                } else {
-                                    val screenTime = documents.documents[0].getLong("screenTime") ?: 0L
+                            .addOnSuccessListener { querySnapshot ->
+                                if (!querySnapshot.isEmpty) {
+                                    val latestDoc = querySnapshot.documents[0]
+                                    val screenTime = latestDoc.getLong("screenTime") ?: 0L
                                     screenTimeState = ScreenTimeState.Success(screenTime)
+                                    Log.d("ChildDetailsActivity", "Found previous screen time data: $screenTime")
+                                } else {
+                                    screenTimeState = ScreenTimeState.Success(0L)
+                                    Log.d("ChildDetailsActivity", "No screen time data found")
                                 }
                             }
                             .addOnFailureListener { e ->
-                                Log.e("OverviewTab", "Error getting screen time data", e)
-                                screenTimeState = ScreenTimeState.Error("Error loading screen time data")
+                                screenTimeState = ScreenTimeState.Success(0L)
+                                Log.e("ChildDetailsActivity", "Error querying screen time data", e)
                             }
                     }
                 }
                 .addOnFailureListener { e ->
-                    Log.e("OverviewTab", "Error getting today's screen time data", e)
-                    screenTimeState = ScreenTimeState.Error("Error loading screen time data")
+                    screenTimeState = ScreenTimeState.Success(0L)
+                    Log.e("ChildDetailsActivity", "Error fetching screen time data", e)
                 }
         } catch (e: Exception) {
-            Log.e("OverviewTab", "Error in LaunchedEffect", e)
-            screenTimeState = ScreenTimeState.Error("Error loading screen time data")
+            screenTimeState = ScreenTimeState.Success(0L)
+            Log.e("ChildDetailsActivity", "Error in screen time data fetch", e)
         }
     }
 
@@ -173,37 +169,38 @@ fun OverviewTab(childId: String) {
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(
-            text = "Screen Time Overview",
-            style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.primary
-        )
-
         when (screenTimeState) {
             is ScreenTimeState.Loading -> {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator()
-                }
+                CircularProgressIndicator()
             }
-            is ScreenTimeState.Error -> {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
+            is ScreenTimeState.Success -> {
+                val screenTime = (screenTimeState as ScreenTimeState.Success).screenTime
+                if (screenTime > 0) {
                     Text(
-                        text = (screenTimeState as ScreenTimeState.Error).message,
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodyLarge
+                        text = "Today's Screen Time",
+                        style = MaterialTheme.typography.titleLarge,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    Text(
+                        text = formatScreenTime(screenTime),
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                } else {
+                    Text(
+                        text = "No data",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
-            is ScreenTimeState.Success -> {
-                ScreenTimeCard((screenTimeState as ScreenTimeState.Success).screenTime)
+            is ScreenTimeState.Error -> {
+                Text(
+                    text = (screenTimeState as ScreenTimeState.Error).message,
+                    color = MaterialTheme.colorScheme.error
+                )
             }
         }
     }
@@ -266,4 +263,10 @@ private fun getDateString(calendar: Calendar): String {
     val month = calendar.get(Calendar.MONTH) + 1
     val day = calendar.get(Calendar.DAY_OF_MONTH)
     return "$year-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}"
+}
+
+private fun formatScreenTime(screenTime: Long): String {
+    val hours = TimeUnit.MILLISECONDS.toHours(screenTime)
+    val minutes = TimeUnit.MILLISECONDS.toMinutes(screenTime) % 60
+    return "$hours hours $minutes minutes"
 } 

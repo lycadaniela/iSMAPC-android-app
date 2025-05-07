@@ -389,35 +389,24 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         items(childrenData) { child ->
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        val intent = Intent(context, ChildDetailsActivity::class.java).apply {
-                                            // Get the document ID which contains the child's UID
-                                            val childDocId = child["documentId"] as? String
-                                            if (childDocId != null) {
-                                                putExtra("childId", childDocId)
-                                                putExtra("childName", child["fullName"] as? String)
-                                                Log.d("ParentMainScreen", "Starting ChildDetailsActivity with childId: $childDocId")
-                                            } else {
-                                                Log.e("ParentMainScreen", "Child document ID is null")
-                                                Toast.makeText(context, "Error: Child ID not found", Toast.LENGTH_SHORT).show()
-                                            }
+                            ChildProfileCard(
+                                childProfile = child,
+                                onClick = {
+                                    val intent = Intent(context, ChildDetailsActivity::class.java).apply {
+                                        // Get the document ID which contains the child's UID
+                                        val childDocId = child["documentId"] as? String
+                                        if (childDocId != null) {
+                                            putExtra("childId", childDocId)
+                                            putExtra("childName", child["fullName"] as? String)
+                                            Log.d("ParentMainScreen", "Starting ChildDetailsActivity with childId: $childDocId")
+                                        } else {
+                                            Log.e("ParentMainScreen", "Child document ID is null")
+                                            Toast.makeText(context, "Error: Child ID not found", Toast.LENGTH_SHORT).show()
                                         }
-                                        context.startActivity(intent)
-                                    },
-                                colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.surface,
-                                    contentColor = MaterialTheme.colorScheme.onSurface
-                                ),
-                                border = BorderStroke(
-                                    width = 1.dp,
-                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
-                                )
-                            ) {
-                                ChildProfileCard(child)
-                            }
+                                    }
+                                    context.startActivity(intent)
+                                }
+                            )
                         }
                     }
                 }
@@ -427,11 +416,14 @@ fun ParentMainScreen(onLogout: () -> Unit) {
 }
 
 @Composable
-fun ChildProfileCard(childProfile: Map<String, Any>) {
+fun ChildProfileCard(
+    childProfile: Map<String, Any>,
+    onClick: () -> Unit
+) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp),
+            .clickable(onClick = onClick),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Row(
