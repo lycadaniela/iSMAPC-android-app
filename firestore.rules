@@ -15,6 +15,15 @@ service cloud.firestore {
         get(/databases/$(database)/documents/users/parents/$(request.auth.uid)/profile).data.email == parentEmail;
     }
 
+    function isParentOfChildById(childId) {
+      let parentProfile = get(/databases/$(database)/documents/users/parents/$(request.auth.uid)/profile);
+      let childProfile = get(/databases/$(database)/documents/users/child/profile/$(childId));
+      return isAuthenticated() && 
+        parentProfile != null && 
+        childProfile != null &&
+        parentProfile.data.email == childProfile.data.parentEmail;
+    }
+
     // Parent profiles
     match /users/parents/{userId}/profile {
       allow read: if isAuthenticated();
@@ -63,9 +72,19 @@ service cloud.firestore {
         // Allow parents to read their children's installed apps data
         isParentOfChild(get(/databases/$(database)/documents/users/child/profile/$(userId)).data.parentEmail)
       );
-      allow write: if isAuthenticated() && 
-                   userId == request.auth.uid &&
-                   exists(/databases/$(database)/documents/users/child/profile/$(request.auth.uid));
+      allow write: if isAuthenticated() && (
+        // Allow users to write their own installed apps data
+        userId == request.auth.uid ||
+        // Allow parents to write their children's installed apps data
+        isParentOfChildById(userId)
+      );
+    }
+
+    // Locked apps data
+    match /lockedApps/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+      allow list: if isAuthenticated();
     }
 
     // Allow collection group queries on any 'profile' subcollection

@@ -65,6 +65,9 @@ class MainActivity : ComponentActivity() {
         // Start the InstalledAppsService
         startService(Intent(this, InstalledAppsService::class.java))
 
+        // Start the app lock service
+        startService(Intent(this, AppLockService::class.java))
+
         // Check user type
         val currentUser = auth.currentUser
         if (currentUser != null) {

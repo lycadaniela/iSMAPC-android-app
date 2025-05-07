@@ -125,6 +125,17 @@
             android:name=".InstalledAppsService"
             android:enabled="true"
             android:exported="false" />
+
+        <service
+            android:name=".AppLockService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="specialUse" />
+
+        <activity
+            android:name=".AppLockScreenActivity"
+            android:exported="false"
+            android:theme="@style/Theme.ISMAPC" />
     </application>
     
 </manifest>
