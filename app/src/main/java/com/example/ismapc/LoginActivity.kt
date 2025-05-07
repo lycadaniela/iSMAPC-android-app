@@ -54,18 +54,56 @@ import com.google.android.gms.auth.api.signin.GoogleSignInStatusCodes
 import com.google.firebase.firestore.FirebaseFirestore
 import android.util.Log
 import android.content.SharedPreferences
+import com.google.firebase.auth.ktx.auth
+import com.google.firebase.ktx.Firebase
+import com.google.firebase.auth.FirebaseAuth.AuthStateListener
+import com.google.firebase.auth.FirebaseAuthSettings
 
 class LoginActivity : ComponentActivity() {
     private lateinit var auth: FirebaseAuth
     private lateinit var googleSignInClient: GoogleSignInClient
     private lateinit var sharedPreferences: SharedPreferences
+    private lateinit var authStateListener: AuthStateListener
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
         // Initialize Firebase Auth
         auth = FirebaseAuth.getInstance()
+        // Firebase Auth persistence is enabled by default, no need to set it explicitly
         sharedPreferences = getSharedPreferences("login_prefs", Context.MODE_PRIVATE)
+
+        // Add auth state listener
+        authStateListener = AuthStateListener { firebaseAuth ->
+            val user = firebaseAuth.currentUser
+            if (user != null) {
+                // User is signed in, check if they exist in our database
+                val db = FirebaseFirestore.getInstance()
+                db.collection("users")
+                    .document("parents")
+                    .collection(user.uid)
+                    .document("profile")
+                    .get()
+                    .addOnSuccessListener { parentDoc ->
+                        if (parentDoc.exists()) {
+                            startActivity(Intent(this, MainActivity::class.java))
+                            finish()
+                        } else {
+                            db.collection("users")
+                                .document("child")
+                                .collection("profile")
+                                .document(user.uid)
+                                .get()
+                                .addOnSuccessListener { childDoc ->
+                                    if (childDoc.exists()) {
+                                        startActivity(Intent(this, MainActivity::class.java))
+                                        finish()
+                                    }
+                                }
+                        }
+                    }
+            }
+        }
 
         // Configure Google Sign In
         val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
@@ -131,6 +169,16 @@ class LoginActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        auth.addAuthStateListener(authStateListener)
+    }
+
+    override fun onStop() {
+        super.onStop()
+        auth.removeAuthStateListener(authStateListener)
     }
 
     private fun startGoogleSignIn() {
