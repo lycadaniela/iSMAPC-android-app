@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -33,6 +34,20 @@ import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 import android.content.Context
 import java.io.File
+import android.graphics.drawable.Drawable
+import androidx.compose.ui.graphics.asImageBitmap
+import android.graphics.Bitmap
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.sp
+import androidx.core.graphics.drawable.toBitmap
+import androidx.compose.foundation.background
 
 class ChildDetailsActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -245,10 +260,10 @@ fun OverviewTab(childId: String) {
                             .weight(1f)
                     ) {
                         items(apps) { app ->
-                            Text(
-                                text = app["appName"] as? String ?: "Unknown App",
-                                style = MaterialTheme.typography.bodyLarge,
-                                modifier = Modifier.padding(vertical = 4.dp)
+                            AppListItem(
+                                appName = app["appName"] as? String ?: "Unknown App",
+                                packageName = app["packageName"] as? String ?: "",
+                                context = context
                             )
                         }
                     }
@@ -264,6 +279,94 @@ fun OverviewTab(childId: String) {
                 Text(
                     text = (installedAppsState as InstalledAppsState.Error).message,
                     color = MaterialTheme.colorScheme.error
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun AppListItem(
+    appName: String,
+    packageName: String,
+    context: Context
+) {
+    var isLocked by remember { mutableStateOf(false) }
+    val packageManager = context.packageManager
+    var appIcon by remember { mutableStateOf<ImageBitmap?>(null) }
+
+    LaunchedEffect(packageName) {
+        try {
+            val icon = packageManager.getApplicationIcon(packageName)
+            appIcon = icon.toBitmap().asImageBitmap()
+        } catch (e: Exception) {
+            Log.e("AppListItem", "Error loading app icon for $packageName", e)
+        }
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // App Icon
+            if (appIcon != null) {
+                Image(
+                    bitmap = appIcon!!,
+                    contentDescription = "App icon for $appName",
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(8.dp)),
+                    contentScale = ContentScale.Fit
+                )
+            } else {
+                // Placeholder icon
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Lock,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.width(16.dp))
+
+            // App Name
+            Text(
+                text = appName,
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.weight(1f)
+            )
+
+            // Lock/Unlock Button
+            Button(
+                onClick = { isLocked = !isLocked },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (isLocked) 
+                        MaterialTheme.colorScheme.error 
+                    else 
+                        MaterialTheme.colorScheme.primary
+                )
+            ) {
+                Text(
+                    text = if (isLocked) "Unlock" else "Lock",
+                    color = MaterialTheme.colorScheme.onPrimary
                 )
             }
         }
