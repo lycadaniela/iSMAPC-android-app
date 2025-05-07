@@ -10,6 +10,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -32,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import com.example.ismapc.ui.theme.ISMAPCTheme
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import androidx.compose.ui.graphics.Color
 
 class MainActivity : ComponentActivity() {
     companion object {
@@ -321,18 +324,43 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                     Text(
                         text = name.toString(),
                         style = MaterialTheme.typography.headlineSmall,
-                        modifier = Modifier.padding(vertical = 8.dp)
+                        modifier = Modifier.padding(vertical = 8.dp),
+                        color = MaterialTheme.colorScheme.primary
                     )
                 }
 
-                // Children Section
-                Text(
-                    text = "Your Children",
-                    style = MaterialTheme.typography.titleLarge,
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Children Section with horizontal lines
+                Row(
                     modifier = Modifier
-                        .padding(top = 24.dp, bottom = 16.dp)
-                        .align(Alignment.Start)
-                )
+                        .fillMaxWidth()
+                        .padding(vertical = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Left horizontal line
+                    Divider(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(end = 16.dp),
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                    )
+
+                    // "Your Children" text
+                    Text(
+                        text = "Your Children",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+
+                    // Right horizontal line
+                    Divider(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(start = 16.dp),
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                    )
+                }
 
                 if (childrenData.isEmpty()) {
                     Text(
@@ -343,24 +371,39 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                     )
                 } else {
                     LazyColumn(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 32.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         items(childrenData) { child ->
                             Card(
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        // TODO: Handle child card click
+                                        Toast.makeText(context, "Opening ${child["fullName"]}'s profile", Toast.LENGTH_SHORT).show()
+                                    },
                                 colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.surface
+                                    containerColor = MaterialTheme.colorScheme.surface,
+                                    contentColor = MaterialTheme.colorScheme.onSurface
+                                ),
+                                border = BorderStroke(
+                                    width = 1.dp,
+                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
                                 )
                             ) {
                                 Column(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(16.dp)
+                                        .padding(16.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
                                     Text(
                                         text = child["fullName"]?.toString() ?: "Unknown",
-                                        style = MaterialTheme.typography.titleMedium
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = MaterialTheme.colorScheme.primary
                                     )
                                     Text(
                                         text = child["email"]?.toString() ?: "No email",
