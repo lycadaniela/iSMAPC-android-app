@@ -80,6 +80,11 @@
             android:name=".ForgotPasswordActivity"
             android:exported="false"
             android:theme="@style/Theme.ISMAPC" />
+
+        <activity
+            android:name=".ChildDetailsActivity"
+            android:exported="false"
+            android:theme="@style/Theme.ISMAPC" />
     </application>
     
 </manifest>

@@ -383,8 +383,11 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable {
-                                        // TODO: Handle child card click
-                                        Toast.makeText(context, "Opening ${child["fullName"]}'s profile", Toast.LENGTH_SHORT).show()
+                                        val intent = Intent(context, ChildDetailsActivity::class.java).apply {
+                                            putExtra("childId", child["uid"] as? String)
+                                            putExtra("childName", child["fullName"] as? String)
+                                        }
+                                        context.startActivity(intent)
                                     },
                                 colors = CardDefaults.cardColors(
                                     containerColor = MaterialTheme.colorScheme.surface,
