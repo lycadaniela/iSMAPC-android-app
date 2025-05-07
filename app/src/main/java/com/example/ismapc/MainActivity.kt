@@ -62,91 +62,78 @@ class MainActivity : ComponentActivity() {
         firestore = FirebaseFirestore.getInstance()
         enableEdgeToEdge()
         
-        // Start the InstalledAppsService
-        startService(Intent(this, InstalledAppsService::class.java))
-
-        // Start the app lock service
-        startService(Intent(this, AppLockService::class.java))
-
-        // Check user type
-        val currentUser = auth.currentUser
-        if (currentUser != null) {
-            Log.d("MainActivity", "Current user: ${currentUser.uid}, email: ${currentUser.email}")
-            // First check parent collection
-            firestore.collection(USERS_COLLECTION)
-                .document(PARENTS_COLLECTION)
-                .collection(currentUser.uid)
-                .document(PROFILE_DOCUMENT)
-                .get()
-                .addOnSuccessListener { parentDoc ->
-                    Log.d("MainActivity", "Checking parent collection: ${parentDoc.exists()}")
-                    if (parentDoc.exists()) {
-                        userType = "parent"
-                        Log.d("MainActivity", "User is a parent")
-                    } else {
-                        // If not found in parent, check child collection
-                        Log.d("MainActivity", "Checking child collection")
-                        firestore.collection(USERS_COLLECTION)
-                            .document(CHILD_COLLECTION)
-                            .collection("profile")
-                            .document(currentUser.uid)
-                            .get()
-                            .addOnSuccessListener { childDoc ->
-                                Log.d("MainActivity", "Child doc exists: ${childDoc.exists()}")
-                                if (childDoc.exists()) {
-                                    userType = "child"
-                                    Log.d("MainActivity", "User is a child")
-                                    // Start location service for child users
-                                    val locationServiceIntent = Intent(this, LocationService::class.java)
-                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                                        startForegroundService(locationServiceIntent)
+        try {
+            // Check user type first before starting any services
+            val currentUser = auth.currentUser
+            if (currentUser != null) {
+                Log.d("MainActivity", "Current user: ${currentUser.uid}, email: ${currentUser.email}")
+                // First check parent collection
+                firestore.collection(USERS_COLLECTION)
+                    .document(PARENTS_COLLECTION)
+                    .collection(currentUser.uid)
+                    .document(PROFILE_DOCUMENT)
+                    .get()
+                    .addOnSuccessListener { parentDoc ->
+                        Log.d("MainActivity", "Checking parent collection: ${parentDoc.exists()}")
+                        if (parentDoc.exists()) {
+                            userType = "parent"
+                            Log.d("MainActivity", "User is a parent")
+                            // No need to start background services for parents
+                        } else {
+                            // If not found in parent, check child collection
+                            Log.d("MainActivity", "Checking child collection")
+                            firestore.collection(USERS_COLLECTION)
+                                .document(CHILD_COLLECTION)
+                                .collection("profile")
+                                .document(currentUser.uid)
+                                .get()
+                                .addOnSuccessListener { childDoc ->
+                                    Log.d("MainActivity", "Child doc exists: ${childDoc.exists()}")
+                                    if (childDoc.exists()) {
+                                        userType = "child"
+                                        Log.d("MainActivity", "User is a child")
+                                        try {
+                                            // Start all background services for child users
+                                            startChildServices()
+                                        } catch (e: Exception) {
+                                            Log.e("MainActivity", "Error starting services: ${e.message}")
+                                        }
                                     } else {
-                                        startService(locationServiceIntent)
+                                        // User not found in either collection
+                                        Log.e("MainActivity", "User not found in either collection")
+                                        Toast.makeText(this, "User type not found. Please sign in again.", Toast.LENGTH_LONG).show()
+                                        auth.signOut()
+                                        startActivity(Intent(this, LoginActivity::class.java))
+                                        finish()
                                     }
-                                    
-                                    // Start screen time service for child users
-                                    val screenTimeServiceIntent = Intent(this, ScreenTimeService::class.java)
-                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                                        startForegroundService(screenTimeServiceIntent)
-                                    } else {
-                                        startService(screenTimeServiceIntent)
-                                    }
-                                } else {
-                                    // User not found in either collection
-                                    Log.e("MainActivity", "User not found in either collection")
-                                    Toast.makeText(this, "User type not found. Please sign in again.", Toast.LENGTH_LONG).show()
+                                }
+                                .addOnFailureListener { e ->
+                                    Log.e("MainActivity", "Error checking child collection: ${e.message}")
+                                    Log.e("MainActivity", "Error details", e)
+                                    Toast.makeText(this, "Error checking user type: ${e.message}", Toast.LENGTH_LONG).show()
                                     auth.signOut()
                                     startActivity(Intent(this, LoginActivity::class.java))
                                     finish()
                                 }
-                            }
-                            .addOnFailureListener { e ->
-                                Log.e("MainActivity", "Error checking child collection: ${e.message}")
-                                Log.e("MainActivity", "Error details", e)
-                                // Try to get more information about the error
-                                if (e.message?.contains("permission-denied") == true) {
-                                    Log.e("MainActivity", "Permission denied error. Current user: ${currentUser.uid}, email: ${currentUser.email}")
-                                }
-                                Toast.makeText(this, "Error checking user type: ${e.message}", Toast.LENGTH_LONG).show()
-                                auth.signOut()
-                                startActivity(Intent(this, LoginActivity::class.java))
-                                finish()
-                            }
+                        }
                     }
-                }
-                .addOnFailureListener { e ->
-                    Log.e("MainActivity", "Error checking parent collection: ${e.message}")
-                    Log.e("MainActivity", "Error details", e)
-                    Toast.makeText(this, "Error checking user type: ${e.message}", Toast.LENGTH_LONG).show()
-                    auth.signOut()
-                    startActivity(Intent(this, LoginActivity::class.java))
-                    finish()
-                }
-        } else {
-            // No user logged in
-            Log.d("MainActivity", "No user logged in")
-            startActivity(Intent(this, LoginActivity::class.java))
-            finish()
+                    .addOnFailureListener { e ->
+                        Log.e("MainActivity", "Error checking parent collection: ${e.message}")
+                        Log.e("MainActivity", "Error details", e)
+                        Toast.makeText(this, "Error checking user type: ${e.message}", Toast.LENGTH_LONG).show()
+                        auth.signOut()
+                        startActivity(Intent(this, LoginActivity::class.java))
+                        finish()
+                    }
+            } else {
+                // No user logged in
+                Log.d("MainActivity", "No user logged in")
+                startActivity(Intent(this, LoginActivity::class.java))
+                finish()
+            }
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Error in onCreate: ${e.message}")
+            Toast.makeText(this, "Error initializing app: ${e.message}", Toast.LENGTH_LONG).show()
         }
 
         setContent {
@@ -182,6 +169,61 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+        }
+    }
+
+    private fun startChildServices() {
+        try {
+            // Start the InstalledAppsService
+            startService(Intent(this, InstalledAppsService::class.java))
+
+            // Start the AppLockService
+            startAppLockService()
+
+            // Start location service
+            val locationServiceIntent = Intent(this, LocationService::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(locationServiceIntent)
+            } else {
+                startService(locationServiceIntent)
+            }
+            
+            // Start screen time service
+            val screenTimeServiceIntent = Intent(this, ScreenTimeService::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(screenTimeServiceIntent)
+            } else {
+                startService(screenTimeServiceIntent)
+            }
+
+            Log.d("MainActivity", "All child services started successfully")
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Error starting child services: ${e.message}")
+        }
+    }
+
+    private fun startAppLockService() {
+        try {
+            val serviceIntent = Intent(this, AppLockService::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(serviceIntent)
+            } else {
+                startService(serviceIntent)
+            }
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Error starting AppLockService: ${e.message}")
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        try {
+            // Only restart services for child users
+            if (userType == "child") {
+                startChildServices()
+            }
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Error in onResume: ${e.message}")
         }
     }
 }
