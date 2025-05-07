@@ -157,8 +157,12 @@ fun OverviewTab(childId: String) {
                     if (documentSnapshot.exists()) {
                         val apps = documentSnapshot.get("apps") as? List<Map<String, Any>>
                         if (apps != null) {
-                            installedAppsState = InstalledAppsState.Success(apps)
-                            Log.d("ChildDetailsActivity", "Installed apps found: ${apps.size}")
+                            // Filter out system apps
+                            val nonSystemApps = apps.filter { app ->
+                                !(app["isSystemApp"] as? Boolean ?: false)
+                            }
+                            installedAppsState = InstalledAppsState.Success(nonSystemApps)
+                            Log.d("ChildDetailsActivity", "Non-system apps found: ${nonSystemApps.size}")
                         } else {
                             installedAppsState = InstalledAppsState.Success(emptyList())
                             Log.d("ChildDetailsActivity", "No apps found in document")
@@ -250,7 +254,7 @@ fun OverviewTab(childId: String) {
                     }
                 } else {
                     Text(
-                        text = "No apps found",
+                        text = "No non-system apps found",
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
