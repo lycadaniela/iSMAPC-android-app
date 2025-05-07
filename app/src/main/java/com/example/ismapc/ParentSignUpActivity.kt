@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.provider.MediaStore
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -97,7 +98,7 @@ class ParentSignUpActivity : ComponentActivity() {
                                             )
                                             
                                             firestore.collection("users")
-                                                .document("parent")
+                                                .document("parents")
                                                 .collection(user.uid)
                                                 .document("profile")
                                                 .set(userData)
@@ -161,16 +162,25 @@ class ParentSignUpActivity : ComponentActivity() {
                         )
 
                         firestore.collection("users")
-                            .document("parent")
+                            .document("parents")
                             .collection(user.uid)
                             .document("profile")
                             .set(userData)
                             .addOnSuccessListener {
+                                Toast.makeText(this, "Account created successfully!", Toast.LENGTH_LONG).show()
                                 startActivity(Intent(this, MainActivity::class.java))
                                 finish()
                             }
                             .addOnFailureListener { e ->
-                                Toast.makeText(this, "Failed to save user data: ${e.message}", Toast.LENGTH_LONG).show()
+                                // Delete the Firebase Auth account if Firestore save fails
+                                user.delete().addOnCompleteListener { deleteTask ->
+                                    if (deleteTask.isSuccessful) {
+                                        Log.d("ParentSignUp", "Deleted Firebase Auth account after Firestore save failed")
+                                    } else {
+                                        Log.e("ParentSignUp", "Failed to delete account after Firestore save failed", deleteTask.exception)
+                                    }
+                                    Toast.makeText(this, "Failed to save user data: ${e.message}", Toast.LENGTH_LONG).show()
+                                }
                             }
                     }
                 } else {
