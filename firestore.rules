@@ -29,6 +29,13 @@ service cloud.firestore {
                     request.resource.data.parentEmail == request.auth.token.email);
     }
 
+    // Screen time data - simplified structure
+    match /screenTime/{document} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && 
+                   request.resource.data.userId == request.auth.uid;
+    }
+
     // Allow collection group queries on any 'profile' subcollection
     match /{document=**}/profile/{profileId} {
       allow read: if request.auth != null 

@@ -30,12 +30,17 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.ismapc.ui.theme.ISMAPCTheme
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import androidx.compose.ui.graphics.Color
 import androidx.compose.material.icons.filled.CheckCircle
+import android.app.AppOpsManager
+import android.content.Context
+import android.provider.Settings
+import android.app.usage.UsageStatsManager
 
 class MainActivity : ComponentActivity() {
     companion object {
@@ -475,8 +480,53 @@ fun ChildProfileCard(childProfile: Map<String, Any>) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChildMainScreen(onLogout: () -> Unit) {
+    val context = LocalContext.current
+    var hasUsagePermission by remember { mutableStateOf(false) }
+    var serviceStarted by remember { mutableStateOf(false) }
+
+    // Check for usage stats permission and start service
+    LaunchedEffect(Unit) {
+        val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+        val mode = appOps.checkOpNoThrow(
+            AppOpsManager.OPSTR_GET_USAGE_STATS,
+            android.os.Process.myUid(),
+            context.packageName
+        )
+        hasUsagePermission = mode == AppOpsManager.MODE_ALLOWED
+        Log.d("ChildMainScreen", "Usage permission status: $hasUsagePermission")
+
+        if (hasUsagePermission) {
+            try {
+                // Stop any existing service first
+                context.stopService(Intent(context, ScreenTimeService::class.java))
+                // Then start a new instance
+                val serviceIntent = Intent(context, ScreenTimeService::class.java)
+                context.startService(serviceIntent)
+                serviceStarted = true
+                Log.d("ChildMainScreen", "Screen time service started successfully")
+            } catch (e: Exception) {
+                Log.e("ChildMainScreen", "Error starting screen time service", e)
+                serviceStarted = false
+            }
+        }
+    }
+
+    // Restart service when permission is granted
+    LaunchedEffect(hasUsagePermission) {
+        if (hasUsagePermission && !serviceStarted) {
+            try {
+                val serviceIntent = Intent(context, ScreenTimeService::class.java)
+                context.startService(serviceIntent)
+                serviceStarted = true
+                Log.d("ChildMainScreen", "Screen time service started after permission grant")
+            } catch (e: Exception) {
+                Log.e("ChildMainScreen", "Error starting screen time service after permission grant", e)
+                serviceStarted = false
+            }
+        }
+    }
+
     Scaffold(
-        modifier = Modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
                 title = { Text("Child Dashboard") },
@@ -504,20 +554,55 @@ fun ChildMainScreen(onLogout: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Icon(
-                imageVector = Icons.Filled.CheckCircle,
-                contentDescription = "Success",
-                modifier = Modifier
-                    .size(120.dp)
-                    .padding(bottom = 16.dp),
-                tint = MaterialTheme.colorScheme.primary
-            )
-            Text(
-                text = "Connected Successfully",
-                style = MaterialTheme.typography.headlineMedium,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Bold
-            )
+            if (!hasUsagePermission) {
+                Text(
+                    text = "Screen Time Permission Required",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+                Button(
+                    onClick = {
+                        val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
+                        context.startActivity(intent)
+                    }
+                ) {
+                    Text("Grant Permission")
+                }
+            } else if (!serviceStarted) {
+                Text(
+                    text = "Error Starting Screen Time Tracking",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+                Button(
+                    onClick = {
+                        try {
+                            val serviceIntent = Intent(context, ScreenTimeService::class.java)
+                            context.startService(serviceIntent)
+                            serviceStarted = true
+                            Log.d("ChildMainScreen", "Screen time service started on retry")
+                        } catch (e: Exception) {
+                            Log.e("ChildMainScreen", "Error starting screen time service on retry", e)
+                        }
+                    }
+                ) {
+                    Text("Retry")
+                }
+            } else {
+                Text(
+                    text = "Screen Time Tracking Active",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+                Text(
+                    text = "Your screen time is being tracked and will be visible to your parent.",
+                    style = MaterialTheme.typography.bodyLarge,
+                    textAlign = TextAlign.Center
+                )
+            }
         }
     }
 }
