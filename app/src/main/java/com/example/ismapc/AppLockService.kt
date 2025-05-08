@@ -18,6 +18,8 @@ import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
@@ -28,11 +30,15 @@ class AppLockService : Service() {
     private val auth = FirebaseAuth.getInstance()
     private var isRunning = false
     private var job: Job? = null
-    private val scope = CoroutineScope(Dispatchers.IO)
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var lastLockedApp: String? = null
     private val NOTIFICATION_ID = 1
     private val CHANNEL_ID = "AppLockServiceChannel"
     private var wakeLock: PowerManager.WakeLock? = null
+    private var usageStatsManager: UsageStatsManager? = null
+    private var lockedAppsCache: List<String> = emptyList()
+    private var lastCacheUpdate = 0L
+    private val CACHE_DURATION = 5000L // Cache locked apps for 5 seconds
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -40,6 +46,7 @@ class AppLockService : Service() {
         super.onCreate()
         Log.d(TAG, "AppLockService created")
         try {
+            usageStatsManager = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
             createNotificationChannel()
             acquireWakeLock()
         } catch (e: Exception) {
@@ -64,6 +71,7 @@ class AppLockService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        Log.d(TAG, "onStartCommand called")
         if (!isRunning) {
             try {
                 isRunning = true
@@ -71,9 +79,24 @@ class AppLockService : Service() {
                 startMonitoring()
             } catch (e: Exception) {
                 Log.e(TAG, "Error in onStartCommand: ${e.message}")
+                restartService()
             }
         }
         return START_STICKY
+    }
+
+    private fun restartService() {
+        try {
+            val intent = Intent(applicationContext, AppLockService::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(intent)
+            } else {
+                startService(intent)
+            }
+            Log.d(TAG, "Service restarted")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error restarting service: ${e.message}")
+        }
     }
 
     private fun createNotificationChannel() {
@@ -122,68 +145,117 @@ class AppLockService : Service() {
         }
     }
 
+    private suspend fun getLockedApps(): List<String> {
+        val currentTime = System.currentTimeMillis()
+        if (currentTime - lastCacheUpdate < CACHE_DURATION) {
+            return lockedAppsCache
+        }
+
+        try {
+            val currentUser = auth.currentUser
+            if (currentUser != null) {
+                val lockedAppsDoc = firestore.collection("lockedApps")
+                    .document(currentUser.uid)
+                    .get()
+                    .await()
+
+                if (lockedAppsDoc.exists()) {
+                    lockedAppsCache = lockedAppsDoc.get("lockedApps") as? List<String> ?: emptyList()
+                    lastCacheUpdate = currentTime
+                    return lockedAppsCache
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting locked apps: ${e.message}")
+        }
+        return emptyList()
+    }
+
     private fun startMonitoring() {
         job = scope.launch {
-            while (isRunning) {
-                try {
-                    val currentUser = auth.currentUser
-                    if (currentUser != null) {
-                        // Check if current user is a child
-                        val childProfile = firestore.collection("users/child/profile")
-                            .document(currentUser.uid)
-                            .get()
-                            .await()
-
-                        if (childProfile.exists()) {
-                            // Get locked apps for this child
-                            val lockedAppsDoc = firestore.collection("lockedApps")
+            try {
+                while (isRunning) {
+                    try {
+                        val currentUser = auth.currentUser
+                        if (currentUser != null) {
+                            // Check if current user is a child
+                            val childProfile = firestore.collection("users/child/profile")
                                 .document(currentUser.uid)
                                 .get()
                                 .await()
 
-                            if (lockedAppsDoc.exists()) {
-                                val lockedApps = lockedAppsDoc.get("lockedApps") as? List<String> ?: emptyList()
+                            if (childProfile.exists()) {
+                                // Get locked apps (using cache)
+                                val lockedApps = getLockedApps()
                                 
                                 // Check current app
                                 val currentApp = getCurrentApp()
                                 if (currentApp != null) {
+                                    Log.d(TAG, "Current app: $currentApp, Locked apps: $lockedApps")
                                     if (lockedApps.contains(currentApp)) {
-                                        // App is locked, show lock screen
-                                        if (lastLockedApp != currentApp) {
-                                            lastLockedApp = currentApp
+                                        // App is locked, show lock screen immediately
+                                        Log.d(TAG, "Showing lock screen for app: $currentApp")
+                                        lastLockedApp = currentApp
+                                        withContext(Dispatchers.Main) {
                                             showLockScreen()
                                         }
+                                        // Add a small delay after showing lock screen
+                                        delay(100)
                                     } else {
                                         lastLockedApp = null
                                     }
                                 }
                             }
                         }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error in app monitoring: ${e.message}")
+                        if (e is kotlinx.coroutines.CancellationException) {
+                            throw e
+                        }
                     }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error in app monitoring: ${e.message}")
+                    
+                    delay(200) // Check more frequently
                 }
-                kotlinx.coroutines.delay(1000) // Check every second
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                Log.d(TAG, "Monitoring coroutine cancelled")
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "Fatal error in monitoring: ${e.message}")
+                restartService()
             }
         }
     }
 
     private fun getCurrentApp(): String? {
         try {
-            val usageStatsManager = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
             val time = System.currentTimeMillis()
-            val usageEvents = usageStatsManager.queryEvents(time - 1000, time)
+            // Query a longer time window to catch all events
+            val usageEvents = usageStatsManager?.queryEvents(time - 2000, time)
+            if (usageEvents == null) {
+                Log.e(TAG, "UsageStatsManager is null")
+                return null
+            }
+
             val event = UsageEvents.Event()
             var lastEvent: UsageEvents.Event? = null
+            var lastMoveToForeground: UsageEvents.Event? = null
 
             while (usageEvents.hasNextEvent()) {
                 usageEvents.getNextEvent(event)
-                if (event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND) {
-                    lastEvent = event
+                when (event.eventType) {
+                    UsageEvents.Event.MOVE_TO_FOREGROUND -> {
+                        lastMoveToForeground = event
+                    }
+                    UsageEvents.Event.ACTIVITY_RESUMED -> {
+                        lastEvent = event
+                    }
                 }
             }
 
-            return lastEvent?.packageName
+            // Prefer MOVE_TO_FOREGROUND events as they're more reliable
+            val packageName = lastMoveToForeground?.packageName ?: lastEvent?.packageName
+            Log.d(TAG, "Current app package name: $packageName")
+            return packageName
         } catch (e: Exception) {
             Log.e(TAG, "Error getting current app: ${e.message}")
             return null
@@ -193,9 +265,13 @@ class AppLockService : Service() {
     private fun showLockScreen() {
         try {
             val intent = Intent(this, AppLockScreenActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or 
+                       Intent.FLAG_ACTIVITY_CLEAR_TOP or 
+                       Intent.FLAG_ACTIVITY_SINGLE_TOP
+                addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION)
             }
             startActivity(intent)
+            Log.d(TAG, "Lock screen shown")
         } catch (e: Exception) {
             Log.e(TAG, "Error showing lock screen: ${e.message}")
         }
@@ -203,6 +279,7 @@ class AppLockService : Service() {
 
     override fun onDestroy() {
         try {
+            Log.d(TAG, "onDestroy called")
             isRunning = false
             job?.cancel()
             wakeLock?.let {
@@ -210,11 +287,17 @@ class AppLockService : Service() {
                     it.release()
                 }
             }
-            Log.d(TAG, "Service destroyed")
+            restartService()
         } catch (e: Exception) {
             Log.e(TAG, "Error in onDestroy: ${e.message}")
         } finally {
             super.onDestroy()
         }
+    }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        Log.d(TAG, "onTaskRemoved called")
+        restartService()
     }
 } 
