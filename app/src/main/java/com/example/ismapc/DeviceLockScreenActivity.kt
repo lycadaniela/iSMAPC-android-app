@@ -128,9 +128,10 @@ class DeviceLockScreenActivity : ComponentActivity() {
             ISMAPCTheme {
                 DeviceLockScreen(
                     onUnlocked = {
-                        // Clean up and finish activity
+                        // Clean up and close the app
                         handler.removeCallbacks(checkForegroundRunnable)
                         finish()
+                        moveTaskToBack(true)
                     }
                 )
             }
