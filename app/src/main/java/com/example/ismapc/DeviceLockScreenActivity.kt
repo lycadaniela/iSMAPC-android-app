@@ -34,9 +34,10 @@ import kotlinx.coroutines.delay
 class DeviceLockScreenActivity : ComponentActivity() {
     private val TAG = "DeviceLockScreenActivity"
     private val handler = Handler(Looper.getMainLooper())
+    private var isScreenOff = false
     private val checkForegroundRunnable = object : Runnable {
         override fun run() {
-            if (!isFinishing) {
+            if (!isFinishing && !isScreenOff) {
                 checkAndBringToFront()
                 handler.postDelayed(this, 50) // Check every 50ms
             }
@@ -65,10 +66,8 @@ class DeviceLockScreenActivity : ComponentActivity() {
         
         // Set window flags to prevent system UI access and app minimization
         window.addFlags(
-            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
             WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD or
             WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-            WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
             WindowManager.LayoutParams.FLAG_ALLOW_LOCK_WHILE_SCREEN_ON or
             WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
@@ -80,8 +79,6 @@ class DeviceLockScreenActivity : ComponentActivity() {
             WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH or
             WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
             WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD or
-            WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
-            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
             WindowManager.LayoutParams.FLAG_ALLOW_LOCK_WHILE_SCREEN_ON
         )
 
@@ -96,9 +93,9 @@ class DeviceLockScreenActivity : ComponentActivity() {
             or View.SYSTEM_UI_FLAG_LOW_PROFILE
         )
 
-        // Set window type to TYPE_APPLICATION_OVERLAY with highest priority
+        // Set window type to TYPE_APPLICATION with normal priority
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            window.setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
+            window.setType(WindowManager.LayoutParams.TYPE_APPLICATION)
             window.attributes = window.attributes.apply {
                 flags = flags or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
                 flags = flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
@@ -110,12 +107,10 @@ class DeviceLockScreenActivity : ComponentActivity() {
                 flags = flags or WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH
                 flags = flags or WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
                 flags = flags or WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
-                flags = flags or WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
-                flags = flags or WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
                 flags = flags or WindowManager.LayoutParams.FLAG_ALLOW_LOCK_WHILE_SCREEN_ON
             }
         } else {
-            window.setType(WindowManager.LayoutParams.TYPE_SYSTEM_ALERT)
+            window.setType(WindowManager.LayoutParams.TYPE_APPLICATION)
         }
 
         // Set window to fullscreen
@@ -159,12 +154,11 @@ class DeviceLockScreenActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        isScreenOff = false
         // Re-apply window flags and system UI visibility
         window.addFlags(
-            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
             WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD or
             WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-            WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
             WindowManager.LayoutParams.FLAG_ALLOW_LOCK_WHILE_SCREEN_ON or
             WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
@@ -190,7 +184,25 @@ class DeviceLockScreenActivity : ComponentActivity() {
     override fun onPause() {
         super.onPause()
         Log.d(TAG, "Activity onPause")
+        isScreenOff = true
         // Only bring activity back to front if we're not finishing
+        if (!isFinishing) {
+            val intent = Intent(this, DeviceLockScreenActivity::class.java)
+            intent.addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK or
+                Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or
+                Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED or
+                Intent.FLAG_ACTIVITY_CLEAR_TOP
+            )
+            startActivity(intent)
+        }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        Log.d(TAG, "Activity onStop")
+        isScreenOff = true
+        // Bring activity back to front when screen is turned on
         if (!isFinishing) {
             val intent = Intent(this, DeviceLockScreenActivity::class.java)
             intent.addFlags(
@@ -217,7 +229,6 @@ fun DeviceLockScreen(
     val context = LocalContext.current
     val firestore = FirebaseFirestore.getInstance()
     val auth = FirebaseAuth.getInstance()
-    var isChecking by remember { mutableStateOf(false) }
 
     // Check lock state periodically
     LaunchedEffect(Unit) {
@@ -271,39 +282,6 @@ fun DeviceLockScreen(
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onBackground
             )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Button(
-                onClick = {
-                    isChecking = true
-                    val currentUser = auth.currentUser
-                    if (currentUser != null) {
-                        firestore.collection("deviceLocks")
-                            .document(currentUser.uid)
-                            .get()
-                            .addOnSuccessListener { document ->
-                                isChecking = false
-                                if (!document.exists() || !(document.getBoolean("isLocked") ?: false)) {
-                                    onUnlocked()
-                                }
-                            }
-                            .addOnFailureListener {
-                                isChecking = false
-                            }
-                    }
-                },
-                enabled = !isChecking
-            ) {
-                if (isChecking) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        color = MaterialTheme.colorScheme.onPrimary
-                    )
-                } else {
-                    Text("Check Lock Status")
-                }
-            }
         }
     }
 } 
