@@ -137,7 +137,9 @@ fun OverviewTab(childId: String) {
     var installedAppsState by remember { mutableStateOf<InstalledAppsState>(InstalledAppsState.Loading) }
     val context = LocalContext.current
     val firestore = FirebaseFirestore.getInstance()
+    var lockedApps by remember { mutableStateOf<List<String>>(emptyList()) }
 
+    // Set up real-time listener for locked apps
     LaunchedEffect(childId) {
         if (childId.isBlank()) {
             screenTimeState = ScreenTimeState.Error("Invalid child ID")
@@ -146,8 +148,22 @@ fun OverviewTab(childId: String) {
         }
 
         try {
-            Log.d("ChildDetailsActivity", "Fetching screen time data for child: $childId")
+            // Set up locked apps listener
+            firestore.collection("lockedApps")
+                .document(childId)
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null) {
+                        Log.e("OverviewTab", "Error listening to locked apps", error)
+                        return@addSnapshotListener
+                    }
 
+                    if (snapshot != null && snapshot.exists()) {
+                        lockedApps = snapshot.get("lockedApps") as? List<String> ?: emptyList()
+                        Log.d("OverviewTab", "Updated locked apps list: $lockedApps")
+                    }
+                }
+
+            // Fetch screen time data
             firestore.collection("screenTime")
                 .document(childId)
                 .get()
@@ -265,7 +281,17 @@ fun OverviewTab(childId: String) {
                             AppListItem(
                                 appName = app["appName"] as? String ?: "Unknown App",
                                 packageName = app["packageName"] as? String ?: "",
-                                context = context
+                                context = context,
+                                isLocked = lockedApps.contains(app["packageName"] as? String ?: ""),
+                                onLockStateChanged = { packageName, newLockState ->
+                                    // Update locked apps list
+                                    val updatedList = if (newLockState) {
+                                        lockedApps + packageName
+                                    } else {
+                                        lockedApps - packageName
+                                    }
+                                    lockedApps = updatedList
+                                }
                             )
                         }
                     }
@@ -291,64 +317,23 @@ fun OverviewTab(childId: String) {
 fun AppListItem(
     appName: String,
     packageName: String,
-    context: Context
+    context: Context,
+    isLocked: Boolean,
+    onLockStateChanged: (String, Boolean) -> Unit
 ) {
-    var isLocked by rememberSaveable { mutableStateOf(false) }
+    var isUpdating by remember { mutableStateOf(false) }
     val packageManager = context.packageManager
     var appIcon by remember { mutableStateOf<ImageBitmap?>(null) }
     val firestore = FirebaseFirestore.getInstance()
     val childId = (context as? ChildDetailsActivity)?.intent?.getStringExtra("childId")
 
-    // Load initial locked state and set up real-time listener
+    // Load app icon
     LaunchedEffect(packageName) {
         try {
-            // Load app icon
             val icon = packageManager.getApplicationIcon(packageName)
             appIcon = icon.toBitmap().asImageBitmap()
-
-            // Set up real-time listener for locked apps
-            childId?.let { id ->
-                // First, ensure the document exists
-                firestore.collection("lockedApps")
-                    .document(id)
-                    .get()
-                    .addOnSuccessListener { document ->
-                        if (!document.exists()) {
-                            // Create the document if it doesn't exist
-                            val initialData = hashMapOf(
-                                "lockedApps" to listOf<String>(),
-                                "lastUpdated" to FieldValue.serverTimestamp()
-                            )
-                            firestore.collection("lockedApps")
-                                .document(id)
-                                .set(initialData)
-                                .addOnSuccessListener {
-                                    Log.d("AppListItem", "Created lockedApps document for child $id")
-                                }
-                                .addOnFailureListener { e ->
-                                    Log.e("AppListItem", "Error creating lockedApps document", e)
-                                }
-                        }
-                    }
-
-                // Then set up the listener
-                firestore.collection("lockedApps")
-                    .document(id)
-                    .addSnapshotListener { snapshot, error ->
-                        if (error != null) {
-                            Log.e("AppListItem", "Error listening to locked apps", error)
-                            return@addSnapshotListener
-                        }
-
-                        if (snapshot != null && snapshot.exists()) {
-                            val lockedApps = snapshot.get("lockedApps") as? List<String> ?: emptyList()
-                            isLocked = lockedApps.contains(packageName)
-                            Log.d("AppListItem", "Updated lock state for $packageName: $isLocked")
-                        }
-                    }
-            }
         } catch (e: Exception) {
-            Log.e("AppListItem", "Error loading app data for $packageName", e)
+            Log.e("AppListItem", "Error loading app icon for $packageName", e)
         }
     }
 
@@ -405,41 +390,51 @@ fun AppListItem(
             // Lock/Unlock Button
             Button(
                 onClick = {
-                    childId?.let { id ->
-                        firestore.collection("lockedApps")
-                            .document(id)
-                            .get()
-                            .addOnSuccessListener { document ->
-                                val lockedApps = (document.get("lockedApps") as? List<String> ?: emptyList()).toMutableList()
-                                
-                                if (isLocked) {
-                                    lockedApps.remove(packageName)
-                                } else {
-                                    lockedApps.add(packageName)
+                    if (!isUpdating) {
+                        isUpdating = true
+                        childId?.let { id ->
+                            // Get current locked apps
+                            firestore.collection("lockedApps")
+                                .document(id)
+                                .get()
+                                .addOnSuccessListener { document ->
+                                    val currentLockedApps = (document.get("lockedApps") as? List<String> ?: emptyList()).toMutableList()
+                                    
+                                    // Update the list
+                                    if (isLocked) {
+                                        currentLockedApps.remove(packageName)
+                                    } else {
+                                        currentLockedApps.add(packageName)
+                                    }
+
+                                    // Update Firestore
+                                    val updates = hashMapOf(
+                                        "lockedApps" to currentLockedApps,
+                                        "lastUpdated" to FieldValue.serverTimestamp()
+                                    )
+
+                                    firestore.collection("lockedApps")
+                                        .document(id)
+                                        .set(updates)
+                                        .addOnSuccessListener {
+                                            Log.d("AppListItem", "Successfully updated locked apps for child $id")
+                                            // Update local state
+                                            onLockStateChanged(packageName, !isLocked)
+                                            isUpdating = false
+                                        }
+                                        .addOnFailureListener { e ->
+                                            Log.e("AppListItem", "Error updating locked apps", e)
+                                            isUpdating = false
+                                        }
                                 }
-
-                                val updates = hashMapOf(
-                                    "lockedApps" to lockedApps,
-                                    "lastUpdated" to FieldValue.serverTimestamp()
-                                )
-
-                                firestore.collection("lockedApps")
-                                    .document(id)
-                                    .set(updates)
-                                    .addOnSuccessListener {
-                                        Log.d("AppListItem", "Successfully updated locked apps for child $id")
-                                        // Update local state immediately
-                                        isLocked = !isLocked
-                                    }
-                                    .addOnFailureListener { e ->
-                                        Log.e("AppListItem", "Error updating locked apps", e)
-                                    }
-                            }
-                            .addOnFailureListener { e ->
-                                Log.e("AppListItem", "Error getting locked apps document", e)
-                            }
+                                .addOnFailureListener { e ->
+                                    Log.e("AppListItem", "Error getting locked apps document", e)
+                                    isUpdating = false
+                                }
+                        }
                     }
                 },
+                enabled = !isUpdating,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = if (isLocked) 
                         MaterialTheme.colorScheme.error 
@@ -447,10 +442,17 @@ fun AppListItem(
                         MaterialTheme.colorScheme.primary
                 )
             ) {
-                Text(
-                    text = if (isLocked) "Unlock" else "Lock",
-                    color = MaterialTheme.colorScheme.onPrimary
-                )
+                if (isUpdating) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                } else {
+                    Text(
+                        text = if (isLocked) "Unlock" else "Lock",
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                }
             }
         }
     }

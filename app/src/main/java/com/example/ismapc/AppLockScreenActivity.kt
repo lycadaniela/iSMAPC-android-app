@@ -2,6 +2,7 @@ package com.example.ismapc
 
 import android.content.Intent
 import android.os.Bundle
+import android.app.Activity
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
@@ -28,6 +29,17 @@ class AppLockScreenActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onBackPressed() {
+        // Prevent back navigation
+        // Instead, send user to home screen
+        val homeIntent = Intent(Intent.ACTION_MAIN).apply {
+            addCategory(Intent.CATEGORY_HOME)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        }
+        startActivity(homeIntent)
+        finish()
     }
 }
 
@@ -75,6 +87,7 @@ fun LockScreen() {
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK
                 }
                 context.startActivity(homeIntent)
+                (context as? Activity)?.finish()
             }
         ) {
             Text("Return to Home")
