@@ -20,6 +20,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.outlined.ExitToApp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -36,7 +38,6 @@ import com.example.ismapc.ui.theme.ISMAPCTheme
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import androidx.compose.ui.graphics.Color
-import androidx.compose.material.icons.filled.CheckCircle
 import android.app.AppOpsManager
 import android.content.Context
 import android.provider.Settings
@@ -585,7 +586,21 @@ fun ChildMainScreen(onLogout: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Child Dashboard") },
+                title = { },
+                navigationIcon = {
+                    IconButton(
+                        onClick = {
+                            (context as? Activity)?.let { activity ->
+                                activity.startActivity(Intent(context, ChildPermissionActivity::class.java))
+                            }
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Lock,
+                            contentDescription = "Check Permissions"
+                        )
+                    }
+                },
                 actions = {
                     IconButton(onClick = onLogout) {
                         Icon(
@@ -610,20 +625,22 @@ fun ChildMainScreen(onLogout: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            // Your existing child dashboard content
-            Text("Welcome to your Dashboard!")
+            // Success icon
+            Icon(
+                imageVector = Icons.Filled.CheckCircle,
+                contentDescription = "Success",
+                modifier = Modifier
+                    .size(64.dp)
+                    .padding(bottom = 16.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
             
-            // Add a button to check permissions again
-            Button(
-                onClick = {
-                    (context as? Activity)?.let { activity ->
-                        activity.startActivity(Intent(context, ChildPermissionActivity::class.java))
-                    }
-                },
-                modifier = Modifier.padding(top = 16.dp)
-            ) {
-                Text("Check Permissions")
-            }
+            // Connected successfully text
+            Text(
+                text = "Connected Successfully",
+                style = MaterialTheme.typography.headlineMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
         }
     }
 }
