@@ -31,9 +31,6 @@ class ChildPermissionActivity : ComponentActivity() {
         Manifest.permission.ACCESS_COARSE_LOCATION,
         Manifest.permission.FOREGROUND_SERVICE_LOCATION,
         Manifest.permission.FOREGROUND_SERVICE_DATA_SYNC,
-        Manifest.permission.READ_PHONE_STATE,
-        Manifest.permission.READ_CALL_LOG,
-        Manifest.permission.READ_SMS,
         Manifest.permission.PACKAGE_USAGE_STATS,
         Manifest.permission.SYSTEM_ALERT_WINDOW,
         Manifest.permission.REQUEST_DELETE_PACKAGES,
@@ -172,18 +169,6 @@ fun ChildPermissionScreen(
             icon = Icons.Default.LocationOn,
             title = "Location Access",
             description = "Required to track your location for safety purposes"
-        )
-
-        PermissionItem(
-            icon = Icons.Default.Phone,
-            title = "Phone State & Call Log",
-            description = "Required to monitor call usage and screen time"
-        )
-
-        PermissionItem(
-            icon = Icons.Default.Email,
-            title = "SMS Access",
-            description = "Required to monitor message usage"
         )
 
         PermissionItem(
