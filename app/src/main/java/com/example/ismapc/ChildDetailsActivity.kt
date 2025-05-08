@@ -6,6 +6,7 @@ import android.content.Intent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
@@ -230,16 +231,7 @@ fun OverviewTab(childId: String) {
             is ScreenTimeState.Success -> {
                 val screenTime = (screenTimeState as ScreenTimeState.Success).screenTime
                 if (screenTime > 0) {
-                    Text(
-                        text = "Today's Screen Time",
-                        style = MaterialTheme.typography.titleLarge,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-                    Text(
-                        text = formatScreenTime(screenTime),
-                        style = MaterialTheme.typography.headlineMedium,
-                        color = MaterialTheme.colorScheme.primary
-                    )
+                    ScreenTimeCard(screenTime)
                 } else {
                     Text(
                         text = "No screen time data",
@@ -384,7 +376,8 @@ fun AppListItem(
             Text(
                 text = appName,
                 style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
             )
 
             // Lock/Unlock Button
@@ -476,9 +469,15 @@ private fun ScreenTimeCard(screenTime: Long) {
     val minutes = TimeUnit.MILLISECONDS.toMinutes(screenTime) % 60
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant
+        ),
+        border = BorderStroke(
+            width = 2.dp,
+            color = MaterialTheme.colorScheme.primary
         )
     ) {
         Column(
@@ -490,13 +489,13 @@ private fun ScreenTimeCard(screenTime: Long) {
             Text(
                 text = "Today's Screen Time",
                 style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = "$hours hours $minutes minutes",
                 style = MaterialTheme.typography.headlineMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.primary
             )
         }
     }
