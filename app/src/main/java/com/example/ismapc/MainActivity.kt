@@ -44,6 +44,7 @@ import android.provider.Settings
 import android.app.usage.UsageStatsManager
 import android.app.Activity
 import android.os.Build
+import com.google.firebase.firestore.FieldValue
 
 class MainActivity : ComponentActivity() {
     companion object {
@@ -183,6 +184,14 @@ class MainActivity : ComponentActivity() {
             // Start the AppLockService
             startAppLockService()
 
+            // Start the DeviceLockService
+            val deviceLockServiceIntent = Intent(this, DeviceLockService::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(deviceLockServiceIntent)
+            } else {
+                startService(deviceLockServiceIntent)
+            }
+
             // Start location service
             val locationServiceIntent = Intent(this, LocationService::class.java)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -241,6 +250,7 @@ class MainActivity : ComponentActivity() {
                 stopService(Intent(this, ScreenTimeService::class.java))
                 stopService(Intent(this, AppLockService::class.java))
                 stopService(Intent(this, InstalledAppsService::class.java))
+                stopService(Intent(this, DeviceLockService::class.java))
             }
         } catch (e: Exception) {
             Log.e("MainActivity", "Error in onDestroy: ${e.message}")
@@ -505,6 +515,32 @@ fun ChildProfileCard(
     childProfile: Map<String, Any>,
     onClick: () -> Unit
 ) {
+    var isLocked by remember { mutableStateOf(false) }
+    var isUpdating by remember { mutableStateOf(false) }
+    val firestore = FirebaseFirestore.getInstance()
+    val childId = childProfile["documentId"] as? String ?: ""
+    val context = LocalContext.current
+
+    // Set up real-time listener for device lock state
+    LaunchedEffect(childId) {
+        if (childId.isNotBlank()) {
+            firestore.collection("deviceLocks")
+                .document(childId)
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null) {
+                        Log.e("ChildProfileCard", "Error listening to device lock state", error)
+                        return@addSnapshotListener
+                    }
+
+                    if (snapshot != null && snapshot.exists()) {
+                        isLocked = snapshot.getBoolean("isLocked") ?: false
+                    } else {
+                        isLocked = false
+                    }
+                }
+        }
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -553,6 +589,70 @@ fun ChildProfileCard(
                     style = MaterialTheme.typography.bodyMedium,
                     color = Color.DarkGray
                 )
+            }
+
+            // Lock device button
+            Button(
+                onClick = {
+                    if (!isUpdating) {
+                        isUpdating = true
+                        val updates = hashMapOf(
+                            "isLocked" to !isLocked,
+                            "lastUpdated" to FieldValue.serverTimestamp()
+                        )
+
+                        firestore.collection("deviceLocks")
+                            .document(childId)
+                            .set(updates)
+                            .addOnSuccessListener {
+                                isUpdating = false
+                                Toast.makeText(
+                                    context,
+                                    if (!isLocked) "Device unlocked successfully" else "Device locked successfully",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                            .addOnFailureListener { e ->
+                                Log.e("ChildProfileCard", "Error updating device lock state", e)
+                                isUpdating = false
+                                Toast.makeText(
+                                    context,
+                                    "Error: ${e.message}",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                    }
+                },
+                enabled = !isUpdating,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (isLocked) 
+                        MaterialTheme.colorScheme.error 
+                    else 
+                        MaterialTheme.colorScheme.primary
+                ),
+                modifier = Modifier.padding(start = 8.dp)
+            ) {
+                if (isUpdating) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                } else {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = if (isLocked) "Unlock Device" else "Lock Device",
+                            tint = MaterialTheme.colorScheme.onPrimary
+                        )
+                        Text(
+                            text = if (isLocked) "Unlock" else "Lock",
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                    }
+                }
             }
         }
     }

@@ -668,8 +668,18 @@ fun LocationTab(childId: String) {
 
 @Composable
 fun SettingsTab(childId: String) {
-    Box(modifier = Modifier.fillMaxSize()) {
-        Text("Settings Tab Content")
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        // Settings content will be added here in the future
+        Text(
+            text = "Settings",
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.primary
+        )
     }
 }
 

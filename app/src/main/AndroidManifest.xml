@@ -132,10 +132,23 @@
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
+        <service
+            android:name=".DeviceLockService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
         <activity
             android:name=".AppLockScreenActivity"
             android:exported="false"
             android:theme="@style/Theme.ISMAPC" />
+
+        <activity
+            android:name=".DeviceLockScreenActivity"
+            android:exported="false"
+            android:theme="@style/Theme.ISMAPC"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true" />
     </application>
     
 </manifest>
