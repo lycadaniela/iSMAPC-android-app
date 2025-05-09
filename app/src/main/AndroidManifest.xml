@@ -106,6 +106,12 @@
             android:exported="false"
             android:theme="@style/Theme.ISMAPC" />
 
+        <activity
+            android:name=".ContentFilteringActivity"
+            android:exported="false"
+            android:label="Content Filtering History"
+            android:theme="@style/Theme.ISMAPC" />
+
         <service
             android:name=".ScreenTimeService"
             android:enabled="true"
@@ -146,6 +152,23 @@
             android:theme="@style/Theme.ISMAPC"
             android:showWhenLocked="true"
             android:turnScreenOn="true" />
+
+        <service
+            android:name=".ContentFilteringService"
+            android:enabled="true"
+            android:exported="false" />
+
+        <service
+            android:name=".BrowserContentMonitorService"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
+        </service>
     </application>
     
 </manifest>

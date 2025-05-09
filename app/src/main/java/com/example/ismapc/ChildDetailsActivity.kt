@@ -21,6 +21,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
 import com.example.ismapc.ui.theme.ISMAPCTheme
 import com.google.firebase.firestore.FirebaseFirestore
 import java.util.*
@@ -51,6 +53,15 @@ import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import androidx.compose.foundation.background
 import com.google.firebase.firestore.FieldValue
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
+import com.example.ismapc.ContentFilteringManager
+import com.google.firebase.Timestamp
+import android.widget.Toast
+import com.example.ismapc.ContentFilteringResult
+import com.example.ismapc.ContentFilteringHelper
 
 class ChildDetailsActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -80,7 +91,7 @@ class ChildDetailsActivity : ComponentActivity() {
 @Composable
 fun ChildDetailsScreen(childId: String, childName: String) {
     var selectedTabIndex by remember { mutableStateOf(0) }
-    val tabs = listOf("Overview", "Location", "Settings")
+    val tabs = listOf("Overview", "Location", "Content Filter")
     val context = LocalContext.current
     
     Scaffold(
@@ -126,7 +137,7 @@ fun ChildDetailsScreen(childId: String, childName: String) {
             when (selectedTabIndex) {
                 0 -> OverviewTab(childId)
                 1 -> LocationTab(childId)
-                2 -> SettingsTab(childId)
+                2 -> ContentFilteringTab(childId, childName, "")
             }
         }
     }
@@ -667,31 +678,250 @@ fun LocationTab(childId: String) {
 }
 
 @Composable
-fun SettingsTab(childId: String) {
+fun ContentFilteringTab(childId: String, childName: String, parentId: String) {
+    var contentResults by remember { mutableStateOf<List<FilteredContent>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    val firestore = FirebaseFirestore.getInstance()
+    val context = LocalContext.current
+
+    LaunchedEffect(childId) {
+        try {
+            Log.d("ContentFilteringTab", "Setting up listener for child: $childId")
+            // Listen for content filtering results in the user's filteredContent subcollection
+            firestore.collection("contentToFilter")
+                .document(childId)
+                .collection("filteredContent")
+                .orderBy("timestamp", Query.Direction.DESCENDING)
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null) {
+                        val errorMsg = "Error listening for results: ${error.message}"
+                        Log.e("ContentFilteringTab", errorMsg)
+                        errorMessage = errorMsg
+                        isLoading = false
+                        return@addSnapshotListener
+                    }
+
+                    Log.d("ContentFilteringTab", "Received ${snapshot?.documents?.size ?: 0} results")
+                    
+                    // Debug log the documents
+                    snapshot?.documents?.forEach { doc ->
+                        Log.d("ContentFilteringTab", "Document data: ${doc.data}")
+                    }
+                    
+                    contentResults = snapshot?.documents?.mapNotNull { doc ->
+                        try {
+                            val data = doc.data
+                            Log.d("ContentFilteringTab", "Processing document ${doc.id}: $data")
+                            
+                            FilteredContent(
+                                id = doc.id,
+                                content = doc.getString("content") ?: "",
+                                isBlockable = doc.getBoolean("isBlockable") ?: false,
+                                reason = doc.getString("reason") ?: "",
+                                timestamp = doc.getTimestamp("timestamp") ?: Timestamp.now(),
+                                status = doc.getString("status") ?: "pending"
+                            ).also {
+                                Log.d("ContentFilteringTab", "Successfully parsed content: ${it.content.take(50)}...")
+                            }
+                        } catch (e: Exception) {
+                            Log.e("ContentFilteringTab", "Error parsing document ${doc.id}", e)
+                            null
+                        }
+                    } ?: emptyList()
+                    
+                    Log.d("ContentFilteringTab", "Final content results size: ${contentResults.size}")
+                    isLoading = false
+                    errorMessage = null
+                }
+        } catch (e: Exception) {
+            val errorMsg = "Error setting up listener: ${e.message}"
+            Log.e("ContentFilteringTab", errorMsg, e)
+            errorMessage = errorMsg
+            isLoading = false
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+            .padding(16.dp)
     ) {
-        // Settings content will be added here in the future
         Text(
-            text = "Settings",
+            text = "Content Filtering History",
             style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.primary
+            modifier = Modifier.padding(bottom = 16.dp)
         )
+
+        when {
+            isLoading -> {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
+            }
+            errorMessage != null -> {
+                Text(
+                    text = errorMessage ?: "",
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(16.dp)
+                )
+            }
+            contentResults.isEmpty() -> {
+                Text(
+                    text = "No content filtering history found",
+                    modifier = Modifier.padding(16.dp)
+                )
+            }
+            else -> {
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(contentResults) { content ->
+                        ContentFilteringCard(
+                            content = content,
+                            onBlock = { contentId ->
+                                Log.d("ContentFilteringTab", "Blocking content: $contentId")
+                                firestore.collection("contentToFilter")
+                                    .document(childId)
+                                    .collection("filteredContent")
+                                    .document(contentId)
+                                    .update("status", "blocked")
+                                    .addOnSuccessListener {
+                                        Log.d("ContentFilteringTab", "Content blocked successfully")
+                                        Toast.makeText(
+                                            context,
+                                            "Content blocked successfully",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                    .addOnFailureListener { e ->
+                                        Log.e("ContentFilteringTab", "Error blocking content", e)
+                                        Toast.makeText(
+                                            context,
+                                            "Error blocking content",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                            },
+                            onAllow = { contentId ->
+                                Log.d("ContentFilteringTab", "Allowing content: $contentId")
+                                firestore.collection("contentToFilter")
+                                    .document(childId)
+                                    .collection("filteredContent")
+                                    .document(contentId)
+                                    .update("status", "allowed")
+                                    .addOnSuccessListener {
+                                        Log.d("ContentFilteringTab", "Content allowed successfully")
+                                        Toast.makeText(
+                                            context,
+                                            "Content allowed successfully",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                    .addOnFailureListener { e ->
+                                        Log.e("ContentFilteringTab", "Error allowing content", e)
+                                        Toast.makeText(
+                                            context,
+                                            "Error allowing content",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                            }
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
-private fun getDateString(calendar: Calendar): String {
-    val year = calendar.get(Calendar.YEAR)
-    val month = calendar.get(Calendar.MONTH) + 1
-    val day = calendar.get(Calendar.DAY_OF_MONTH)
-    return "$year-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}"
-}
-
-private fun formatScreenTime(screenTime: Long): String {
-    val hours = TimeUnit.MILLISECONDS.toHours(screenTime)
-    val minutes = TimeUnit.MILLISECONDS.toMinutes(screenTime) % 60
-    return "$hours hours $minutes minutes"
+@Composable
+fun ContentFilteringCard(
+    content: FilteredContent,
+    onBlock: (String) -> Unit,
+    onAllow: (String) -> Unit
+) {
+    val dateFormat = remember { SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.getDefault()) }
+    
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = when (content.status) {
+                "blocked" -> MaterialTheme.colorScheme.errorContainer
+                "allowed" -> MaterialTheme.colorScheme.primaryContainer
+                else -> if (content.isBlockable) 
+                    MaterialTheme.colorScheme.errorContainer 
+                else 
+                    MaterialTheme.colorScheme.surface
+            }
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(16.dp)
+                .fillMaxWidth()
+        ) {
+            Text(
+                text = content.content,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            Text(
+                text = "Status: ${content.status}",
+                style = MaterialTheme.typography.bodySmall
+            )
+            
+            if (content.isBlockable) {
+                Text(
+                    text = "Reason: ${content.reason}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+            
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = dateFormat.format(content.timestamp.toDate()),
+                    style = MaterialTheme.typography.bodySmall
+                )
+                
+                if (content.status == "processed") {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = { onBlock(content.id) },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.error
+                            )
+                        ) {
+                            Text("Block")
+                        }
+                        
+                        Button(
+                            onClick = { onAllow(content.id) },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary
+                            )
+                        ) {
+                            Text("Allow")
+                        }
+                    }
+                }
+            }
+        }
+    }
 } 

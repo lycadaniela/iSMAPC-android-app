@@ -85,6 +85,51 @@ service cloud.firestore {
       allow write: if isAuthenticated() && isParentOfChild(userId);
     }
 
+    // Content filtering data
+    match /contentFiltering/{childId} {
+      allow read: if isAuthenticated() && (
+        childId == request.auth.uid ||
+        isParentOfChild(childId)
+      );
+      allow write: if isAuthenticated() && isParentOfChild(childId);
+    }
+
+    // Content to filter collection and subcollections
+    match /contentToFilter/{userId} {
+      allow read: if isAuthenticated() && (
+        userId == request.auth.uid ||
+        isParentOfChild(userId)
+      );
+      allow write: if isAuthenticated() && (
+        userId == request.auth.uid ||
+        isParentOfChild(userId)
+      );
+      
+      // Content subcollection
+      match /content/{documentId} {
+        allow read: if isAuthenticated() && (
+          userId == request.auth.uid ||
+          isParentOfChild(userId)
+        );
+        allow write: if isAuthenticated() && (
+          userId == request.auth.uid ||
+          isParentOfChild(userId)
+        );
+      }
+      
+      // FilteredContent subcollection
+      match /filteredContent/{documentId} {
+        allow read: if isAuthenticated() && (
+          userId == request.auth.uid ||
+          isParentOfChild(userId)
+        );
+        allow write: if isAuthenticated() && (
+          userId == request.auth.uid ||
+          isParentOfChild(userId)
+        );
+      }
+    }
+
     // Device locks collection
     match /deviceLocks/{childId} {
       allow read: if isAuthenticated() && (

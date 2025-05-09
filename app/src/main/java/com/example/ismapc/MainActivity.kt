@@ -178,39 +178,74 @@ class MainActivity : ComponentActivity() {
         try {
             Log.d("MainActivity", "Starting child services")
             
-            // Start the InstalledAppsService
-            startService(Intent(this, InstalledAppsService::class.java))
+            // Get child profile first
+            firestore.collection(USERS_COLLECTION)
+                .document(CHILD_COLLECTION)
+                .collection("profile")
+                .document(auth.currentUser?.uid ?: "")
+                .get()
+                .addOnSuccessListener { document ->
+                    if (document.exists()) {
+                        val childName = document.getString("fullName") ?: "Child"
+                        val childId = auth.currentUser?.uid ?: ""
+                        
+                        try {
+                            // Start the InstalledAppsService
+                            startService(Intent(this, InstalledAppsService::class.java))
 
-            // Start the AppLockService
-            startAppLockService()
+                            // Start the AppLockService
+                            startAppLockService()
 
-            // Start the DeviceLockService
-            val deviceLockServiceIntent = Intent(this, DeviceLockService::class.java)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                startForegroundService(deviceLockServiceIntent)
-            } else {
-                startService(deviceLockServiceIntent)
-            }
+                            // Start the DeviceLockService
+                            val deviceLockServiceIntent = Intent(this, DeviceLockService::class.java)
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                startForegroundService(deviceLockServiceIntent)
+                            } else {
+                                startService(deviceLockServiceIntent)
+                            }
 
-            // Start location service
-            val locationServiceIntent = Intent(this, LocationService::class.java)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                startForegroundService(locationServiceIntent)
-            } else {
-                startService(locationServiceIntent)
-            }
-            
-            // Start screen time service
-            val screenTimeServiceIntent = Intent(this, ScreenTimeService::class.java)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                startForegroundService(screenTimeServiceIntent)
-            } else {
-                startService(screenTimeServiceIntent)
-            }
+                            // Start location service
+                            val locationServiceIntent = Intent(this, LocationService::class.java)
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                startForegroundService(locationServiceIntent)
+                            } else {
+                                startService(locationServiceIntent)
+                            }
+                            
+                            // Start screen time service
+                            val screenTimeServiceIntent = Intent(this, ScreenTimeService::class.java)
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                startForegroundService(screenTimeServiceIntent)
+                            } else {
+                                startService(screenTimeServiceIntent)
+                            }
 
-            Log.d("MainActivity", "All child services started successfully")
+                            // Start content filtering service
+                            startContentFilteringService(childId, childName)
+
+                            // Start browser content monitor service
+                            val browserMonitorIntent = Intent(this, BrowserContentMonitorService::class.java).apply {
+                                putExtra("childId", childId)
+                            }
+                            startService(browserMonitorIntent)
+
+                            Log.d("MainActivity", "All child services started successfully")
+                        } catch (e: Exception) {
+                            Log.e("MainActivity", "Error starting services", e)
+                            Toast.makeText(this, "Error starting services: ${e.message}", Toast.LENGTH_LONG).show()
+                        }
+                    } else {
+                        Log.e("MainActivity", "Child profile not found")
+                        Toast.makeText(this, "Error: Child profile not found", Toast.LENGTH_LONG).show()
+                    }
+                }
+                .addOnFailureListener { e ->
+                    Log.e("MainActivity", "Error getting child profile", e)
+                    Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                }
         } catch (e: Exception) {
-            Log.e("MainActivity", "Error starting child services: ${e.message}")
+            Log.e("MainActivity", "Error in startChildServices", e)
+            Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -223,7 +258,7 @@ class MainActivity : ComponentActivity() {
                 startService(serviceIntent)
             }
         } catch (e: Exception) {
-            Log.e("MainActivity", "Error starting AppLockService: ${e.message}")
+            Log.e("MainActivity", "Error starting AppLockService", e)
         }
     }
 
@@ -251,10 +286,32 @@ class MainActivity : ComponentActivity() {
                 stopService(Intent(this, AppLockService::class.java))
                 stopService(Intent(this, InstalledAppsService::class.java))
                 stopService(Intent(this, DeviceLockService::class.java))
+                stopService(Intent(this, ContentFilteringService::class.java))
             }
         } catch (e: Exception) {
             Log.e("MainActivity", "Error in onDestroy: ${e.message}")
         }
+    }
+
+    private fun startContentFilteringService(childId: String, childName: String) {
+        try {
+            val serviceIntent = Intent(this, ContentFilteringService::class.java).apply {
+                putExtra("childId", childId)
+                putExtra("childName", childName)
+                putExtra("parentId", FirebaseAuth.getInstance().currentUser?.uid)
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(serviceIntent)
+            } else {
+                startService(serviceIntent)
+            }
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Error starting ContentFilteringService", e)
+        }
+    }
+
+    private fun stopContentFilteringService() {
+        stopService(Intent(this, ContentFilteringService::class.java))
     }
 }
 
