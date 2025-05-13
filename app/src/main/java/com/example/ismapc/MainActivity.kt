@@ -11,18 +11,22 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.outlined.ExitToApp
+import androidx.compose.material.icons.filled.ExitToApp
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -45,6 +49,8 @@ import android.app.usage.UsageStatsManager
 import android.app.Activity
 import android.os.Build
 import com.google.firebase.firestore.FieldValue
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 
 class MainActivity : ComponentActivity() {
     companion object {
@@ -389,176 +395,276 @@ fun ParentMainScreen(onLogout: () -> Unit) {
         }
     }
 
-    Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        topBar = {
-            TopAppBar(
-                title = { },
-                navigationIcon = {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(start = 8.dp)
-                    ) {
-                        IconButton(onClick = { /* TODO: Handle home click */ }) {
-                            Icon(
-                                imageVector = Icons.Default.Home,
-                                contentDescription = "Home",
-                                tint = MaterialTheme.colorScheme.onPrimary
-                            )
-                        }
-                        Text(
-                            text = "Home",
-                            color = MaterialTheme.colorScheme.onPrimary,
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { /* TODO: Handle settings click */ }) {
-                        Icon(
-                            imageVector = Icons.Default.Settings,
-                            contentDescription = "Settings",
-                            tint = MaterialTheme.colorScheme.onPrimary
-                        )
-                    }
-                    IconButton(onClick = onLogout) {
-                        Icon(
-                            imageVector = Icons.Outlined.ExitToApp,
-                            contentDescription = "Logout",
-                            tint = MaterialTheme.colorScheme.onPrimary
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
-                    actionIconContentColor = MaterialTheme.colorScheme.onPrimary
-                )
-            )
-        }
-    ) { innerPadding ->
-        if (isLoading) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator()
-            }
-        } else {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.White)
+    ) {
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            containerColor = Color.Transparent
+        ) { paddingValues ->
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(innerPadding)
-                    .padding(16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Top
+                    .padding(paddingValues),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Profile Picture
-                Box(
+                // Main Content
+                Column(
                     modifier = Modifier
-                        .size(120.dp)
-                        .padding(8.dp),
-                    contentAlignment = Alignment.Center
+                        .fillMaxSize(),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    if (profileBitmap != null) {
-                        Image(
-                            bitmap = profileBitmap!!.asImageBitmap(),
-                            contentDescription = "Profile Picture",
-                            modifier = Modifier
-                                .size(120.dp)
-                                .clip(CircleShape),
-                            contentScale = ContentScale.Crop
+                    if (isLoading) {
+                        CircularProgressIndicator(
+                            color = MaterialTheme.colorScheme.primary
                         )
                     } else {
-                        Icon(
-                            imageVector = Icons.Default.Person,
-                            contentDescription = "Profile Picture",
+                        // Top Section with Theme Background
+                        Box(
                             modifier = Modifier
-                                .size(120.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.surfaceVariant),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
+                                .fillMaxWidth()
+                                .shadow(
+                                    elevation = 8.dp,
+                                    shape = RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp),
+                                    clip = false
+                                )
+                                .background(
+                                    brush = Brush.verticalGradient(
+                                        colors = listOf(
+                                            Color(0xFFE0852D), // ISMAPC Orange
+                                            Color(0xFFFFB27D)  // ISMAPC LightOrange
+                                        )
+                                    ),
+                                    shape = RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp)
+                                )
+                                .padding(vertical = 16.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                // Top Bar Row with Info and Action Icons
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    // Info Icon with curved white background
+                                    Box(
+                                        modifier = Modifier
+                                            .width(64.dp)
+                                            .height(48.dp)
+                                            .offset(x = (-16).dp)
+                                            .background(
+                                                color = Color.White,
+                                                shape = RoundedCornerShape(topEnd = 24.dp, bottomEnd = 24.dp)
+                                            )
+                                            .clickable { /* TODO: Handle info click */ },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Info,
+                                            contentDescription = "Information",
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(32.dp)
+                                        )
+                                    }
 
-                // Parent Name
-                parentData?.get("fullName")?.let { name ->
-                    Text(
-                        text = name.toString(),
-                        style = MaterialTheme.typography.headlineSmall,
-                        modifier = Modifier.padding(vertical = 8.dp),
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                // Children Section with horizontal lines
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Left horizontal line
-                    Divider(
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(end = 16.dp),
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
-                    )
-
-                    // "Your Children" text
-                    Text(
-                        text = "Your Children",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-
-                    // Right horizontal line
-                    Divider(
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(start = 16.dp),
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
-                    )
-                }
-
-                if (childrenData.isEmpty()) {
-                    Text(
-                        text = "No children registered yet",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(vertical = 16.dp)
-                    )
-                } else {
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 32.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        items(childrenData) { child ->
-                            ChildProfileCard(
-                                childProfile = child,
-                                onClick = {
-                                    val intent = Intent(context, ChildDetailsActivity::class.java).apply {
-                                        // Get the document ID which contains the child's UID
-                                        val childDocId = child["documentId"] as? String
-                                        if (childDocId != null) {
-                                            putExtra("childId", childDocId)
-                                            putExtra("childName", child["fullName"] as? String)
-                                            Log.d("ParentMainScreen", "Starting ChildDetailsActivity with childId: $childDocId")
-                                        } else {
-                                            Log.e("ParentMainScreen", "Child document ID is null")
-                                            Toast.makeText(context, "Error: Child ID not found", Toast.LENGTH_SHORT).show()
+                                    // Settings and Logout Icons
+                                    Row(
+                                        modifier = Modifier.padding(end = 16.dp)
+                                    ) {
+                                        IconButton(
+                                            onClick = { /* TODO: Handle settings click */ }
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Settings,
+                                                contentDescription = "Settings",
+                                                tint = Color.White,
+                                                modifier = Modifier.size(32.dp)
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        IconButton(
+                                            onClick = onLogout
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Filled.ExitToApp,
+                                                contentDescription = "Logout",
+                                                tint = Color.White,
+                                                modifier = Modifier.size(32.dp)
+                                            )
                                         }
                                     }
-                                    context.startActivity(intent)
                                 }
-                            )
+
+                                // Parent Profile Section
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    // Profile Picture
+                                    Box(
+                                        modifier = Modifier
+                                            .size(160.dp)
+                                            .border(
+                                                width = 4.dp,
+                                                color = Color.White,
+                                                shape = CircleShape
+                                            )
+                                            .clip(CircleShape)
+                                            .background(Color(0xFFD6D7D3)), // LightGray background
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (profileBitmap != null) {
+                                            Image(
+                                                bitmap = profileBitmap!!.asImageBitmap(),
+                                                contentDescription = "Profile Picture",
+                                                modifier = Modifier.fillMaxSize(),
+                                                contentScale = ContentScale.Crop
+                                            )
+                                        } else {
+                                            Icon(
+                                                imageVector = Icons.Default.Person,
+                                                contentDescription = "Profile Picture",
+                                                tint = Color.Black,
+                                                modifier = Modifier.size(80.dp)
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(16.dp))
+
+                                    // Parent Name
+                                    parentData?.get("fullName")?.let { name ->
+                                        Text(
+                                            text = name.toString(),
+                                            style = MaterialTheme.typography.headlineMedium,
+                                            color = Color.White
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.height(8.dp))
+
+                                    // Parent Email
+                                    parentData?.get("email")?.let { email ->
+                                        Text(
+                                            text = email.toString(),
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            color = Color.White.copy(alpha = 0.8f)
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.height(8.dp))
+
+                                    // Parent and Phone Number Row
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.Center,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "Parent",
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            color = Color.White
+                                        )
+                                        
+                                        VerticalDivider(
+                                            modifier = Modifier
+                                                .height(24.dp)
+                                                .padding(horizontal = 16.dp),
+                                            color = Color.White.copy(alpha = 0.5f)
+                                        )
+                                        
+                                        parentData?.get("phoneNumber")?.let { phone ->
+                                            Text(
+                                                text = phone.toString(),
+                                                style = MaterialTheme.typography.bodyLarge,
+                                                color = Color.White
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Children Section
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp)
+                        ) {
+                            Spacer(modifier = Modifier.height(24.dp))
+
+                            // Add Child Button Section
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 16.dp),
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Button(
+                                    onClick = { /* TODO: Handle add child click */ },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Color(0xFFD6D7D3) // LightGray from theme
+                                    ),
+                                    shape = RoundedCornerShape(24.dp),
+                                    modifier = Modifier
+                                        .height(48.dp)
+                                        .width(200.dp)
+                                        .shadow(
+                                            elevation = 4.dp,
+                                            shape = RoundedCornerShape(24.dp),
+                                            clip = false
+                                        ),
+                                    contentPadding = PaddingValues(0.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Add,
+                                            contentDescription = "Add Child",
+                                            tint = Color.Black,
+                                            modifier = Modifier.size(32.dp)
+                                        )
+                                    }
+                                }
+                            }
+
+                            // Children List
+                            LazyColumn(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                items(childrenData) { child ->
+                                    ChildProfileCard(
+                                        childProfile = child,
+                                        onClick = {
+                                            val intent = Intent(context, ChildDetailsActivity::class.java).apply {
+                                                // Get the document ID which contains the child's UID
+                                                val childDocId = child["documentId"] as? String
+                                                if (childDocId != null) {
+                                                    putExtra("childId", childDocId)
+                                                    putExtra("childName", child["fullName"] as? String)
+                                                    Log.d("ParentMainScreen", "Starting ChildDetailsActivity with childId: $childDocId")
+                                                } else {
+                                                    Log.e("ParentMainScreen", "Child document ID is null")
+                                                    Toast.makeText(context, "Error: Child ID not found", Toast.LENGTH_SHORT).show()
+                                                }
+                                            }
+                                            context.startActivity(intent)
+                                        }
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -601,12 +707,18 @@ fun ChildProfileCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+            .clickable(onClick = onClick)
+            .shadow(
+                elevation = 4.dp,
+                shape = RoundedCornerShape(16.dp),
+                clip = false
+            ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.primaryContainer,
             contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-        )
+        ),
+        shape = RoundedCornerShape(16.dp)
     ) {
         Row(
             modifier = Modifier
@@ -618,14 +730,19 @@ fun ChildProfileCard(
             Box(
                 modifier = Modifier
                     .size(56.dp)
+                    .border(
+                        width = 2.dp,
+                        color = Color.White,
+                        shape = CircleShape
+                    )
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary),
+                    .background(Color(0xFFD6D7D3)), // LightGray background
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Default.Person,
                     contentDescription = "Child profile picture",
-                    tint = MaterialTheme.colorScheme.onPrimary,
+                    tint = Color.Black,
                     modifier = Modifier.size(32.dp)
                 )
             }
@@ -640,11 +757,6 @@ fun ChildProfileCard(
                     text = childProfile["fullName"] as? String ?: "Unknown",
                     style = MaterialTheme.typography.titleMedium,
                     color = Color.Black
-                )
-                Text(
-                    text = childProfile["email"] as? String ?: "",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.DarkGray
                 )
             }
 
@@ -683,16 +795,16 @@ fun ChildProfileCard(
                 enabled = !isUpdating,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = if (isLocked) 
-                        MaterialTheme.colorScheme.error 
+                        Color.Red
                     else 
-                        MaterialTheme.colorScheme.primary
+                        Color.White
                 ),
                 modifier = Modifier.padding(start = 8.dp)
             ) {
                 if (isUpdating) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(24.dp),
-                        color = MaterialTheme.colorScheme.onPrimary
+                        color = if (isLocked) Color.White else Color.Black
                     )
                 } else {
                     Row(
@@ -702,11 +814,11 @@ fun ChildProfileCard(
                         Icon(
                             imageVector = Icons.Default.Lock,
                             contentDescription = if (isLocked) "Unlock Device" else "Lock Device",
-                            tint = MaterialTheme.colorScheme.onPrimary
+                            tint = if (isLocked) Color.White else Color.Black
                         )
                         Text(
                             text = if (isLocked) "Unlock" else "Lock",
-                            color = MaterialTheme.colorScheme.onPrimary
+                            color = if (isLocked) Color.White else Color.Black
                         )
                     }
                 }
@@ -761,7 +873,7 @@ fun ChildMainScreen(onLogout: () -> Unit) {
                 actions = {
                     IconButton(onClick = onLogout) {
                         Icon(
-                            imageVector = Icons.Outlined.ExitToApp,
+                            imageVector = Icons.Filled.ExitToApp,
                             contentDescription = "Logout"
                         )
                     }
