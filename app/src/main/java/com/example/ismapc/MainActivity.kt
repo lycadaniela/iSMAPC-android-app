@@ -52,6 +52,8 @@ import android.os.Build
 import com.google.firebase.firestore.FieldValue
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 
 class MainActivity : ComponentActivity() {
     companion object {
@@ -111,7 +113,11 @@ class MainActivity : ComponentActivity() {
                                         // User not found in either collection
                                         Log.e("MainActivity", "User not found in either collection")
                                         Toast.makeText(this, "User type not found. Please sign in again.", Toast.LENGTH_LONG).show()
+                                        // Sign out and clear all auth state
                                         auth.signOut()
+                                        // Clear any stored credentials
+                                        GoogleSignIn.getClient(this, GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN).build())
+                                            .signOut()
                                         startActivity(Intent(this, LoginActivity::class.java))
                                         finish()
                                     }
@@ -120,7 +126,11 @@ class MainActivity : ComponentActivity() {
                                     Log.e("MainActivity", "Error checking child collection: ${e.message}")
                                     Log.e("MainActivity", "Error details", e)
                                     Toast.makeText(this, "Error checking user type: ${e.message}", Toast.LENGTH_LONG).show()
+                                    // Sign out and clear all auth state
                                     auth.signOut()
+                                    // Clear any stored credentials
+                                    GoogleSignIn.getClient(this, GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN).build())
+                                        .signOut()
                                     startActivity(Intent(this, LoginActivity::class.java))
                                     finish()
                                 }
@@ -130,7 +140,11 @@ class MainActivity : ComponentActivity() {
                         Log.e("MainActivity", "Error checking parent collection: ${e.message}")
                         Log.e("MainActivity", "Error details", e)
                         Toast.makeText(this, "Error checking user type: ${e.message}", Toast.LENGTH_LONG).show()
+                        // Sign out and clear all auth state
                         auth.signOut()
+                        // Clear any stored credentials
+                        GoogleSignIn.getClient(this, GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN).build())
+                            .signOut()
                         startActivity(Intent(this, LoginActivity::class.java))
                         finish()
                     }
@@ -143,6 +157,13 @@ class MainActivity : ComponentActivity() {
         } catch (e: Exception) {
             Log.e("MainActivity", "Error in onCreate: ${e.message}")
             Toast.makeText(this, "Error initializing app: ${e.message}", Toast.LENGTH_LONG).show()
+            // Sign out and clear all auth state
+            auth.signOut()
+            // Clear any stored credentials
+            GoogleSignIn.getClient(this, GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN).build())
+                .signOut()
+            startActivity(Intent(this, LoginActivity::class.java))
+            finish()
         }
 
         setContent {
@@ -403,23 +424,7 @@ fun ParentMainScreen(onLogout: () -> Unit) {
     ) {
         Scaffold(
             modifier = Modifier.fillMaxSize(),
-            containerColor = Color.Transparent,
-            floatingActionButton = {
-                FloatingActionButton(
-                    onClick = { /* TODO: Handle trash can click */ },
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = Color.White,
-                    modifier = Modifier
-                        .padding(16.dp)
-                        .size(56.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = "Delete",
-                        modifier = Modifier.size(32.dp)
-                    )
-                }
-            }
+            containerColor = Color.Transparent
         ) { paddingValues ->
             Column(
                 modifier = Modifier
@@ -617,18 +622,21 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                 .fillMaxWidth()
                                 .padding(horizontal = 16.dp)
                         ) {
-                            Spacer(modifier = Modifier.height(24.dp))
+                            Spacer(modifier = Modifier.height(8.dp))
 
                             // Add Child Button Section
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(vertical = 16.dp),
-                                horizontalArrangement = Arrangement.Center
+                                    .padding(vertical = 8.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Button(
                                     onClick = { 
-                                        val intent = Intent(context, ChildSignUpActivity::class.java)
+                                        val intent = Intent(context, ChildSignUpActivity::class.java).apply {
+                                            putExtra("parentEmail", parentData?.get("email") as? String)
+                                        }
                                         context.startActivity(intent)
                                     },
                                     colors = ButtonDefaults.buttonColors(
@@ -657,32 +665,65 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                         )
                                     }
                                 }
+
+                                Spacer(modifier = Modifier.width(16.dp))
+
+                                Button(
+                                    onClick = { /* TODO: Handle trash can click */ },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Color.Red
+                                    ),
+                                    shape = RoundedCornerShape(24.dp),
+                                    modifier = Modifier
+                                        .height(48.dp)
+                                        .width(48.dp)
+                                        .shadow(
+                                            elevation = 4.dp,
+                                            shape = RoundedCornerShape(24.dp),
+                                            clip = false
+                                        ),
+                                    contentPadding = PaddingValues(0.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = "Delete",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(32.dp)
+                                    )
+                                }
                             }
 
-                            // Children List
-                            LazyColumn(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalArrangement = Arrangement.spacedBy(16.dp)
+                            // Children List with Scrollable Content
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f)
                             ) {
-                                items(childrenData) { child ->
-                                    ChildProfileCard(
-                                        childProfile = child,
-                                        onClick = {
-                                            val intent = Intent(context, ChildDetailsActivity::class.java).apply {
-                                                // Get the document ID which contains the child's UID
-                                                val childDocId = child["documentId"] as? String
-                                                if (childDocId != null) {
-                                                    putExtra("childId", childDocId)
-                                                    putExtra("childName", child["fullName"] as? String)
-                                                    Log.d("ParentMainScreen", "Starting ChildDetailsActivity with childId: $childDocId")
-                                                } else {
-                                                    Log.e("ParentMainScreen", "Child document ID is null")
-                                                    Toast.makeText(context, "Error: Child ID not found", Toast.LENGTH_SHORT).show()
+                                LazyColumn(
+                                    modifier = Modifier.fillMaxSize(),
+                                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                                    contentPadding = PaddingValues(bottom = 16.dp)
+                                ) {
+                                    items(childrenData) { child ->
+                                        ChildProfileCard(
+                                            childProfile = child,
+                                            onClick = {
+                                                val intent = Intent(context, ChildDetailsActivity::class.java).apply {
+                                                    // Get the document ID which contains the child's UID
+                                                    val childDocId = child["documentId"] as? String
+                                                    if (childDocId != null) {
+                                                        putExtra("childId", childDocId)
+                                                        putExtra("childName", child["fullName"] as? String)
+                                                        Log.d("ParentMainScreen", "Starting ChildDetailsActivity with childId: $childDocId")
+                                                    } else {
+                                                        Log.e("ParentMainScreen", "Child document ID is null")
+                                                        Toast.makeText(context, "Error: Child ID not found", Toast.LENGTH_SHORT).show()
+                                                    }
                                                 }
+                                                context.startActivity(intent)
                                             }
-                                            context.startActivity(intent)
-                                        }
-                                    )
+                                        )
+                                    }
                                 }
                             }
                         }

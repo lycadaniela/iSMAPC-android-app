@@ -56,12 +56,16 @@ class ChildSignUpActivity : ComponentActivity() {
     private val RC_SIGN_IN = 9001
     private var showParentEmailDialog by mutableStateOf(false)
     private var pendingGoogleToken: String? = null
+    private var parentEmail: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         auth = FirebaseAuth.getInstance()
         firestore = FirebaseFirestore.getInstance()
         profilePictureManager = ProfilePictureManager(this)
+        
+        // Get parent email from intent
+        parentEmail = intent.getStringExtra("parentEmail")
 
         // Configure Google Sign In
         val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
@@ -80,17 +84,18 @@ class ChildSignUpActivity : ComponentActivity() {
                     if (showParentEmailDialog) {
                         ParentEmailDialog(
                             onDismiss = { showParentEmailDialog = false },
-                            onConfirm = { parentEmail ->
+                            onConfirm = { email ->
                                 showParentEmailDialog = false
                                 pendingGoogleToken?.let { token ->
-                                    firebaseAuthWithGoogle(token, parentEmail)
+                                    firebaseAuthWithGoogle(token, email)
                                 }
                             }
                         )
                     }
                     
                     ChildSignUpScreen(
-                        onSignUp = { email, password, fullName, parentEmail, selectedImageUri ->
+                        parentEmail = parentEmail ?: "",
+                        onSignUp = { email, password, fullName, selectedImageUri ->
                             auth.createUserWithEmailAndPassword(email, password)
                                 .addOnCompleteListener { task ->
                                     if (task.isSuccessful) {
@@ -119,10 +124,7 @@ class ChildSignUpActivity : ComponentActivity() {
                                                 .set(userData)
                                                 .addOnSuccessListener {
                                                     Log.d("ChildSignUp", "Child profile created successfully")
-                                                    // Navigate directly to MainActivity
-                                                    val intent = Intent(this, MainActivity::class.java)
-                                                    intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-                                                    startActivity(intent)
+                                                    // Navigate back to parent dashboard
                                                     finish()
                                                 }
                                                 .addOnFailureListener { e ->
@@ -290,13 +292,13 @@ fun ParentEmailDialog(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChildSignUpScreen(
-    onSignUp: (email: String, password: String, fullName: String, parentEmail: String, selectedImageUri: Uri?) -> Unit,
+    parentEmail: String,
+    onSignUp: (email: String, password: String, fullName: String, selectedImageUri: Uri?) -> Unit,
     onGoogleSignUp: () -> Unit
 ) {
     val context = LocalContext.current
     var fullName by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
-    var parentEmail by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
@@ -304,7 +306,6 @@ fun ChildSignUpScreen(
     // Error states
     var fullNameError by remember { mutableStateOf(false) }
     var emailError by remember { mutableStateOf(false) }
-    var parentEmailError by remember { mutableStateOf(false) }
     var passwordError by remember { mutableStateOf(false) }
     var confirmPasswordError by remember { mutableStateOf(false) }
 
@@ -421,20 +422,6 @@ fun ChildSignUpScreen(
         )
 
         OutlinedTextField(
-            value = parentEmail,
-            onValueChange = { parentEmail = it },
-            label = { Text("Parent's Email") },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 16.dp),
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Email,
-                imeAction = ImeAction.Next
-            )
-        )
-
-        OutlinedTextField(
             value = password,
             onValueChange = { 
                 password = it
@@ -502,13 +489,11 @@ fun ChildSignUpScreen(
                 // Validate all fields
                 fullNameError = fullName.isBlank()
                 emailError = !android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()
-                parentEmailError = !android.util.Patterns.EMAIL_ADDRESS.matcher(parentEmail).matches()
                 passwordError = password.length < 6
                 confirmPasswordError = password != confirmPassword
 
-                if (!fullNameError && !emailError && !parentEmailError && 
-                    !passwordError && !confirmPasswordError) {
-                    onSignUp(email, password, fullName, parentEmail, selectedImageUri)
+                if (!fullNameError && !emailError && !passwordError && !confirmPasswordError) {
+                    onSignUp(email, password, fullName, selectedImageUri)
                 }
             },
             modifier = Modifier
