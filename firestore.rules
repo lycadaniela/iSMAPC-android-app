@@ -37,9 +37,18 @@ service cloud.firestore {
     // Child profiles
     match /users/child/profile/{userId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && 
-                   request.resource.data.parentEmail == request.auth.token.email;
-      allow update, delete: if isParentOfChild(userId);
+      allow create: if isAuthenticated() && (
+        // Allow if the parentEmail matches the authenticated user's email
+        request.resource.data.parentEmail == request.auth.token.email ||
+        // Or if the authenticated user is a parent
+        exists(/databases/$(database)/documents/users/parents/$(request.auth.uid)/profile) ||
+        // Or if the parentEmail is provided in the request
+        request.resource.data.parentEmail != null
+      );
+      allow update: if isOwner(userId) ||
+                   (isAuthenticated() && 
+                    request.resource.data.parentEmail == request.auth.token.email);
+      allow delete: if isParentOfChild(userId);
     }
 
     // Screen time data
@@ -143,8 +152,12 @@ service cloud.firestore {
 
     // Allow collection group queries on any 'profile' subcollection
     match /{document=**}/profile/{profileId} {
-      allow read: if request.auth != null 
-                  && request.auth.token.email == resource.data.parentEmail;
+      allow read: if isAuthenticated() && (
+        // Allow if the parentEmail matches the authenticated user's email
+        resource.data.parentEmail == request.auth.token.email ||
+        // Or if the authenticated user is a parent
+        exists(/databases/$(database)/documents/users/parents/$(request.auth.uid)/profile)
+      );
     }
 
     // Allow listing collections

@@ -130,6 +130,14 @@ class ChildSignUpActivity : ComponentActivity() {
                                                 .addOnFailureListener { e ->
                                                     Log.e("ChildSignUp", "Error creating child profile", e)
                                                     Toast.makeText(this, "Error creating profile: ${e.message}", Toast.LENGTH_LONG).show()
+                                                    // Delete the Firebase Auth account if Firestore save fails
+                                                    user.delete().addOnCompleteListener { deleteTask ->
+                                                        if (deleteTask.isSuccessful) {
+                                                            Log.d("ChildSignUp", "Deleted Firebase Auth account after Firestore save failed")
+                                                        } else {
+                                                            Log.e("ChildSignUp", "Failed to delete account after Firestore save failed", deleteTask.exception)
+                                                        }
+                                                    }
                                                 }
                                         }
                                     } else {
