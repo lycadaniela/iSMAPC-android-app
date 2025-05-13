@@ -153,9 +153,14 @@ service cloud.firestore {
     match /deviceLocks/{childId} {
       allow read: if isAuthenticated() && (
         request.auth.uid == childId ||
-        isParentOfChild(childId)
+        exists(/databases/$(database)/documents/users/parents/$(request.auth.uid)/profile)
       );
-      allow write: if isAuthenticated() && isParentOfChild(childId);
+      allow write: if isAuthenticated() && (
+        // Allow if the user is a parent
+        exists(/databases/$(database)/documents/users/parents/$(request.auth.uid)/profile) ||
+        // Or if the user is the child
+        request.auth.uid == childId
+      );
     }
 
     // Allow collection group queries on any 'profile' subcollection

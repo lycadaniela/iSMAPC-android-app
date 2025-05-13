@@ -703,9 +703,11 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                     .weight(1f)
                             ) {
                                 LazyColumn(
-                                    modifier = Modifier.fillMaxSize(),
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(horizontal = 16.dp),
                                     verticalArrangement = Arrangement.spacedBy(16.dp),
-                                    contentPadding = PaddingValues(bottom = 16.dp)
+                                    contentPadding = PaddingValues(vertical = 16.dp)
                                 ) {
                                     items(childrenData) { child ->
                                         ChildProfileCard(
