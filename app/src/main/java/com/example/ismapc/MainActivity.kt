@@ -627,7 +627,10 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                 horizontalArrangement = Arrangement.Center
                             ) {
                                 Button(
-                                    onClick = { /* TODO: Handle add child click */ },
+                                    onClick = { 
+                                        val intent = Intent(context, ChildSignUpActivity::class.java)
+                                        context.startActivity(intent)
+                                    },
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = Color(0xFFD6D7D3) // LightGray from theme
                                     ),

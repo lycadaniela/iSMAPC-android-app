@@ -323,16 +323,26 @@ fun ChildSignUpScreen(
     ) {
         // Back button row
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 16.dp),
             horizontalArrangement = Arrangement.Start
         ) {
             IconButton(
-                onClick = { (context as? ComponentActivity)?.finish() }
+                onClick = { 
+                    (context as? ComponentActivity)?.let { activity ->
+                        activity.finish()
+                    }
+                },
+                modifier = Modifier
+                    .size(48.dp)
+                    .offset(x = (-12).dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.ArrowBack,
                     contentDescription = "Back",
-                    tint = MaterialTheme.colorScheme.onBackground
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(32.dp)
                 )
             }
         }
