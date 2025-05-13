@@ -665,7 +665,7 @@ fun LoginScreen(
                 )
                 TextButton(
                     onClick = {
-                        context.startActivity(Intent(context, SignUpOptionActivity::class.java))
+                        context.startActivity(Intent(context, ParentSignUpActivity::class.java))
                     }
                 ) {
                     Text("Sign Up")
