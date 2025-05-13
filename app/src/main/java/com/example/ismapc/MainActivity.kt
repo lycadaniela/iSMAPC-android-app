@@ -54,6 +54,8 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.firebase.firestore.CollectionReference
+import com.google.firebase.firestore.WriteBatch
 
 class MainActivity : ComponentActivity() {
     companion object {
@@ -351,6 +353,7 @@ fun ParentMainScreen(onLogout: () -> Unit) {
     var parentData by remember { mutableStateOf<Map<String, Any>?>(null) }
     var childrenData by remember { mutableStateOf<List<Map<String, Any>>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
+    var isTrashMode by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val profilePictureManager = remember { ProfilePictureManager(context) }
     var profileBitmap by remember { mutableStateOf<Bitmap?>(null) }
@@ -669,9 +672,9 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                 Spacer(modifier = Modifier.width(16.dp))
 
                                 Button(
-                                    onClick = { /* TODO: Handle trash can click */ },
+                                    onClick = { isTrashMode = !isTrashMode },
                                     colors = ButtonDefaults.buttonColors(
-                                        containerColor = Color.Red
+                                        containerColor = if (isTrashMode) Color(0xFF8B0000) else Color.Red
                                     ),
                                     shape = RoundedCornerShape(24.dp),
                                     modifier = Modifier
@@ -708,19 +711,107 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                         ChildProfileCard(
                                             childProfile = child,
                                             onClick = {
-                                                val intent = Intent(context, ChildDetailsActivity::class.java).apply {
-                                                    // Get the document ID which contains the child's UID
-                                                    val childDocId = child["documentId"] as? String
-                                                    if (childDocId != null) {
-                                                        putExtra("childId", childDocId)
-                                                        putExtra("childName", child["fullName"] as? String)
-                                                        Log.d("ParentMainScreen", "Starting ChildDetailsActivity with childId: $childDocId")
-                                                    } else {
-                                                        Log.e("ParentMainScreen", "Child document ID is null")
-                                                        Toast.makeText(context, "Error: Child ID not found", Toast.LENGTH_SHORT).show()
+                                                if (!isTrashMode) {
+                                                    val intent = Intent(context, ChildDetailsActivity::class.java).apply {
+                                                        // Get the document ID which contains the child's UID
+                                                        val childDocId = child["documentId"] as? String
+                                                        if (childDocId != null) {
+                                                            putExtra("childId", childDocId)
+                                                            putExtra("childName", child["fullName"] as? String)
+                                                            Log.d("ParentMainScreen", "Starting ChildDetailsActivity with childId: $childDocId")
+                                                        } else {
+                                                            Log.e("ParentMainScreen", "Child document ID is null")
+                                                            Toast.makeText(context, "Error: Child ID not found", Toast.LENGTH_SHORT).show()
+                                                        }
                                                     }
+                                                    context.startActivity(intent)
                                                 }
-                                                context.startActivity(intent)
+                                            },
+                                            isTrashMode = isTrashMode,
+                                            onDelete = { childId ->
+                                                // Delete child account from Firestore and Auth
+                                                val auth = FirebaseAuth.getInstance()
+                                                val firestore = FirebaseFirestore.getInstance()
+                                                
+                                                // Create a batch operation
+                                                val batch = firestore.batch()
+                                                
+                                                // Function to delete all documents in a collection
+                                                fun deleteCollection(collectionRef: CollectionReference, batch: WriteBatch) {
+                                                    collectionRef.get()
+                                                        .addOnSuccessListener { documents ->
+                                                            for (document in documents) {
+                                                                // Add document to batch for deletion
+                                                                batch.delete(document.reference)
+                                                            }
+                                                        }
+                                                }
+
+                                                // Delete main profile
+                                                val profileRef = firestore.collection(MainActivity.USERS_COLLECTION)
+                                                    .document(MainActivity.CHILD_COLLECTION)
+                                                    .collection("profile")
+                                                    .document(childId)
+                                                batch.delete(profileRef)
+
+                                                // Delete all data in collections that use the child's ID
+                                                val collectionsToDelete = listOf(
+                                                    "screenTime",
+                                                    "locations",
+                                                    "installedApps",
+                                                    "lockedApps",
+                                                    "contentFiltering",
+                                                    "contentToFilter",
+                                                    "deviceLocks"
+                                                )
+
+                                                // Add all documents to batch
+                                                collectionsToDelete.forEach { collectionName ->
+                                                    val collectionRef = firestore.collection(collectionName)
+                                                    // Delete documents where childId matches
+                                                    collectionRef.whereEqualTo("childId", childId)
+                                                        .get()
+                                                        .addOnSuccessListener { documents ->
+                                                            for (document in documents) {
+                                                                batch.delete(document.reference)
+                                                            }
+                                                        }
+                                                }
+
+                                                // Also delete documents where the document ID is the childId
+                                                collectionsToDelete.forEach { collectionName ->
+                                                    val docRef = firestore.collection(collectionName).document(childId)
+                                                    batch.delete(docRef)
+                                                }
+
+                                                // Commit the batch
+                                                batch.commit()
+                                                    .addOnSuccessListener {
+                                                        // Then delete from Auth
+                                                        try {
+                                                            // Delete the user from Firebase Auth
+                                                            auth.currentUser?.let { currentUser ->
+                                                                if (currentUser.uid == childId) {
+                                                                    currentUser.delete()
+                                                                        .addOnSuccessListener {
+                                                                            Toast.makeText(context, "Child account and all associated data deleted successfully", Toast.LENGTH_SHORT).show()
+                                                                        }
+                                                                        .addOnFailureListener { e ->
+                                                                            Toast.makeText(context, "Error deleting child account: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+                                                                        }
+                                                                } else {
+                                                                    // If we can't delete directly, we need to use Admin SDK
+                                                                    // For now, just show a message
+                                                                    Toast.makeText(context, "Please use the Firebase Console to delete the child account", Toast.LENGTH_LONG).show()
+                                                                }
+                                                            }
+                                                        } catch (e: Exception) {
+                                                            Toast.makeText(context, "Error: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+                                                        }
+                                                    }
+                                                    .addOnFailureListener { e ->
+                                                        Toast.makeText(context, "Error deleting child data: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+                                                    }
                                             }
                                         )
                                     }
@@ -737,7 +828,9 @@ fun ParentMainScreen(onLogout: () -> Unit) {
 @Composable
 fun ChildProfileCard(
     childProfile: Map<String, Any>,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    isTrashMode: Boolean,
+    onDelete: (String) -> Unit
 ) {
     var isLocked by remember { mutableStateOf(false) }
     var isUpdating by remember { mutableStateOf(false) }
@@ -790,97 +883,110 @@ fun ChildProfileCard(
             // Profile picture or placeholder
             Box(
                 modifier = Modifier
-                    .size(56.dp)
-                    .border(
-                        width = 2.dp,
-                        color = Color.White,
-                        shape = CircleShape
-                    )
-                    .clip(CircleShape)
-                    .background(Color(0xFFD6D7D3)), // LightGray background
+                    .size(48.dp)
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Default.Person,
-                    contentDescription = "Child profile picture",
-                    tint = Color.Black,
-                    modifier = Modifier.size(32.dp)
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
                 )
             }
 
             Spacer(modifier = Modifier.width(16.dp))
 
-            // Child info
-            Column(
+            // Child name
+            Text(
+                text = childProfile["fullName"] as? String ?: "Unknown Child",
+                style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.weight(1f)
-            ) {
-                Text(
-                    text = childProfile["fullName"] as? String ?: "Unknown",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = Color.Black
-                )
-            }
+            )
 
-            // Lock device button
-            Button(
-                onClick = {
-                    if (!isUpdating) {
-                        isUpdating = true
-                        val updates = hashMapOf(
-                            "isLocked" to !isLocked,
-                            "lastUpdated" to FieldValue.serverTimestamp()
-                        )
-
-                        firestore.collection("deviceLocks")
-                            .document(childId)
-                            .set(updates)
-                            .addOnSuccessListener {
-                                isUpdating = false
-                                Toast.makeText(
-                                    context,
-                                    if (!isLocked) "Device unlocked successfully" else "Device locked successfully",
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                            }
-                            .addOnFailureListener { e ->
-                                Log.e("ChildProfileCard", "Error updating device lock state", e)
-                                isUpdating = false
-                                Toast.makeText(
-                                    context,
-                                    "Error: ${e.message}",
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                            }
-                    }
-                },
-                enabled = !isUpdating,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isLocked) 
-                        Color.Red
-                    else 
-                        Color.White
-                ),
-                modifier = Modifier.padding(start = 8.dp)
-            ) {
-                if (isUpdating) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        color = if (isLocked) Color.White else Color.Black
-                    )
-                } else {
+            // Lock/Delete Button
+            if (isTrashMode) {
+                // Delete Button
+                Button(
+                    onClick = { onDelete(childId) },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color.Red
+                    ),
+                    modifier = Modifier.padding(start = 8.dp)
+                ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Lock,
-                            contentDescription = if (isLocked) "Unlock Device" else "Lock Device",
-                            tint = if (isLocked) Color.White else Color.Black
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Delete Child",
+                            tint = Color.White
                         )
                         Text(
-                            text = if (isLocked) "Unlock" else "Lock",
+                            text = "Delete",
+                            color = Color.White
+                        )
+                    }
+                }
+            } else {
+                // Lock Button
+                Button(
+                    onClick = {
+                        if (!isUpdating) {
+                            isUpdating = true
+                            val updates = hashMapOf(
+                                "isLocked" to !isLocked,
+                                "lastUpdated" to FieldValue.serverTimestamp()
+                            )
+
+                            firestore.collection("deviceLocks")
+                                .document(childId)
+                                .set(updates)
+                                .addOnSuccessListener {
+                                    Log.d("ChildProfileCard", "Successfully updated device lock state")
+                                    isUpdating = false
+                                }
+                                .addOnFailureListener { e ->
+                                    Log.e("ChildProfileCard", "Error updating device lock state", e)
+                                    Toast.makeText(
+                                        context,
+                                        "Error: ${e.message}",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                    isUpdating = false
+                                }
+                        }
+                    },
+                    enabled = !isUpdating,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isLocked) 
+                            Color.Red
+                        else 
+                            Color.White
+                    ),
+                    modifier = Modifier.padding(start = 8.dp)
+                ) {
+                    if (isUpdating) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
                             color = if (isLocked) Color.White else Color.Black
                         )
+                    } else {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Lock,
+                                contentDescription = if (isLocked) "Unlock Device" else "Lock Device",
+                                tint = if (isLocked) Color.White else Color.Black
+                            )
+                            Text(
+                                text = if (isLocked) "Unlock" else "Lock",
+                                color = if (isLocked) Color.White else Color.Black
+                            )
+                        }
                     }
                 }
             }
