@@ -25,7 +25,10 @@ service cloud.firestore {
       return isAuthenticated() && 
         parentProfile != null && 
         childProfile != null &&
-        parentProfile.data.email == childProfile.data.parentEmail;
+        (
+          parentProfile.data.email == childProfile.data.parentEmail ||
+          exists(/databases/$(database)/documents/users/parents/$(request.auth.uid)/profile)
+        );
     }
 
     // Parent profiles
@@ -48,7 +51,12 @@ service cloud.firestore {
       allow update: if isOwner(userId) ||
                    (isAuthenticated() && 
                     request.resource.data.parentEmail == request.auth.token.email);
-      allow delete: if isParentOfChild(userId);
+      allow delete: if isAuthenticated() && (
+        // Allow if the user is a parent
+        exists(/databases/$(database)/documents/users/parents/$(request.auth.uid)/profile) ||
+        // Or if the user is the owner
+        request.auth.uid == userId
+      );
     }
 
     // Screen time data
