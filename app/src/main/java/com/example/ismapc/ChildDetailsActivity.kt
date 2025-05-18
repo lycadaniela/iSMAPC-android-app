@@ -284,14 +284,16 @@ fun ChildDetailsScreen(childId: String, childName: String) {
             )
         }
 
-        // Screen Time Section in White Background
-        Surface(
+        // Screen Time Section
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .fillMaxHeight(0.4f)
-                .align(Alignment.BottomCenter),
-            color = MaterialTheme.colorScheme.surface,
-            shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)
+                .align(Alignment.BottomCenter)
+                .background(
+                    color = MaterialTheme.colorScheme.surface,
+                    shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)
+                )
         ) {
             Column(
                 modifier = Modifier
@@ -300,28 +302,36 @@ fun ChildDetailsScreen(childId: String, childName: String) {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                Text(
-                    text = "Screen Time",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
-                
-                val hours = TimeUnit.MILLISECONDS.toHours(screenTime)
-                val minutes = TimeUnit.MILLISECONDS.toMinutes(screenTime) % 60
-                
-                Text(
-                    text = "$hours hours $minutes minutes",
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                
-                Text(
-                    text = "Today's Usage",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 8.dp)
-                )
+                Box(
+                    modifier = Modifier
+                        .padding(vertical = 8.dp)
+                        .border(
+                            width = 3.dp,
+                            color = MaterialTheme.colorScheme.primary,
+                            shape = RoundedCornerShape(16.dp)
+                        )
+                        .padding(horizontal = 24.dp, vertical = 16.dp)
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "Today's Usage",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                        
+                        val hours = TimeUnit.MILLISECONDS.toHours(screenTime)
+                        val minutes = TimeUnit.MILLISECONDS.toMinutes(screenTime) % 60
+                        
+                        Text(
+                            text = "$hours hours $minutes minutes",
+                            style = MaterialTheme.typography.headlineMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
             }
         }
     }
