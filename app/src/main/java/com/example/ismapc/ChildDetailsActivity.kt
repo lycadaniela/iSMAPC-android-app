@@ -102,6 +102,12 @@ fun ChildDetailsScreen(childId: String, childName: String) {
     var childEmail by remember { mutableStateOf<String?>(null) }
     var showEmailDropdown by remember { mutableStateOf(false) }
     
+    // Calculate screen time percentage
+    val screenTimePercentage = remember(screenTime) {
+        val totalDayMilliseconds = 24 * 60 * 60 * 1000L // 24 hours in milliseconds
+        ((screenTime.toFloat() / totalDayMilliseconds) * 100).coerceIn(0f, 100f)
+    }
+    
     // Fetch child photo, email and screen time
     LaunchedEffect(childId) {
         if (childId.isBlank()) {
@@ -269,6 +275,17 @@ fun ChildDetailsScreen(childId: String, childName: String) {
                         }
                     }
                 }
+                
+                // Screen Time Percentage Text
+                Text(
+                    text = "Spent ${String.format("%.1f", screenTimePercentage)}% of the day on the phone",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                    textAlign = TextAlign.Center
+                )
             }
 
             // Screen Time Section
