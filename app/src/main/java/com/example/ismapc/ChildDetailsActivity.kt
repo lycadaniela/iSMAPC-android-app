@@ -233,7 +233,7 @@ fun ChildDetailsScreen(childId: String, childName: String) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 8.dp),
+                    .padding(bottom = 4.dp),
                 contentAlignment = Alignment.Center
             ) {
                 // Circular Progress Bar
@@ -279,57 +279,131 @@ fun ChildDetailsScreen(childId: String, childName: String) {
                 text = "Spent ${String.format("%.1f", screenTimePercentage)}% of the day on the phone",
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onPrimary,
-                modifier = Modifier.padding(bottom = 8.dp),
+                modifier = Modifier.padding(bottom = 16.dp),
                 textAlign = TextAlign.Center
             )
-        }
 
-        // Screen Time Section
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .fillMaxHeight(0.4f)
-                .align(Alignment.BottomCenter)
-                .background(
-                    color = MaterialTheme.colorScheme.surface,
-                    shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)
-                )
-        ) {
-            Column(
+            // Screen Time Section
+            Box(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .background(
+                        color = MaterialTheme.colorScheme.surface,
+                        shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)
+                    )
+                    .padding(top = 16.dp)
             ) {
-                Box(
+                Column(
                     modifier = Modifier
-                        .padding(vertical = 8.dp)
-                        .border(
-                            width = 3.dp,
-                            color = MaterialTheme.colorScheme.primary,
-                            shape = RoundedCornerShape(16.dp)
-                        )
-                        .padding(horizontal = 24.dp, vertical = 16.dp)
+                        .fillMaxWidth()
+                        .padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(24.dp)
                 ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally
+                    Box(
+                        modifier = Modifier
+                            .padding(vertical = 8.dp)
+                            .border(
+                                width = 3.dp,
+                                color = MaterialTheme.colorScheme.primary,
+                                shape = RoundedCornerShape(16.dp)
+                            )
+                            .padding(horizontal = 24.dp, vertical = 16.dp)
                     ) {
-                        Text(
-                            text = "Today's Usage",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(bottom = 8.dp)
-                        )
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = "Today's Usage",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(bottom = 8.dp)
+                            )
+                            
+                            val hours = TimeUnit.MILLISECONDS.toHours(screenTime)
+                            val minutes = TimeUnit.MILLISECONDS.toMinutes(screenTime) % 60
+                            
+                            Text(
+                                text = "$hours hours $minutes minutes",
+                                style = MaterialTheme.typography.headlineMedium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+
+                    // Action Buttons
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Button(
+                            onClick = { /* TODO: Handle Apps click */ },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = MaterialTheme.colorScheme.onPrimary
+                            ),
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp),
+                            elevation = ButtonDefaults.buttonElevation(
+                                defaultElevation = 6.dp,
+                                pressedElevation = 8.dp
+                            )
+                        ) {
+                            Text(
+                                "Apps",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                         
-                        val hours = TimeUnit.MILLISECONDS.toHours(screenTime)
-                        val minutes = TimeUnit.MILLISECONDS.toMinutes(screenTime) % 60
+                        Button(
+                            onClick = { /* TODO: Handle Location click */ },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = MaterialTheme.colorScheme.onPrimary
+                            ),
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp),
+                            elevation = ButtonDefaults.buttonElevation(
+                                defaultElevation = 6.dp,
+                                pressedElevation = 8.dp
+                            )
+                        ) {
+                            Text(
+                                "Location",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                         
-                        Text(
-                            text = "$hours hours $minutes minutes",
-                            style = MaterialTheme.typography.headlineMedium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
+                        Button(
+                            onClick = { /* TODO: Handle Content Filter click */ },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = MaterialTheme.colorScheme.onPrimary
+                            ),
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp),
+                            elevation = ButtonDefaults.buttonElevation(
+                                defaultElevation = 6.dp,
+                                pressedElevation = 8.dp
+                            )
+                        ) {
+                            Text(
+                                "Content Filter",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                 }
             }
