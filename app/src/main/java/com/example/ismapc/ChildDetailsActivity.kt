@@ -11,6 +11,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Email
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -98,17 +99,20 @@ fun ChildDetailsScreen(childId: String, childName: String) {
     val firestore = FirebaseFirestore.getInstance()
     var childPhotoUrl by remember { mutableStateOf<String?>(null) }
     var screenTime by remember { mutableStateOf<Long>(0) }
+    var childEmail by remember { mutableStateOf<String?>(null) }
+    var showEmailDropdown by remember { mutableStateOf(false) }
     
-    // Fetch child photo and screen time
+    // Fetch child photo, email and screen time
     LaunchedEffect(childId) {
         if (childId.isBlank()) return@LaunchedEffect
         
-        // Fetch child photo
+        // Fetch child photo and email
         firestore.collection("users")
             .document(childId)
             .get()
             .addOnSuccessListener { document ->
                 childPhotoUrl = document.getString("photoUrl")
+                childEmail = document.getString("email")
             }
             
         // Fetch screen time for progress calculation
@@ -125,10 +129,61 @@ fun ChildDetailsScreen(childId: String, childName: String) {
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.primary)
     ) {
+        // Top Bar with Back Button and Email Icon
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Back Button
+            IconButton(
+                onClick = { (context as? Activity)?.finish() }
+            ) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowBack,
+                            contentDescription = "Back",
+                    tint = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+
+            // Email Icon and Dropdown
+            Box {
+                IconButton(
+                    onClick = { showEmailDropdown = !showEmailDropdown }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Email,
+                        contentDescription = "Show email",
+                        tint = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+                
+                DropdownMenu(
+                    expanded = showEmailDropdown,
+                    onDismissRequest = { showEmailDropdown = false },
+                    modifier = Modifier
+                        .background(MaterialTheme.colorScheme.surface)
+                        .padding(8.dp)
+                ) {
+                    Text(
+                        text = childEmail ?: "No email available",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+                }
+            }
+        }
+
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp),
+                .padding(top = 72.dp) // Add padding to account for the top bar
+                .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // Child Photo Section
@@ -186,58 +241,58 @@ fun ChildDetailsScreen(childId: String, childName: String) {
                     color = MaterialTheme.colorScheme.onPrimary,
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
-                var screenTimeState by remember { mutableStateOf<ScreenTimeState>(ScreenTimeState.Loading) }
-                val firestore = FirebaseFirestore.getInstance()
+    var screenTimeState by remember { mutableStateOf<ScreenTimeState>(ScreenTimeState.Loading) }
+    val firestore = FirebaseFirestore.getInstance()
 
-                LaunchedEffect(childId) {
-                    if (childId.isBlank()) {
-                        screenTimeState = ScreenTimeState.Error("Invalid child ID")
-                        return@LaunchedEffect
+    LaunchedEffect(childId) {
+        if (childId.isBlank()) {
+            screenTimeState = ScreenTimeState.Error("Invalid child ID")
+            return@LaunchedEffect
+        }
+
+        try {
+            firestore.collection("screenTime")
+                .document(childId)
+                .get()
+                .addOnSuccessListener { documentSnapshot ->
+                    if (documentSnapshot.exists()) {
+                        val screenTime = documentSnapshot.getLong("screenTime") ?: 0L
+                        screenTimeState = ScreenTimeState.Success(screenTime)
+                    } else {
+                        screenTimeState = ScreenTimeState.Success(0L)
                     }
-
-                    try {
-                        firestore.collection("screenTime")
-                            .document(childId)
-                            .get()
-                            .addOnSuccessListener { documentSnapshot ->
-                                if (documentSnapshot.exists()) {
-                                    val screenTime = documentSnapshot.getLong("screenTime") ?: 0L
-                                    screenTimeState = ScreenTimeState.Success(screenTime)
-                                } else {
-                                    screenTimeState = ScreenTimeState.Success(0L)
-                                }
-                            }
-                            .addOnFailureListener { e ->
-                                screenTimeState = ScreenTimeState.Error("Error fetching screen time: ${e.message}")
-                            }
-                    } catch (e: Exception) {
-                        screenTimeState = ScreenTimeState.Error("Error: ${e.message}")
+                }
+                .addOnFailureListener { e ->
+                    screenTimeState = ScreenTimeState.Error("Error fetching screen time: ${e.message}")
+                }
+        } catch (e: Exception) {
+            screenTimeState = ScreenTimeState.Error("Error: ${e.message}")
                     }
                 }
 
-                when (screenTimeState) {
-                    is ScreenTimeState.Loading -> {
+        when (screenTimeState) {
+            is ScreenTimeState.Loading -> {
                         CircularProgressIndicator(
                             color = MaterialTheme.colorScheme.onPrimary
                         )
-                    }
-                    is ScreenTimeState.Success -> {
-                        val screenTime = (screenTimeState as ScreenTimeState.Success).screenTime
-                        if (screenTime > 0) {
-                            ScreenTimeCard(screenTime)
-                        } else {
-                            Text(
-                                text = "No screen time data",
-                                style = MaterialTheme.typography.titleLarge,
+            }
+            is ScreenTimeState.Success -> {
+                val screenTime = (screenTimeState as ScreenTimeState.Success).screenTime
+                if (screenTime > 0) {
+                    ScreenTimeCard(screenTime)
+                } else {
+                    Text(
+                        text = "No screen time data",
+                        style = MaterialTheme.typography.titleLarge,
                                 color = MaterialTheme.colorScheme.onPrimary
-                            )
-                        }
-                    }
-                    is ScreenTimeState.Error -> {
-                        Text(
-                            text = (screenTimeState as ScreenTimeState.Error).message,
-                            color = MaterialTheme.colorScheme.error
-                        )
+                    )
+                }
+            }
+            is ScreenTimeState.Error -> {
+                Text(
+                    text = (screenTimeState as ScreenTimeState.Error).message,
+                    color = MaterialTheme.colorScheme.error
+                )
                     }
                 }
             }
@@ -369,13 +424,13 @@ fun ChildDetailsScreen(childId: String, childName: String) {
                 }
             }
 
-            // Installed Apps Section
+        // Installed Apps Section
             item {
-                Text(
-                    text = "Installed Apps",
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
+        Text(
+            text = "Installed Apps",
+            style = MaterialTheme.typography.titleLarge,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
                 var installedAppsState by remember { mutableStateOf<InstalledAppsState>(InstalledAppsState.Loading) }
                 var lockedApps by remember { mutableStateOf<List<String>>(emptyList()) }
                 val firestore = FirebaseFirestore.getInstance()
@@ -426,42 +481,42 @@ fun ChildDetailsScreen(childId: String, childName: String) {
                     }
                 }
 
-                when (installedAppsState) {
-                    is InstalledAppsState.Loading -> {
-                        CircularProgressIndicator()
-                    }
-                    is InstalledAppsState.Success -> {
-                        val apps = (installedAppsState as InstalledAppsState.Success).apps
-                        if (apps.isNotEmpty()) {
+        when (installedAppsState) {
+            is InstalledAppsState.Loading -> {
+                CircularProgressIndicator()
+            }
+            is InstalledAppsState.Success -> {
+                val apps = (installedAppsState as InstalledAppsState.Success).apps
+                if (apps.isNotEmpty()) {
                             apps.forEach { app ->
-                                AppListItem(
-                                    appName = app["appName"] as? String ?: "Unknown App",
-                                    packageName = app["packageName"] as? String ?: "",
-                                    context = context,
-                                    isLocked = lockedApps.contains(app["packageName"] as? String ?: ""),
-                                    onLockStateChanged = { packageName, newLockState ->
-                                        val updatedList = if (newLockState) {
-                                            lockedApps + packageName
-                                        } else {
-                                            lockedApps - packageName
-                                        }
-                                        lockedApps = updatedList
+                            AppListItem(
+                                appName = app["appName"] as? String ?: "Unknown App",
+                                packageName = app["packageName"] as? String ?: "",
+                                context = context,
+                                isLocked = lockedApps.contains(app["packageName"] as? String ?: ""),
+                                onLockStateChanged = { packageName, newLockState ->
+                                    val updatedList = if (newLockState) {
+                                        lockedApps + packageName
+                                    } else {
+                                        lockedApps - packageName
                                     }
-                                )
-                            }
-                        } else {
-                            Text(
-                                text = "No non-system apps found",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    lockedApps = updatedList
+                                }
                             )
-                        }
                     }
-                    is InstalledAppsState.Error -> {
-                        Text(
-                            text = (installedAppsState as InstalledAppsState.Error).message,
-                            color = MaterialTheme.colorScheme.error
-                        )
+                } else {
+                    Text(
+                        text = "No non-system apps found",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            is InstalledAppsState.Error -> {
+                Text(
+                    text = (installedAppsState as InstalledAppsState.Error).message,
+                    color = MaterialTheme.colorScheme.error
+                )
                     }
                 }
             }
