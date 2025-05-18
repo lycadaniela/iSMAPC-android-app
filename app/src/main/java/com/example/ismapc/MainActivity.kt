@@ -888,6 +888,13 @@ fun ChildProfileCard(
     val firestore = FirebaseFirestore.getInstance()
     val childId = childProfile["documentId"] as? String ?: ""
     val context = LocalContext.current
+    val profilePictureManager = remember { ProfilePictureManager(context) }
+    var profileBitmap by remember { mutableStateOf<Bitmap?>(null) }
+
+    // Load profile picture
+    LaunchedEffect(childId) {
+        profileBitmap = profilePictureManager.getProfilePictureBitmap(childId)
+    }
 
     // Set up real-time listener for device lock state
     LaunchedEffect(childId) {
@@ -931,19 +938,34 @@ fun ChildProfileCard(
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Profile picture or placeholder
+            // Profile picture with white border
             Box(
                 modifier = Modifier
-                    .size(48.dp)
-                    .clip(RoundedCornerShape(24.dp))
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
+                    .size(64.dp)
+                    .border(
+                        width = 2.dp,
+                        color = Color.White,
+                        shape = CircleShape
+                    )
+                    .clip(CircleShape)
+                    .background(Color(0xFFD6D7D3)), // LightGray background
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = Icons.Default.Person,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary
-                )
+                if (profileBitmap != null) {
+                    Image(
+                        bitmap = profileBitmap!!.asImageBitmap(),
+                        contentDescription = "Profile Picture",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.Person,
+                        contentDescription = "Profile Picture",
+                        tint = Color.Black,
+                        modifier = Modifier.size(32.dp)
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.width(16.dp))
