@@ -101,6 +101,10 @@ fun ChildDetailsScreen(childId: String, childName: String) {
     var screenTime by remember { mutableStateOf<Long>(0) }
     var childEmail by remember { mutableStateOf<String?>(null) }
     var showEmailDropdown by remember { mutableStateOf(false) }
+    var showAppsList by remember { mutableStateOf(false) }
+    var showLocationMap by remember { mutableStateOf(false) }
+    var installedApps by remember { mutableStateOf<List<Map<String, Any>>>(emptyList()) }
+    var currentLocation by remember { mutableStateOf<GeoPoint?>(null) }
     
     // Calculate screen time percentage
     val screenTimePercentage = remember(screenTime) {
@@ -114,14 +118,14 @@ fun ChildDetailsScreen(childId: String, childName: String) {
             Log.e("ChildDetails", "Child ID is blank")
             return@LaunchedEffect
         }
-        
+
         Log.d("ChildDetails", "Fetching data for child ID: $childId")
         
         // Fetch child photo and email
         firestore.collection("users")
             .document("child")
             .collection("profile")
-            .document(childId)
+                .document(childId)
             .get()
             .addOnSuccessListener { document ->
                 if (document.exists()) {
@@ -134,18 +138,51 @@ fun ChildDetailsScreen(childId: String, childName: String) {
             }
             .addOnFailureListener { e ->
                 Log.e("ChildDetails", "Error fetching child data", e)
-            }
-            
+                }
+
         // Fetch screen time for progress calculation
-        firestore.collection("screenTime")
-            .document(childId)
-            .get()
+            firestore.collection("screenTime")
+                .document(childId)
+                .get()
             .addOnSuccessListener { document ->
                 screenTime = document.getLong("screenTime") ?: 0L
                 Log.d("ChildDetails", "Screen time fetched: $screenTime")
             }
     }
-    
+
+    // Fetch installed apps when Apps button is clicked
+    LaunchedEffect(showAppsList) {
+        if (showAppsList) {
+            firestore.collection("installedApps")
+                .document(childId)
+                .get()
+                .addOnSuccessListener { document ->
+                    if (document.exists()) {
+                        @Suppress("UNCHECKED_CAST")
+                        installedApps = document.get("apps") as? List<Map<String, Any>> ?: emptyList()
+                        }
+                }
+                    }
+                }
+
+    // Fetch location when Location button is clicked
+    LaunchedEffect(showLocationMap) {
+        if (showLocationMap) {
+            firestore.collection("locations")
+                .document(childId)
+                .get()
+                .addOnSuccessListener { document ->
+                    if (document.exists()) {
+                        val latitude = document.getDouble("latitude")
+                        val longitude = document.getDouble("longitude")
+                        if (latitude != null && longitude != null) {
+                            currentLocation = GeoPoint(latitude, longitude)
+        }
+    }
+                }
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -195,33 +232,33 @@ fun ChildDetailsScreen(childId: String, childName: String) {
                         .padding(8.dp)
                 ) {
                     if (childEmail != null) {
-                        Text(
+            Text(
                             text = childEmail!!,
-                            style = MaterialTheme.typography.bodyLarge,
+                style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                         )
-                    } else {
+                                    } else {
                         Row(
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            CircularProgressIndicator(
+            ) {
+                    CircularProgressIndicator(
                                 modifier = Modifier.size(16.dp),
                                 color = MaterialTheme.colorScheme.primary,
                                 strokeWidth = 2.dp
-                            )
-                            Text(
+                    )
+                    Text(
                                 text = "Loading email...",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                    }
+                    )
                 }
             }
         }
+    }
+}
 
         // Child Photo Section with Percentage
         Column(
@@ -231,8 +268,8 @@ fun ChildDetailsScreen(childId: String, childName: String) {
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Box(
-                modifier = Modifier
-                    .fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
                     .padding(bottom = 4.dp),
                 contentAlignment = Alignment.Center
             ) {
@@ -265,7 +302,7 @@ fun ChildDetailsScreen(childId: String, childName: String) {
                             contentScale = ContentScale.Crop
                         )
                     } else {
-                        Text(
+                Text(
                             text = childName.firstOrNull()?.toString()?.uppercase() ?: "?",
                             style = MaterialTheme.typography.headlineLarge,
                             color = MaterialTheme.colorScheme.primary
@@ -313,8 +350,8 @@ fun ChildDetailsScreen(childId: String, childName: String) {
                     ) {
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Text(
+            ) {
+                Text(
                                 text = "Today's Usage",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -340,7 +377,12 @@ fun ChildDetailsScreen(childId: String, childName: String) {
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Button(
-                            onClick = { /* TODO: Handle Apps click */ },
+                            onClick = { 
+                                val intent = Intent(context, InstalledAppsActivity::class.java).apply {
+                                    putExtra("childId", childId)
+                                }
+                                context.startActivity(intent)
+                            },
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = MaterialTheme.colorScheme.primary,
                                 contentColor = MaterialTheme.colorScheme.onPrimary
@@ -362,7 +404,12 @@ fun ChildDetailsScreen(childId: String, childName: String) {
                         }
                         
                         Button(
-                            onClick = { /* TODO: Handle Location click */ },
+                            onClick = { 
+                                val intent = Intent(context, ContentFilteringActivity::class.java).apply {
+                                    putExtra("childId", childId)
+                                }
+                                context.startActivity(intent)
+                            },
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = MaterialTheme.colorScheme.primary,
                                 contentColor = MaterialTheme.colorScheme.onPrimary
@@ -384,7 +431,12 @@ fun ChildDetailsScreen(childId: String, childName: String) {
                         }
                         
                         Button(
-                            onClick = { /* TODO: Handle Content Filter click */ },
+                            onClick = { 
+                                val intent = Intent(context, ContentFilteringActivity::class.java).apply {
+                                    putExtra("childId", childId)
+                                }
+                                context.startActivity(intent)
+                            },
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = MaterialTheme.colorScheme.primary,
                                 contentColor = MaterialTheme.colorScheme.onPrimary

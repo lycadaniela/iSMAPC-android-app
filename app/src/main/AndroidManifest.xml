@@ -119,6 +119,12 @@
             android:label="Content Filtering History"
             android:theme="@style/Theme.ISMAPC" />
 
+        <activity
+            android:name=".InstalledAppsActivity"
+            android:exported="false"
+            android:label="Installed Apps"
+            android:theme="@style/Theme.ISMAPC" />
+
         <service
             android:name=".ScreenTimeService"
             android:enabled="true"
