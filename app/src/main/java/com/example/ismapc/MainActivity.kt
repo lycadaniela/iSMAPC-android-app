@@ -91,7 +91,9 @@ class MainActivity : ComponentActivity() {
                         if (parentDoc.exists()) {
                             userType = "parent"
                             Log.d("MainActivity", "User is a parent")
-                            // No need to start background services for parents
+                            // Stop any running child services when switching to parent
+                            stopChildServices()
+                        
                         } else {
                             // If not found in parent, check child collection
                             Log.d("MainActivity", "Checking child collection")
@@ -110,6 +112,11 @@ class MainActivity : ComponentActivity() {
                                             startChildServices()
                                         } catch (e: Exception) {
                                             Log.e("MainActivity", "Error starting services: ${e.message}")
+                                            // If services fail to start, show error and return to login
+                                            Toast.makeText(this, "Error starting required services. Please try again.", Toast.LENGTH_LONG).show()
+                                            auth.signOut()
+                                            startActivity(Intent(this, LoginActivity::class.java))
+                                            finish()
                                         }
                                     } else {
                                         // User not found in either collection
@@ -177,6 +184,8 @@ class MainActivity : ComponentActivity() {
                     when (userType) {
                         "parent" -> ParentMainScreen(
                             onLogout = {
+                                // Stop all services before logging out
+                                stopChildServices()
                                 auth.signOut()
                                 startActivity(Intent(this, LoginActivity::class.java))
                                 finish()
@@ -184,6 +193,8 @@ class MainActivity : ComponentActivity() {
                         )
                         "child" -> ChildMainScreen(
                             onLogout = {
+                                // Stop all services before logging out
+                                stopChildServices()
                                 auth.signOut()
                                 startActivity(Intent(this, LoginActivity::class.java))
                                 finish()
@@ -204,9 +215,27 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun stopChildServices() {
+        try {
+            Log.d("MainActivity", "Stopping all child services")
+            stopService(Intent(this, LocationService::class.java))
+            stopService(Intent(this, ScreenTimeService::class.java))
+            stopService(Intent(this, AppLockService::class.java))
+            stopService(Intent(this, InstalledAppsService::class.java))
+            stopService(Intent(this, DeviceLockService::class.java))
+            stopService(Intent(this, ContentFilteringService::class.java))
+            stopService(Intent(this, BrowserContentMonitorService::class.java))
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Error stopping services: ${e.message}")
+        }
+    }
+
     private fun startChildServices() {
         try {
             Log.d("MainActivity", "Starting child services")
+            
+            // First stop any existing services to ensure clean state
+            stopChildServices()
             
             // Get child profile first
             firestore.collection(USERS_COLLECTION)
@@ -263,19 +292,39 @@ class MainActivity : ComponentActivity() {
                         } catch (e: Exception) {
                             Log.e("MainActivity", "Error starting services", e)
                             Toast.makeText(this, "Error starting services: ${e.message}", Toast.LENGTH_LONG).show()
+                            // If services fail to start, stop all services and return to login
+                            stopChildServices()
+                            auth.signOut()
+                            startActivity(Intent(this, LoginActivity::class.java))
+                            finish()
                         }
                     } else {
                         Log.e("MainActivity", "Child profile not found")
                         Toast.makeText(this, "Error: Child profile not found", Toast.LENGTH_LONG).show()
+                        // If child profile not found, stop all services and return to login
+                        stopChildServices()
+                        auth.signOut()
+                        startActivity(Intent(this, LoginActivity::class.java))
+                        finish()
                     }
                 }
                 .addOnFailureListener { e ->
                     Log.e("MainActivity", "Error getting child profile", e)
                     Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                    // If error getting child profile, stop all services and return to login
+                    stopChildServices()
+                    auth.signOut()
+                    startActivity(Intent(this, LoginActivity::class.java))
+                    finish()
                 }
         } catch (e: Exception) {
             Log.e("MainActivity", "Error in startChildServices", e)
             Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+            // If error in startChildServices, stop all services and return to login
+            stopChildServices()
+            auth.signOut()
+            startActivity(Intent(this, LoginActivity::class.java))
+            finish()
         }
     }
 
