@@ -3,6 +3,9 @@ package com.example.ismapc
 import android.content.Intent
 import android.graphics.Bitmap
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.os.Process
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -94,7 +97,8 @@ class MainActivity : ComponentActivity() {
                             Log.d("MainActivity", "User is a parent")
                             // Stop any running child services when switching to parent
                             stopChildServices()
-                        
+                            // Initialize UI
+                            initializeUI()
                         } else {
                             // If not found in parent, check child collection
                             Log.d("MainActivity", "Checking child collection")
@@ -108,55 +112,22 @@ class MainActivity : ComponentActivity() {
                                     if (childDoc.exists()) {
                                         userType = "child"
                                         Log.d("MainActivity", "User is a child")
-                                        try {
-                                            // Start all background services for child users
-                                            startChildServices()
-                                        } catch (e: Exception) {
-                                            Log.e("MainActivity", "Error starting services: ${e.message}")
-                                            // If services fail to start, show error and return to login
-                                            Toast.makeText(this, "Error starting required services. Please try again.", Toast.LENGTH_LONG).show()
-                                            auth.signOut()
-                                            startActivity(Intent(this, LoginActivity::class.java))
-                                            finish()
-                                        }
+                                        // Initialize UI first
+                                        initializeUI()
+                                        // Then check permissions before starting services
+                                        checkAndRequestPermissions()
                                     } else {
                                         // User not found in either collection
-                                        Log.e("MainActivity", "User not found in either collection")
-                                        Toast.makeText(this, "User type not found. Please sign in again.", Toast.LENGTH_LONG).show()
-                                        // Sign out and clear all auth state
-                                        auth.signOut()
-                                        // Clear any stored credentials
-                                        GoogleSignIn.getClient(this, GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN).build())
-                                            .signOut()
-                                        startActivity(Intent(this, LoginActivity::class.java))
-                                        finish()
+                                        handleUserNotFound()
                                     }
                                 }
                                 .addOnFailureListener { e ->
-                                    Log.e("MainActivity", "Error checking child collection: ${e.message}")
-                                    Log.e("MainActivity", "Error details", e)
-                                    Toast.makeText(this, "Error checking user type: ${e.message}", Toast.LENGTH_LONG).show()
-                                    // Sign out and clear all auth state
-                                    auth.signOut()
-                                    // Clear any stored credentials
-                                    GoogleSignIn.getClient(this, GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN).build())
-                                        .signOut()
-                                    startActivity(Intent(this, LoginActivity::class.java))
-                                    finish()
+                                    handleError("Error checking child collection", e)
                                 }
                         }
                     }
                     .addOnFailureListener { e ->
-                        Log.e("MainActivity", "Error checking parent collection: ${e.message}")
-                        Log.e("MainActivity", "Error details", e)
-                        Toast.makeText(this, "Error checking user type: ${e.message}", Toast.LENGTH_LONG).show()
-                        // Sign out and clear all auth state
-                        auth.signOut()
-                        // Clear any stored credentials
-                        GoogleSignIn.getClient(this, GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN).build())
-                            .signOut()
-                        startActivity(Intent(this, LoginActivity::class.java))
-                        finish()
+                        handleError("Error checking parent collection", e)
                     }
             } else {
                 // No user logged in
@@ -165,17 +136,11 @@ class MainActivity : ComponentActivity() {
                 finish()
             }
         } catch (e: Exception) {
-            Log.e("MainActivity", "Error in onCreate: ${e.message}")
-            Toast.makeText(this, "Error initializing app: ${e.message}", Toast.LENGTH_LONG).show()
-            // Sign out and clear all auth state
-            auth.signOut()
-            // Clear any stored credentials
-            GoogleSignIn.getClient(this, GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN).build())
-                .signOut()
-            startActivity(Intent(this, LoginActivity::class.java))
-            finish()
+            handleError("Error in onCreate", e)
         }
+    }
 
+    private fun initializeUI() {
         setContent {
             ISMAPCTheme {
                 Surface(
@@ -185,7 +150,6 @@ class MainActivity : ComponentActivity() {
                     when (userType) {
                         "parent" -> ParentMainScreen(
                             onLogout = {
-                                // Stop all services before logging out
                                 stopChildServices()
                                 auth.signOut()
                                 startActivity(Intent(this, LoginActivity::class.java))
@@ -194,7 +158,6 @@ class MainActivity : ComponentActivity() {
                         )
                         "child" -> ChildMainScreen(
                             onLogout = {
-                                // Stop all services before logging out
                                 stopChildServices()
                                 auth.signOut()
                                 startActivity(Intent(this, LoginActivity::class.java))
@@ -202,7 +165,6 @@ class MainActivity : ComponentActivity() {
                             }
                         )
                         else -> {
-                            // Show loading state
                             Box(
                                 modifier = Modifier.fillMaxSize(),
                                 contentAlignment = Alignment.Center
@@ -214,6 +176,46 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    private fun checkAndRequestPermissions() {
+        val appOps = getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+        val mode = appOps.checkOpNoThrow(
+            AppOpsManager.OPSTR_GET_USAGE_STATS,
+            Process.myUid(),
+            packageName
+        )
+        val hasUsagePermission = mode == AppOpsManager.MODE_ALLOWED
+        val hasOverlayPermission = Settings.canDrawOverlays(this)
+
+        if (!hasUsagePermission || !hasOverlayPermission) {
+            // Navigate to permission screen
+            startActivity(Intent(this, ChildPermissionActivity::class.java))
+        } else {
+            // All permissions granted, start services
+            startChildServices()
+        }
+    }
+
+    private fun handleUserNotFound() {
+        Log.e("MainActivity", "User not found in either collection")
+        Toast.makeText(this, "User type not found. Please sign in again.", Toast.LENGTH_LONG).show()
+        auth.signOut()
+        GoogleSignIn.getClient(this, GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN).build())
+            .signOut()
+        startActivity(Intent(this, LoginActivity::class.java))
+        finish()
+    }
+
+    private fun handleError(message: String, e: Exception) {
+        Log.e("MainActivity", "$message: ${e.message}")
+        Log.e("MainActivity", "Error details", e)
+        Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+        auth.signOut()
+        GoogleSignIn.getClient(this, GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN).build())
+            .signOut()
+        startActivity(Intent(this, LoginActivity::class.java))
+        finish()
     }
 
     private fun stopChildServices() {
@@ -250,13 +252,11 @@ class MainActivity : ComponentActivity() {
                         val childId = auth.currentUser?.uid ?: ""
                         
                         try {
-                            // Start the InstalledAppsService
+                            // Start services in sequence to prevent race conditions
+                            // First start the basic services
                             startService(Intent(this, InstalledAppsService::class.java))
-
-                            // Start the AppLockService
-                            startAppLockService()
-
-                            // Start the DeviceLockService
+                            
+                            // Then start the foreground services one by one with proper error handling
                             val deviceLockServiceIntent = Intent(this, DeviceLockService::class.java)
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                                 startForegroundService(deviceLockServiceIntent)
@@ -264,68 +264,85 @@ class MainActivity : ComponentActivity() {
                                 startService(deviceLockServiceIntent)
                             }
 
-                            // Start location service
-                            val locationServiceIntent = Intent(this, LocationService::class.java)
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                                startForegroundService(locationServiceIntent)
-                            } else {
-                                startService(locationServiceIntent)
-                            }
-                            
-                            // Start screen time service
-                            val screenTimeServiceIntent = Intent(this, ScreenTimeService::class.java)
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                                startForegroundService(screenTimeServiceIntent)
-                            } else {
-                                startService(screenTimeServiceIntent)
-                            }
+                            // Start location service with a delay to ensure proper initialization
+                            Handler(Looper.getMainLooper()).postDelayed({
+                                try {
+                                    val locationServiceIntent = Intent(this, LocationService::class.java)
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                        startForegroundService(locationServiceIntent)
+                                    } else {
+                                        startService(locationServiceIntent)
+                                    }
+                                } catch (e: Exception) {
+                                    Log.e("MainActivity", "Error starting location service", e)
+                                }
+                            }, 1000)
 
-                            // Start content filtering service
-                            startContentFilteringService(childId, childName)
+                            // Start screen time service with a delay
+                            Handler(Looper.getMainLooper()).postDelayed({
+                                try {
+                                    val screenTimeServiceIntent = Intent(this, ScreenTimeService::class.java)
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                        startForegroundService(screenTimeServiceIntent)
+                                    } else {
+                                        startService(screenTimeServiceIntent)
+                                    }
+                                } catch (e: Exception) {
+                                    Log.e("MainActivity", "Error starting screen time service", e)
+                                }
+                            }, 2000)
 
-                            // Start browser content monitor service
-                            val browserMonitorIntent = Intent(this, BrowserContentMonitorService::class.java).apply {
-                                putExtra("childId", childId)
-                            }
-                            startService(browserMonitorIntent)
+                            // Start app lock service with a delay
+                            Handler(Looper.getMainLooper()).postDelayed({
+                                try {
+                                    startAppLockService()
+                                } catch (e: Exception) {
+                                    Log.e("MainActivity", "Error starting app lock service", e)
+                                }
+                            }, 3000)
+
+                            // Start content filtering service with a delay
+                            Handler(Looper.getMainLooper()).postDelayed({
+                                try {
+                                    startContentFilteringService(childId, childName)
+                                } catch (e: Exception) {
+                                    Log.e("MainActivity", "Error starting content filtering service", e)
+                                }
+                            }, 4000)
+
+                            // Start browser content monitor service with a delay
+                            Handler(Looper.getMainLooper()).postDelayed({
+                                try {
+                                    val browserMonitorIntent = Intent(this, BrowserContentMonitorService::class.java).apply {
+                                        putExtra("childId", childId)
+                                    }
+                                    startService(browserMonitorIntent)
+                                } catch (e: Exception) {
+                                    Log.e("MainActivity", "Error starting browser monitor service", e)
+                                }
+                            }, 5000)
 
                             Log.d("MainActivity", "All child services started successfully")
                         } catch (e: Exception) {
                             Log.e("MainActivity", "Error starting services", e)
                             Toast.makeText(this, "Error starting services: ${e.message}", Toast.LENGTH_LONG).show()
-                            // If services fail to start, stop all services and return to login
                             stopChildServices()
-                            auth.signOut()
-                            startActivity(Intent(this, LoginActivity::class.java))
-                            finish()
                         }
                     } else {
                         Log.e("MainActivity", "Child profile not found")
                         Toast.makeText(this, "Error: Child profile not found", Toast.LENGTH_LONG).show()
-                        // If child profile not found, stop all services and return to login
                         stopChildServices()
-                        auth.signOut()
-                        startActivity(Intent(this, LoginActivity::class.java))
-                        finish()
                     }
                 }
                 .addOnFailureListener { e ->
                     Log.e("MainActivity", "Error getting child profile", e)
                     Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_LONG).show()
-                    // If error getting child profile, stop all services and return to login
                     stopChildServices()
-                    auth.signOut()
-                    startActivity(Intent(this, LoginActivity::class.java))
-                    finish()
                 }
         } catch (e: Exception) {
             Log.e("MainActivity", "Error in startChildServices", e)
             Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_LONG).show()
-            // If error in startChildServices, stop all services and return to login
             stopChildServices()
-            auth.signOut()
-            startActivity(Intent(this, LoginActivity::class.java))
-            finish()
         }
     }
 

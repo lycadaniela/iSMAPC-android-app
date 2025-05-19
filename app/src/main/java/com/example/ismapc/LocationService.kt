@@ -33,6 +33,7 @@ class LocationService : Service() {
     private val MIN_DISTANCE = 10f // 10 meters
     private var isRunning = false
     private var wakeLock: PowerManager.WakeLock? = null
+    private var isInitialized = false
 
     private val locationListener = object : LocationListener {
         override fun onLocationChanged(location: Location) {
@@ -46,26 +47,27 @@ class LocationService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         try {
-            if (!isRunning) {
-                isRunning = true
-                acquireWakeLock()
-                startLocationUpdates()
+            if (!isInitialized) {
+                initializeService()
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error in onStartCommand: ${e.message}")
+            stopSelf()
         }
         return START_STICKY
     }
 
-    override fun onCreate() {
-        super.onCreate()
-        Log.d(TAG, "Service onCreate")
-        
+    private fun initializeService() {
         try {
+            // Initialize basic components
             locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
             firestore = FirebaseFirestore.getInstance()
             auth = FirebaseAuth.getInstance()
-            
+
+            // Create notification channel and start foreground immediately
+            createNotificationChannel()
+            startForeground(NOTIFICATION_ID, createNotification())
+
             // Check if user is a child before proceeding
             val currentUser = auth.currentUser
             if (currentUser == null) {
@@ -90,8 +92,9 @@ class LocationService : Service() {
                 .addOnSuccessListener { childDoc ->
                     if (childDoc.exists()) {
                         // User is a child, proceed with service
-                        createNotificationChannel()
-                        startForeground(NOTIFICATION_ID, createNotification())
+                        isInitialized = true
+                        isRunning = true
+                        acquireWakeLock()
                         startLocationUpdates()
                     } else {
                         Log.e(TAG, "User is not a child")
@@ -103,9 +106,14 @@ class LocationService : Service() {
                     stopSelf()
                 }
         } catch (e: Exception) {
-            Log.e(TAG, "Error in onCreate", e)
+            Log.e(TAG, "Error in initializeService", e)
             stopSelf()
         }
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+        Log.d(TAG, "Service onCreate")
     }
 
     private fun hasRequiredPermissions(): Boolean {
@@ -152,6 +160,7 @@ class LocationService : Service() {
         .setContentText("Tracking location in background")
         .setSmallIcon(R.drawable.ic_launcher_foreground)
         .setPriority(NotificationCompat.PRIORITY_LOW)
+        .setOngoing(true)
         .build()
 
     private fun startLocationUpdates() {
@@ -267,6 +276,7 @@ class LocationService : Service() {
         super.onDestroy()
         try {
             isRunning = false
+            isInitialized = false
             locationManager.removeUpdates(locationListener)
             wakeLock?.let {
                 if (it.isHeld) {
