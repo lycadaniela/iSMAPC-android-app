@@ -410,6 +410,112 @@ fun ParentMainScreen(onLogout: () -> Unit) {
     var showSettingsMenu by remember { mutableStateOf(false) }
     var showNotificationsMenu by remember { mutableStateOf(false) }
     var showDeleteAccountDialog by remember { mutableStateOf(false) }
+    var isDeletingAccount by remember { mutableStateOf(false) }
+
+    // Function to delete parent account and associated child accounts
+    fun deleteParentAccount() {
+        isDeletingAccount = true
+        val auth = FirebaseAuth.getInstance()
+        val firestore = FirebaseFirestore.getInstance()
+        val parentEmail = currentUser?.email
+
+        if (currentUser != null && parentEmail != null) {
+            // First, get all child accounts associated with this parent
+            firestore.collection(MainActivity.USERS_COLLECTION)
+                .document(MainActivity.CHILD_COLLECTION)
+                .collection("profile")
+                .whereEqualTo("parentEmail", parentEmail)
+                .get()
+                .addOnSuccessListener { childDocuments ->
+                    val batch = firestore.batch()
+                    
+                    // Create a deletion request document
+                    val deletionRequest = hashMapOf(
+                        "parentId" to currentUser.uid,
+                        "parentEmail" to parentEmail,
+                        "requestedAt" to FieldValue.serverTimestamp(),
+                        "status" to "pending",
+                        "type" to "account_deletion"
+                    )
+                    
+                    // Add the deletion request to a special collection
+                    firestore.collection("deletionRequests")
+                        .document(currentUser.uid)
+                        .set(deletionRequest)
+                        .addOnSuccessListener {
+                            // Delete all child accounts and their data
+                            for (childDoc in childDocuments) {
+                                val childId = childDoc.id
+                                
+                                // Delete child's profile
+                                batch.delete(childDoc.reference)
+                                
+                                // Delete child's data from other collections
+                                val collectionsToDelete = listOf(
+                                    "screenTime",
+                                    "locations",
+                                    "installedApps",
+                                    "lockedApps",
+                                    "contentFiltering",
+                                    "contentToFilter",
+                                    "deviceLocks"
+                                )
+                                
+                                collectionsToDelete.forEach { collectionName ->
+                                    // Delete documents where childId matches
+                                    firestore.collection(collectionName)
+                                        .whereEqualTo("childId", childId)
+                                        .get()
+                                        .addOnSuccessListener { docs ->
+                                            docs.forEach { doc ->
+                                                batch.delete(doc.reference)
+                                            }
+                                        }
+                                    
+                                    // Also delete documents where the document ID is the childId
+                                    batch.delete(firestore.collection(collectionName).document(childId))
+                                }
+                            }
+                            
+                            // Delete parent's profile
+                            batch.delete(
+                                firestore.collection(MainActivity.USERS_COLLECTION)
+                                    .document(MainActivity.PARENTS_COLLECTION)
+                                    .collection(currentUser.uid)
+                                    .document(MainActivity.PROFILE_DOCUMENT)
+                            )
+                            
+                            // Commit all deletions
+                            batch.commit()
+                                .addOnSuccessListener {
+                                    isDeletingAccount = false
+                                    Toast.makeText(context, "Account deletion request submitted. Your account will be permanently deleted within 24 hours.", Toast.LENGTH_LONG).show()
+                                    // Sign out and navigate to login
+                                    auth.signOut()
+                                    (context as? Activity)?.let { activity ->
+                                        activity.startActivity(Intent(context, LoginActivity::class.java))
+                                        activity.finish()
+                                    }
+                                }
+                                .addOnFailureListener { e ->
+                                    isDeletingAccount = false
+                                    Toast.makeText(context, "Error deleting data: ${e.message}", Toast.LENGTH_SHORT).show()
+                                }
+                        }
+                        .addOnFailureListener { e ->
+                            isDeletingAccount = false
+                            Toast.makeText(context, "Error submitting deletion request: ${e.message}", Toast.LENGTH_SHORT).show()
+                        }
+                }
+                .addOnFailureListener { e ->
+                    isDeletingAccount = false
+                    Toast.makeText(context, "Error finding child accounts: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+        } else {
+            isDeletingAccount = false
+            Toast.makeText(context, "Error: User not found", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     // Fetch parent data and children data from Firestore using real-time listeners
     LaunchedEffect(currentUser?.uid) {
@@ -1117,7 +1223,11 @@ fun ParentMainScreen(onLogout: () -> Unit) {
     // Delete Account Confirmation Dialog
     if (showDeleteAccountDialog) {
         AlertDialog(
-            onDismissRequest = { showDeleteAccountDialog = false },
+            onDismissRequest = { 
+                if (!isDeletingAccount) {
+                    showDeleteAccountDialog = false 
+                }
+            },
             title = {
                 Text(
                     "Delete Account",
@@ -1125,30 +1235,65 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                 )
             },
             text = {
-                Text(
-                    "Are you sure you want to delete your account? This action cannot be undone and all your data will be permanently deleted.",
-                    style = MaterialTheme.typography.bodyLarge
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showDeleteAccountDialog = false
-                        // TODO: Implement account deletion
-                        // 1. Delete user data from Firestore
-                        // 2. Delete user from Firebase Auth
-                        // 3. Sign out and navigate to login
-                    }
-                ) {
+                Column {
                     Text(
-                        "Delete",
+                        "Are you sure you want to delete your account? This action cannot be undone and will:",
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        "• Delete your parent account",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    Text(
+                        "• Delete all associated child accounts",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    Text(
+                        "• Permanently delete all data",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        "Note: Your account will be permanently deleted within 24 hours after submitting the request.",
+                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error
                     )
                 }
             },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (!isDeletingAccount) {
+                            deleteParentAccount()
+                        }
+                    },
+                    enabled = !isDeletingAccount
+                ) {
+                    if (isDeletingAccount) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    } else {
+                        Text(
+                            "Delete",
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+            },
             dismissButton = {
                 TextButton(
-                    onClick = { showDeleteAccountDialog = false }
+                    onClick = { 
+                        if (!isDeletingAccount) {
+                            showDeleteAccountDialog = false 
+                        }
+                    },
+                    enabled = !isDeletingAccount
                 ) {
                     Text("Cancel")
                 }
