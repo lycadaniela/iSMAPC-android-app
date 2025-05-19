@@ -36,6 +36,9 @@ class LocationMapActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
+        // Initialize OSMDroid configuration
+        Configuration.getInstance().userAgentValue = packageName
+        
         // Get the child ID from the intent
         val childId = intent.getStringExtra("childId")
         val childName = intent.getStringExtra("childName")
@@ -53,6 +56,12 @@ class LocationMapActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Refresh map tiles when activity resumes
+        Configuration.getInstance().userAgentValue = packageName
     }
 }
 
@@ -121,7 +130,11 @@ fun LocationMapScreen(childId: String, childName: String) {
                     }
                 }
             },
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier.fillMaxSize(),
+            update = { map ->
+                // Refresh map tiles when the view updates
+                map.invalidate()
+            }
         )
 
         // Back Button
