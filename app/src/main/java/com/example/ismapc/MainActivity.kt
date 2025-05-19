@@ -406,6 +406,7 @@ fun ParentMainScreen(onLogout: () -> Unit) {
     val context = LocalContext.current
     val profilePictureManager = remember { ProfilePictureManager(context) }
     var profileBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var showSettingsMenu by remember { mutableStateOf(false) }
 
     // Fetch parent data and children data from Firestore using real-time listeners
     LaunchedEffect(currentUser?.uid) {
@@ -552,15 +553,175 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                     Row(
                                         modifier = Modifier.padding(end = 16.dp)
                                     ) {
-                                        IconButton(
-                                            onClick = { /* TODO: Handle settings click */ }
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Settings,
-                                                contentDescription = "Settings",
-                                                tint = Color.White,
-                                                modifier = Modifier.size(32.dp)
-                                            )
+                                        Box {
+                                            IconButton(
+                                                onClick = { showSettingsMenu = true }
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Settings,
+                                                    contentDescription = "Settings",
+                                                    tint = Color.White,
+                                                    modifier = Modifier.size(32.dp)
+                                                )
+                                            }
+                                            
+                                            DropdownMenu(
+                                                expanded = showSettingsMenu,
+                                                onDismissRequest = { showSettingsMenu = false },
+                                                modifier = Modifier
+                                                    .width(240.dp)
+                                                    .background(
+                                                        MaterialTheme.colorScheme.surface,
+                                                        RoundedCornerShape(12.dp)
+                                                    )
+                                            ) {
+                                                // General Section
+                                                Text(
+                                                    text = "GENERAL",
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                                                )
+                                                
+                                                DropdownMenuItem(
+                                                    text = { 
+                                                        Text(
+                                                            "Notifications",
+                                                            style = MaterialTheme.typography.bodyLarge
+                                                        )
+                                                    },
+                                                    onClick = {
+                                                        showSettingsMenu = false
+                                                        // TODO: Navigate to Notifications
+                                                    },
+                                                    modifier = Modifier.height(48.dp)
+                                                )
+                                                
+                                                DropdownMenuItem(
+                                                    text = { 
+                                                        Text(
+                                                            "Ticketing",
+                                                            style = MaterialTheme.typography.bodyLarge
+                                                        )
+                                                    },
+                                                    onClick = {
+                                                        showSettingsMenu = false
+                                                        // TODO: Navigate to Ticketing
+                                                    },
+                                                    modifier = Modifier.height(48.dp)
+                                                )
+                                                
+                                                Divider(
+                                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                                    color = MaterialTheme.colorScheme.outlineVariant
+                                                )
+                                                
+                                                // Account Section
+                                                Text(
+                                                    text = "ACCOUNT",
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                                                )
+                                                
+                                                DropdownMenuItem(
+                                                    text = { 
+                                                        Text(
+                                                            "Change Password",
+                                                            style = MaterialTheme.typography.bodyLarge
+                                                        )
+                                                    },
+                                                    onClick = {
+                                                        showSettingsMenu = false
+                                                        // TODO: Navigate to Change Password
+                                                    },
+                                                    modifier = Modifier.height(48.dp)
+                                                )
+                                                
+                                                DropdownMenuItem(
+                                                    text = { 
+                                                        Text(
+                                                            "Delete Account",
+                                                            style = MaterialTheme.typography.bodyLarge,
+                                                            color = MaterialTheme.colorScheme.error
+                                                        )
+                                                    },
+                                                    onClick = {
+                                                        showSettingsMenu = false
+                                                        // TODO: Navigate to Delete Account
+                                                    },
+                                                    modifier = Modifier.height(48.dp)
+                                                )
+                                                
+                                                DropdownMenuItem(
+                                                    text = { 
+                                                        Text(
+                                                            "Logout",
+                                                            style = MaterialTheme.typography.bodyLarge
+                                                        )
+                                                    },
+                                                    onClick = {
+                                                        showSettingsMenu = false
+                                                        onLogout()
+                                                    },
+                                                    modifier = Modifier.height(48.dp)
+                                                )
+                                                
+                                                Divider(
+                                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                                    color = MaterialTheme.colorScheme.outlineVariant
+                                                )
+                                                
+                                                // Info Section
+                                                Text(
+                                                    text = "INFO",
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                                                )
+                                                
+                                                DropdownMenuItem(
+                                                    text = { 
+                                                        Text(
+                                                            "About",
+                                                            style = MaterialTheme.typography.bodyLarge
+                                                        )
+                                                    },
+                                                    onClick = {
+                                                        showSettingsMenu = false
+                                                        // TODO: Navigate to About
+                                                    },
+                                                    modifier = Modifier.height(48.dp)
+                                                )
+                                                
+                                                DropdownMenuItem(
+                                                    text = { 
+                                                        Text(
+                                                            "Terms & Conditions",
+                                                            style = MaterialTheme.typography.bodyLarge
+                                                        )
+                                                    },
+                                                    onClick = {
+                                                        showSettingsMenu = false
+                                                        // TODO: Navigate to Terms & Conditions
+                                                    },
+                                                    modifier = Modifier.height(48.dp)
+                                                )
+                                                
+                                                DropdownMenuItem(
+                                                    text = { 
+                                                        Text(
+                                                            "Privacy Policy",
+                                                            style = MaterialTheme.typography.bodyLarge
+                                                        )
+                                                    },
+                                                    onClick = {
+                                                        showSettingsMenu = false
+                                                        // TODO: Navigate to Privacy Policy
+                                                    },
+                                                    modifier = Modifier.height(48.dp)
+                                                )
+                                            }
                                         }
                                         Spacer(modifier = Modifier.width(8.dp))
                                         IconButton(
