@@ -435,7 +435,25 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                         "parentEmail" to parentEmail,
                         "requestedAt" to FieldValue.serverTimestamp(),
                         "status" to "pending",
-                        "type" to "account_deletion"
+                        "type" to "account_deletion",
+                        // Add verification data
+                        "verificationData" to hashMapOf(
+                            "parentName" to (parentData?.get("fullName") as? String ?: "Unknown"),
+                            "parentPhone" to (parentData?.get("phoneNumber") as? String ?: "Unknown"),
+                            "childAccounts" to childDocuments.map { doc ->
+                                hashMapOf(
+                                    "childId" to doc.id,
+                                    "childName" to (doc.getString("fullName") ?: "Unknown"),
+                                    "childEmail" to (doc.getString("email") ?: "Unknown")
+                                )
+                            },
+                            "requestSource" to "parent_dashboard",
+                            "deviceInfo" to hashMapOf(
+                                "model" to Build.MODEL,
+                                "manufacturer" to Build.MANUFACTURER,
+                                "androidVersion" to Build.VERSION.RELEASE
+                            )
+                        )
                     )
                     
                     // Add the deletion request to a special collection
@@ -443,6 +461,9 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                         .document(currentUser.uid)
                         .set(deletionRequest)
                         .addOnSuccessListener {
+                            Log.d("AccountDeletion", "Deletion request created successfully for parent: $parentEmail")
+                            Log.d("AccountDeletion", "Associated child accounts: ${childDocuments.map { it.id }}")
+                            
                             // Delete all child accounts and their data
                             for (childDoc in childDocuments) {
                                 val childId = childDoc.id
