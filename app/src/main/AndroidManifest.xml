@@ -120,6 +120,12 @@
             android:theme="@style/Theme.ISMAPC" />
 
         <activity
+            android:name=".LocationMapActivity"
+            android:exported="false"
+            android:label="Child Location"
+            android:theme="@style/Theme.ISMAPC" />
+
+        <activity
             android:name=".InstalledAppsActivity"
             android:exported="false"
             android:label="Installed Apps"
