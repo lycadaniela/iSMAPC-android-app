@@ -35,15 +35,11 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import android.util.Log
 
 class ChildPermissionActivity : ComponentActivity() {
-    private val requiredPermissions = arrayOf(
+    val requiredPermissions = arrayOf(
         Manifest.permission.ACCESS_FINE_LOCATION,
         Manifest.permission.ACCESS_COARSE_LOCATION,
         Manifest.permission.FOREGROUND_SERVICE_LOCATION,
-        Manifest.permission.FOREGROUND_SERVICE_DATA_SYNC,
-        Manifest.permission.PACKAGE_USAGE_STATS,
-        Manifest.permission.SYSTEM_ALERT_WINDOW,
-        Manifest.permission.REQUEST_DELETE_PACKAGES,
-        Manifest.permission.QUERY_ALL_PACKAGES
+        Manifest.permission.FOREGROUND_SERVICE_DATA_SYNC
     )
 
     private val permissionLauncher = registerForActivityResult(
@@ -60,13 +56,13 @@ class ChildPermissionActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    ChildPermissionScreen()
+                    ChildPermissionScreen(this)
                 }
             }
         }
     }
 
-    private fun requestPermissions() {
+    fun requestPermissions() {
         val permissionsToRequest = requiredPermissions.filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }.toTypedArray()
@@ -88,9 +84,10 @@ class ChildPermissionActivity : ComponentActivity() {
             // Check special permissions
             val usageStatsGranted = checkUsageStatsPermission()
             val overlayGranted = checkOverlayPermission()
+            val accessibilityGranted = checkAccessibilityPermission()
 
             // If all permissions are granted, finish the activity
-            if (allRuntimePermissionsGranted && usageStatsGranted && overlayGranted) {
+            if (allRuntimePermissionsGranted && usageStatsGranted && overlayGranted && accessibilityGranted) {
                 Log.d("ChildPermissionActivity", "All permissions granted, finishing activity")
                 finish()
             } else {
@@ -98,7 +95,6 @@ class ChildPermissionActivity : ComponentActivity() {
             }
         } catch (e: Exception) {
             Log.e("ChildPermissionActivity", "Error checking permissions: ${e.message}")
-            // Don't finish the activity if there's an error
         }
     }
 
@@ -126,6 +122,17 @@ class ChildPermissionActivity : ComponentActivity() {
         }
     }
 
+    private fun checkAccessibilityPermission(): Boolean {
+        try {
+            val accessibilityManager = getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
+            val enabledServices = accessibilityManager.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
+            return enabledServices.any { it.resolveInfo.serviceInfo.packageName == packageName }
+        } catch (e: Exception) {
+            Log.e("ChildPermissionActivity", "Error checking accessibility permission: ${e.message}")
+            return false
+        }
+    }
+
     private fun openAppSettings() {
         Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
             data = Uri.fromParts("package", packageName, null)
@@ -133,15 +140,21 @@ class ChildPermissionActivity : ComponentActivity() {
         }
     }
 
-    private fun openUsageAccessSettings() {
+    fun openUsageAccessSettings() {
         Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
             startActivity(this)
         }
     }
 
-    private fun openOverlaySettings() {
+    fun openOverlaySettings() {
         Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
             data = Uri.parse("package:$packageName")
+            startActivity(this)
+        }
+    }
+
+    fun openAccessibilitySettings() {
+        Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
             startActivity(this)
         }
     }
@@ -149,7 +162,6 @@ class ChildPermissionActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         try {
-            // Check permissions when returning from settings
             checkAllPermissionsAndFinish()
         } catch (e: Exception) {
             Log.e("ChildPermissionActivity", "Error in onResume: ${e.message}")
@@ -159,17 +171,22 @@ class ChildPermissionActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChildPermissionScreen() {
+fun ChildPermissionScreen(activity: ChildPermissionActivity) {
     val context = LocalContext.current
+    var currentStep by remember { mutableStateOf(0) }
+    var hasLocationPermission by remember { mutableStateOf(false) }
     var hasUsagePermission by remember { mutableStateOf(false) }
     var hasOverlayPermission by remember { mutableStateOf(false) }
     var hasAccessibilityPermission by remember { mutableStateOf(false) }
-    var showPermissionDialog by remember { mutableStateOf(false) }
-    var missingPermissions by remember { mutableStateOf(listOf<String>()) }
 
     // Check permissions when the screen is first loaded
     LaunchedEffect(Unit) {
         try {
+            // Check location permissions
+            hasLocationPermission = activity.requiredPermissions.all {
+                ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
+            }
+
             // Check usage stats permission
             val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
             val mode = appOps.checkOpNoThrow(
@@ -191,36 +208,6 @@ fun ChildPermissionScreen() {
         }
     }
 
-    if (showPermissionDialog) {
-        AlertDialog(
-            onDismissRequest = { showPermissionDialog = false },
-            title = { Text("Required Permissions") },
-            text = { 
-                Text(
-                    "Please grant the following permissions:\n" +
-                    missingPermissions.joinToString("\n") { "• $it" }
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showPermissionDialog = false
-                        context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-                    }
-                ) {
-                    Text("Open Settings")
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = { showPermissionDialog = false }
-                ) {
-                    Text("Cancel")
-                }
-            }
-        )
-    }
-
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -228,6 +215,15 @@ fun ChildPermissionScreen() {
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        // Progress indicator
+        LinearProgressIndicator(
+            progress = (currentStep + 1) / 4f,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 32.dp),
+            color = MaterialTheme.colorScheme.primary
+        )
+
         // Header
         Icon(
             imageVector = Icons.Filled.Lock,
@@ -256,110 +252,133 @@ fun ChildPermissionScreen() {
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Permission Cards
-        PermissionCard(
-            title = "Usage Access",
-            description = "Required to monitor app usage and screen time",
-            icon = Icons.Default.Info,
-            isGranted = hasUsagePermission,
-            onRequest = {
-                val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
-                context.startActivity(intent)
-            }
-        )
-
-        PermissionCard(
-            title = "Display Over Other Apps",
-            description = "Required to show app lock screen and notifications",
-            icon = Icons.Default.Settings,
-            isGranted = hasOverlayPermission,
-            onRequest = {
-                val intent = Intent(
-                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                    Uri.parse("package:${context.packageName}")
-                )
-                context.startActivity(intent)
-            }
-        )
-
-        PermissionCard(
-            title = "Accessibility Service",
-            description = "Required to monitor browser content and ensure safe browsing",
-            icon = Icons.Default.Lock,
-            isGranted = hasAccessibilityPermission,
-            onRequest = {
-                val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
-                context.startActivity(intent)
-            }
-        )
+        // Permission Steps
+        when (currentStep) {
+            0 -> LocationPermissionStep(
+                isGranted = hasLocationPermission,
+                onGrant = {
+                    activity.requestPermissions()
+                }
+            )
+            1 -> UsageAccessStep(
+                isGranted = hasUsagePermission,
+                onGrant = {
+                    activity.openUsageAccessSettings()
+                }
+            )
+            2 -> OverlayPermissionStep(
+                isGranted = hasOverlayPermission,
+                onGrant = {
+                    activity.openOverlaySettings()
+                }
+            )
+            3 -> AccessibilityPermissionStep(
+                isGranted = hasAccessibilityPermission,
+                onGrant = {
+                    activity.openAccessibilitySettings()
+                }
+            )
+        }
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        // Status Message
-        val allPermissionsGranted = hasUsagePermission && hasOverlayPermission && hasAccessibilityPermission
-        if (allPermissionsGranted) {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
-                )
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
+        // Navigation Buttons
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            if (currentStep > 0) {
+                Button(
+                    onClick = { currentStep-- },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.secondary
+                    )
                 ) {
-                    Icon(
-                        imageVector = Icons.Filled.CheckCircle,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                    Text(
-                        text = "All permissions granted! You can now use all features.",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
+                    Text("Previous")
                 }
+            } else {
+                Spacer(modifier = Modifier.width(80.dp))
             }
-        } else {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.errorContainer
-                )
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Warning,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.error
-                    )
-                    Text(
-                        text = "Some permissions are still required for full functionality",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onErrorContainer
-                    )
+
+            Button(
+                onClick = { currentStep++ },
+                enabled = when (currentStep) {
+                    0 -> hasLocationPermission
+                    1 -> hasUsagePermission
+                    2 -> hasOverlayPermission
+                    3 -> hasAccessibilityPermission
+                    else -> false
                 }
+            ) {
+                Text(if (currentStep == 3) "Finish" else "Next")
             }
         }
     }
 }
 
 @Composable
-fun PermissionCard(
+fun LocationPermissionStep(
+    isGranted: Boolean,
+    onGrant: () -> Unit
+) {
+    PermissionStep(
+        title = "Location Access",
+        description = "This permission is required to track your location for safety purposes. Your parents can see where you are to ensure your safety.",
+        icon = Icons.Default.LocationOn,
+        isGranted = isGranted,
+        onGrant = onGrant
+    )
+}
+
+@Composable
+fun UsageAccessStep(
+    isGranted: Boolean,
+    onGrant: () -> Unit
+) {
+    PermissionStep(
+        title = "Usage Access",
+        description = "This permission helps monitor your app usage and screen time. It allows your parents to see how much time you spend on different apps.",
+        icon = Icons.Outlined.Info,
+        isGranted = isGranted,
+        onGrant = onGrant
+    )
+}
+
+@Composable
+fun OverlayPermissionStep(
+    isGranted: Boolean,
+    onGrant: () -> Unit
+) {
+    PermissionStep(
+        title = "Display Over Other Apps",
+        description = "This permission is needed to show important notifications and app lock screens. It helps ensure you're using apps safely.",
+        icon = Icons.Outlined.Settings,
+        isGranted = isGranted,
+        onGrant = onGrant
+    )
+}
+
+@Composable
+fun AccessibilityPermissionStep(
+    isGranted: Boolean,
+    onGrant: () -> Unit
+) {
+    PermissionStep(
+        title = "Accessibility Service",
+        description = "This permission helps monitor browser content to ensure safe browsing. It helps protect you from inappropriate content.",
+        icon = Icons.Outlined.Lock,
+        isGranted = isGranted,
+        onGrant = onGrant
+    )
+}
+
+@Composable
+fun PermissionStep(
     title: String,
     description: String,
     icon: ImageVector,
     isGranted: Boolean,
-    onRequest: () -> Unit
+    onGrant: () -> Unit
 ) {
     Card(
         modifier = Modifier
@@ -372,56 +391,59 @@ fun PermissionCard(
                 MaterialTheme.colorScheme.surfaceVariant
         )
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable(onClick = onRequest)
                 .padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            verticalAlignment = Alignment.CenterVertically
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Icon
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                modifier = Modifier.size(32.dp),
+                modifier = Modifier.size(48.dp),
                 tint = if (isGranted) 
                     MaterialTheme.colorScheme.primary 
                 else 
                     MaterialTheme.colorScheme.onSurfaceVariant
             )
 
-            // Content
-            Column(
-                modifier = Modifier.weight(1f)
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleLarge,
+                color = if (isGranted) 
+                    MaterialTheme.colorScheme.onPrimaryContainer 
+                else 
+                    MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodyLarge,
+                textAlign = TextAlign.Center,
+                color = if (isGranted) 
+                    MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f) 
+                else 
+                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Button(
+                onClick = onGrant,
+                enabled = !isGranted,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (isGranted) 
+                        MaterialTheme.colorScheme.primary 
+                    else 
+                        MaterialTheme.colorScheme.secondary
+                )
             ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = if (isGranted) 
-                        MaterialTheme.colorScheme.onPrimaryContainer 
-                    else 
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    text = description,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = if (isGranted) 
-                        MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f) 
-                    else 
-                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                )
+                Text(if (isGranted) "Granted" else "Grant Permission")
             }
-
-            // Status Icon
-            Icon(
-                imageVector = if (isGranted) Icons.Filled.CheckCircle else Icons.Filled.ArrowForward,
-                contentDescription = if (isGranted) "Granted" else "Grant Permission",
-                tint = if (isGranted) 
-                    MaterialTheme.colorScheme.primary 
-                else 
-                    MaterialTheme.colorScheme.onSurfaceVariant
-            )
         }
     }
 } 
