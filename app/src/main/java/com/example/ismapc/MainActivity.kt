@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -407,6 +408,8 @@ fun ParentMainScreen(onLogout: () -> Unit) {
     val profilePictureManager = remember { ProfilePictureManager(context) }
     var profileBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var showSettingsMenu by remember { mutableStateOf(false) }
+    var showNotificationsMenu by remember { mutableStateOf(false) }
+    var showDeleteAccountDialog by remember { mutableStateOf(false) }
 
     // Fetch parent data and children data from Firestore using real-time listeners
     LaunchedEffect(currentUser?.uid) {
@@ -549,10 +552,110 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                         )
                                     }
 
-                                    // Settings and Logout Icons
+                                    // Settings and Notifications Icons
                                     Row(
                                         modifier = Modifier.padding(end = 16.dp)
                                     ) {
+                                        // Notifications Icon with Dropdown
+                                        Box {
+                                            IconButton(
+                                                onClick = { showNotificationsMenu = true }
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Notifications,
+                                                    contentDescription = "Notifications",
+                                                    tint = Color.White,
+                                                    modifier = Modifier.size(32.dp)
+                                                )
+                                            }
+                                            
+                                            DropdownMenu(
+                                                expanded = showNotificationsMenu,
+                                                onDismissRequest = { showNotificationsMenu = false },
+                                                modifier = Modifier
+                                                    .width(280.dp)
+                                                    .background(
+                                                        MaterialTheme.colorScheme.surface,
+                                                        RoundedCornerShape(12.dp)
+                                                    )
+                                            ) {
+                                                // Notifications Header
+                                                Text(
+                                                    text = "NOTIFICATIONS",
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                                                )
+                                                
+                                                // Sample notification items (replace with actual notifications)
+                                                DropdownMenuItem(
+                                                    text = { 
+                                                        Column {
+                                                            Text(
+                                                                "New Message",
+                                                                style = MaterialTheme.typography.bodyLarge
+                                                            )
+                                                            Text(
+                                                                "You have a new message from John",
+                                                                style = MaterialTheme.typography.bodySmall,
+                                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                            )
+                                                        }
+                                                    },
+                                                    onClick = {
+                                                        showNotificationsMenu = false
+                                                        // TODO: Handle notification click
+                                                    },
+                                                    modifier = Modifier.height(64.dp)
+                                                )
+                                                
+                                                DropdownMenuItem(
+                                                    text = { 
+                                                        Column {
+                                                            Text(
+                                                                "Location Update",
+                                                                style = MaterialTheme.typography.bodyLarge
+                                                            )
+                                                            Text(
+                                                                "Sarah has arrived at school",
+                                                                style = MaterialTheme.typography.bodySmall,
+                                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                            )
+                                                        }
+                                                    },
+                                                    onClick = {
+                                                        showNotificationsMenu = false
+                                                        // TODO: Handle notification click
+                                                    },
+                                                    modifier = Modifier.height(64.dp)
+                                                )
+                                                
+                                                Divider(
+                                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                                    color = MaterialTheme.colorScheme.outlineVariant
+                                                )
+                                                
+                                                // View All option
+                                                DropdownMenuItem(
+                                                    text = { 
+                                                        Text(
+                                                            "View All Notifications",
+                                                            style = MaterialTheme.typography.bodyLarge,
+                                                            color = MaterialTheme.colorScheme.primary
+                                                        )
+                                                    },
+                                                    onClick = {
+                                                        showNotificationsMenu = false
+                                                        // TODO: Navigate to all notifications
+                                                    },
+                                                    modifier = Modifier.height(48.dp)
+                                                )
+                                            }
+                                        }
+                                        
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        
+                                        // Settings Icon with Dropdown
                                         Box {
                                             IconButton(
                                                 onClick = { showSettingsMenu = true }
@@ -597,20 +700,6 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                                     modifier = Modifier.height(48.dp)
                                                 )
                                                 
-                                                DropdownMenuItem(
-                                                    text = { 
-                                                        Text(
-                                                            "Ticketing",
-                                                            style = MaterialTheme.typography.bodyLarge
-                                                        )
-                                                    },
-                                                    onClick = {
-                                                        showSettingsMenu = false
-                                                        // TODO: Navigate to Ticketing
-                                                    },
-                                                    modifier = Modifier.height(48.dp)
-                                                )
-                                                
                                                 Divider(
                                                     modifier = Modifier.padding(horizontal = 16.dp),
                                                     color = MaterialTheme.colorScheme.outlineVariant
@@ -648,7 +737,7 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                                     },
                                                     onClick = {
                                                         showSettingsMenu = false
-                                                        // TODO: Navigate to Delete Account
+                                                        showDeleteAccountDialog = true
                                                     },
                                                     modifier = Modifier.height(48.dp)
                                                 )
@@ -722,17 +811,6 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                                     modifier = Modifier.height(48.dp)
                                                 )
                                             }
-                                        }
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        IconButton(
-                                            onClick = onLogout
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Filled.ExitToApp,
-                                                contentDescription = "Logout",
-                                                tint = Color.White,
-                                                modifier = Modifier.size(32.dp)
-                                            )
                                         }
                                     }
                                 }
@@ -1034,6 +1112,48 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                 }
             }
         }
+    }
+
+    // Delete Account Confirmation Dialog
+    if (showDeleteAccountDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteAccountDialog = false },
+            title = {
+                Text(
+                    "Delete Account",
+                    style = MaterialTheme.typography.headlineSmall
+                )
+            },
+            text = {
+                Text(
+                    "Are you sure you want to delete your account? This action cannot be undone and all your data will be permanently deleted.",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteAccountDialog = false
+                        // TODO: Implement account deletion
+                        // 1. Delete user data from Firestore
+                        // 2. Delete user from Firebase Auth
+                        // 3. Sign out and navigate to login
+                    }
+                ) {
+                    Text(
+                        "Delete",
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showDeleteAccountDialog = false }
+                ) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }
 
