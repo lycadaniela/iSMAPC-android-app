@@ -163,6 +163,23 @@ service cloud.firestore {
       );
     }
 
+    // Deletion requests collection
+    match /deletionRequests/{userId} {
+      allow read: if isAuthenticated() && (
+        // Allow if the user is the owner of the request
+        request.auth.uid == userId ||
+        // Or if the user is a parent
+        exists(/databases/$(database)/documents/users/parents/$(request.auth.uid)/profile)
+      );
+      allow create: if isAuthenticated() && (
+        // Allow if the user is creating their own deletion request
+        request.auth.uid == userId &&
+        // And they are a parent
+        exists(/databases/$(database)/documents/users/parents/$(request.auth.uid)/profile)
+      );
+      allow update, delete: if false; // Only admins can update or delete requests
+    }
+
     // Allow collection group queries on any 'profile' subcollection
     match /{document=**}/profile/{profileId} {
       allow read: if isAuthenticated() && (
