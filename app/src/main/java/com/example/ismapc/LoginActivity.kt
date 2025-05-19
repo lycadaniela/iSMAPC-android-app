@@ -80,8 +80,28 @@ class LoginActivity : ComponentActivity() {
         
         // Initialize Firebase Auth
         auth = FirebaseAuth.getInstance()
-        // Firebase Auth persistence is enabled by default, no need to set it explicitly
+        
+        // Configure Google Sign In
+        val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+            .requestIdToken(getString(R.string.default_web_client_id))
+            .requestEmail()
+            .build()
+
+        googleSignInClient = GoogleSignIn.getClient(this, gso)
+        
+        // Initialize shared preferences
         sharedPreferences = getSharedPreferences("login_prefs", Context.MODE_PRIVATE)
+
+        // Check if this is a fresh installation
+        val isFirstRun = sharedPreferences.getBoolean("is_first_run", true)
+        if (isFirstRun) {
+            // Clear any existing auth state only on fresh installation
+            auth.signOut()
+            googleSignInClient.signOut()
+            sharedPreferences.edit().clear().apply()
+            // Mark that we've handled the first run
+            sharedPreferences.edit().putBoolean("is_first_run", false).apply()
+        }
 
         // Add auth state listener
         authStateListener = AuthStateListener { firebaseAuth ->
@@ -108,20 +128,16 @@ class LoginActivity : ComponentActivity() {
                                     if (childDoc.exists()) {
                                         startActivity(Intent(this, MainActivity::class.java))
                                         finish()
+                                    } else {
+                                        // User not found in database, sign them out
+                                        auth.signOut()
+                                        googleSignInClient.signOut()
                                     }
                                 }
                         }
                     }
             }
         }
-
-        // Configure Google Sign In
-        val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-            .requestIdToken(getString(R.string.default_web_client_id))
-            .requestEmail()
-            .build()
-
-        googleSignInClient = GoogleSignIn.getClient(this, gso)
 
         setContent {
             ISMAPCTheme {
