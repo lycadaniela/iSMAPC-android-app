@@ -124,7 +124,9 @@ class ChildSignUpActivity : ComponentActivity() {
                                                 .set(userData)
                                                 .addOnSuccessListener {
                                                     Log.d("ChildSignUp", "Child profile created successfully")
-                                                    // Navigate back to parent dashboard
+                                                    // Sign out the child account
+                                                    auth.signOut()
+                                                    // Return to parent dashboard
                                                     finish()
                                                 }
                                                 .addOnFailureListener { e ->
@@ -174,8 +176,14 @@ class ChildSignUpActivity : ComponentActivity() {
             val task = GoogleSignIn.getSignedInAccountFromIntent(data)
             try {
                 val account = task.getResult(ApiException::class.java)
-                pendingGoogleToken = account.idToken
-                showParentEmailDialog = true
+                if (parentEmail != null) {
+                    // If parent email is provided, use it directly
+                    firebaseAuthWithGoogle(account.idToken!!, parentEmail!!)
+                } else {
+                    // Only show dialog if parent email is not provided
+                    pendingGoogleToken = account.idToken
+                    showParentEmailDialog = true
+                }
             } catch (e: ApiException) {
                 Toast.makeText(this, "Google sign in failed: ${e.message}", Toast.LENGTH_SHORT).show()
             }
@@ -204,7 +212,9 @@ class ChildSignUpActivity : ComponentActivity() {
                             .document(user.uid)
                             .set(userData)
                             .addOnSuccessListener {
-                                startActivity(Intent(this, MainActivity::class.java))
+                                // Sign out the child account
+                                auth.signOut()
+                                // Return to parent dashboard
                                 finish()
                             }
                             .addOnFailureListener { e ->
