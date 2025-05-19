@@ -849,7 +849,8 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                                     },
                                                     onClick = {
                                                         showSettingsMenu = false
-                                                        // TODO: Navigate to Change Password
+                                                        val intent = Intent(context, ChangePasswordActivity::class.java)
+                                                        context.startActivity(intent)
                                                     },
                                                     modifier = Modifier.height(48.dp)
                                                 )

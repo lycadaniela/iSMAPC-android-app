@@ -76,6 +76,12 @@
             android:label="Parent Sign Up"
             android:theme="@style/Theme.ISMAPC" />
 
+        <activity
+            android:name=".ChangePasswordActivity"
+            android:exported="false"
+            android:label="Change Password"
+            android:theme="@style/Theme.ISMAPC" />
+
         <receiver
             android:name=".AppUninstallReceiver"
             android:enabled="true"
