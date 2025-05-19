@@ -668,7 +668,10 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                                 color = Color.White,
                                                 shape = RoundedCornerShape(topEnd = 24.dp, bottomEnd = 24.dp)
                                             )
-                                            .clickable { /* TODO: Handle info click */ },
+                                            .clickable { 
+                                                val intent = Intent(context, InfoActivity::class.java)
+                                                context.startActivity(intent)
+                                            },
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Icon(

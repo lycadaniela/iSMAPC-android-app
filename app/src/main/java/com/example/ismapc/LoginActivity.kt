@@ -411,8 +411,8 @@ fun LoginScreen(
                     shape = RoundedCornerShape(topStart = 24.dp, bottomStart = 24.dp)
                 )
                 .clickable {
-                    // TODO: Add info dialog or navigation
-                    Toast.makeText(context, "Info about the app", Toast.LENGTH_SHORT).show()
+                    val intent = Intent(context, InfoActivity::class.java)
+                    context.startActivity(intent)
                 },
             contentAlignment = Alignment.Center
         ) {
