@@ -182,68 +182,7 @@ class ChildPermissionActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        try {
-            when (currentPermissionStep) {
-                0 -> {
-                    checkLocationPermissionAndProceed()
-                    // Update composable state
-                    setContent {
-                        ISMAPCTheme {
-                            Surface(
-                                modifier = Modifier.fillMaxSize(),
-                                color = MaterialTheme.colorScheme.background
-                            ) {
-                                ChildPermissionScreen(this)
-                            }
-                        }
-                    }
-                }
-                1 -> {
-                    checkUsageStatsAndProceed()
-                    // Update composable state
-                    setContent {
-                        ISMAPCTheme {
-                            Surface(
-                                modifier = Modifier.fillMaxSize(),
-                                color = MaterialTheme.colorScheme.background
-                            ) {
-                                ChildPermissionScreen(this)
-                            }
-                        }
-                    }
-                }
-                2 -> {
-                    checkOverlayAndProceed()
-                    // Update composable state
-                    setContent {
-                        ISMAPCTheme {
-                            Surface(
-                                modifier = Modifier.fillMaxSize(),
-                                color = MaterialTheme.colorScheme.background
-                            ) {
-                                ChildPermissionScreen(this)
-                            }
-                        }
-                    }
-                }
-                3 -> {
-                    checkAccessibilityAndProceed()
-                    // Update composable state
-                    setContent {
-                        ISMAPCTheme {
-                            Surface(
-                                modifier = Modifier.fillMaxSize(),
-                                color = MaterialTheme.colorScheme.background
-                            ) {
-                                ChildPermissionScreen(this)
-                            }
-                        }
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            Log.e("ChildPermissionActivity", "Error in onResume: ${e.message}")
-        }
+        // Remove the permission checking here since it's handled by the periodic check
     }
 }
 
@@ -256,6 +195,7 @@ fun ChildPermissionScreen(activity: ChildPermissionActivity) {
     var hasUsagePermission by remember { mutableStateOf(false) }
     var hasOverlayPermission by remember { mutableStateOf(false) }
     var hasAccessibilityPermission by remember { mutableStateOf(false) }
+    var allPermissionsGranted by remember { mutableStateOf(false) }
 
     // Update current step when activity's step changes
     LaunchedEffect(activity.currentPermissionStep) {
@@ -286,6 +226,10 @@ fun ChildPermissionScreen(activity: ChildPermissionActivity) {
             val accessibilityManager = context.getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
             val enabledServices = accessibilityManager.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
             hasAccessibilityPermission = enabledServices.any { it.resolveInfo.serviceInfo.packageName == context.packageName }
+
+            // Check if all permissions are granted
+            allPermissionsGranted = hasLocationPermission && hasUsagePermission && 
+                                  hasOverlayPermission && hasAccessibilityPermission
         } catch (e: Exception) {
             Log.e("ChildPermissionScreen", "Error checking permissions: ${e.message}")
         }
@@ -296,14 +240,9 @@ fun ChildPermissionScreen(activity: ChildPermissionActivity) {
         checkAllPermissions()
     }
 
-    // Add a LaunchedEffect to check permissions when returning from settings
-    LaunchedEffect(currentStep) {
-        checkAllPermissions()
-    }
-
-    // Add a LaunchedEffect to check permissions periodically
+    // Add a LaunchedEffect to check permissions periodically until all are granted
     LaunchedEffect(Unit) {
-        while (true) {
+        while (!allPermissionsGranted) {
             checkAllPermissions()
             kotlinx.coroutines.delay(500) // Check every 500ms
         }
@@ -405,8 +344,7 @@ fun ChildPermissionScreen(activity: ChildPermissionActivity) {
                 onClick = { 
                     if (currentStep == 3) {
                         // Check if all permissions are granted before finishing
-                        if (hasLocationPermission && hasUsagePermission && 
-                            hasOverlayPermission && hasAccessibilityPermission) {
+                        if (allPermissionsGranted) {
                             activity.finish()
                         }
                     } else {
