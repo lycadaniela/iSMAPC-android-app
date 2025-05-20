@@ -1,6 +1,6 @@
 <resources>
     <string name="app_name">iSMAPC</string>
     <string name="default_web_client_id">938791590594-ps3pk91a8to06931rbui32lttaq3uqcv.apps.googleusercontent.com</string>
-    <string name="gemini_api_key">AIzaSyCIoQ-2h3PLOwVzCxF72cIlqgyodLatY2M</string>
+    <string name="gemini_api_key">AIzaSyDkTwtjy5PdrlNfk3mE2n24s1Dk2Y5XWGU</string>
     <string name="accessibility_service_description">This service monitors browser content to ensure safe browsing for children.</string>
 </resources>
