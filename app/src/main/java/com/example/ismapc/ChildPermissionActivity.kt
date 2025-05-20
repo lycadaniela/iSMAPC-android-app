@@ -81,27 +81,15 @@ class ChildPermissionActivity : ComponentActivity() {
         val allLocationPermissionsGranted = requiredPermissions.all {
             ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
         }
-        if (allLocationPermissionsGranted) {
-            currentPermissionStep = 1
-        }
     }
 
     private fun checkUsageStatsAndProceed() {
-        if (checkUsageStatsPermission()) {
-            currentPermissionStep = 2
-        }
     }
 
     private fun checkOverlayAndProceed() {
-        if (checkOverlayPermission()) {
-            currentPermissionStep = 3
-        }
     }
 
     private fun checkAccessibilityAndProceed() {
-        if (checkAccessibilityPermission()) {
-            finish()
-        }
     }
 
     private fun checkAllPermissionsAndFinish() {
@@ -274,8 +262,8 @@ fun ChildPermissionScreen(activity: ChildPermissionActivity) {
         currentStep = activity.currentPermissionStep
     }
 
-    // Check permissions when the screen is first loaded and when returning from settings
-    LaunchedEffect(Unit) {
+    // Function to check all permissions
+    fun checkAllPermissions() {
         try {
             // Check location permissions
             hasLocationPermission = activity.requiredPermissions.all {
@@ -303,35 +291,21 @@ fun ChildPermissionScreen(activity: ChildPermissionActivity) {
         }
     }
 
+    // Check permissions when the screen is first loaded
+    LaunchedEffect(Unit) {
+        checkAllPermissions()
+    }
+
     // Add a LaunchedEffect to check permissions when returning from settings
     LaunchedEffect(currentStep) {
-        try {
-            when (currentStep) {
-                0 -> {
-                    hasLocationPermission = activity.requiredPermissions.all {
-                        ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
-                    }
-                }
-                1 -> {
-                    val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
-                    val mode = appOps.checkOpNoThrow(
-                        AppOpsManager.OPSTR_GET_USAGE_STATS,
-                        android.os.Process.myUid(),
-                        context.packageName
-                    )
-                    hasUsagePermission = mode == AppOpsManager.MODE_ALLOWED
-                }
-                2 -> {
-                    hasOverlayPermission = Settings.canDrawOverlays(context)
-                }
-                3 -> {
-                    val accessibilityManager = context.getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
-                    val enabledServices = accessibilityManager.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
-                    hasAccessibilityPermission = enabledServices.any { it.resolveInfo.serviceInfo.packageName == context.packageName }
-                }
-            }
-        } catch (e: Exception) {
-            Log.e("ChildPermissionScreen", "Error checking permissions in step $currentStep: ${e.message}")
+        checkAllPermissions()
+    }
+
+    // Add a LaunchedEffect to check permissions periodically
+    LaunchedEffect(Unit) {
+        while (true) {
+            checkAllPermissions()
+            kotlinx.coroutines.delay(500) // Check every 500ms
         }
     }
 
@@ -428,7 +402,17 @@ fun ChildPermissionScreen(activity: ChildPermissionActivity) {
             }
 
             Button(
-                onClick = { currentStep++ },
+                onClick = { 
+                    if (currentStep == 3) {
+                        // Check if all permissions are granted before finishing
+                        if (hasLocationPermission && hasUsagePermission && 
+                            hasOverlayPermission && hasAccessibilityPermission) {
+                            activity.finish()
+                        }
+                    } else {
+                        currentStep++
+                    }
+                },
                 enabled = when (currentStep) {
                     0 -> hasLocationPermission
                     1 -> hasUsagePermission
