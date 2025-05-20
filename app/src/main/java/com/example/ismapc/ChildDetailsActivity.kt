@@ -433,8 +433,9 @@ fun ChildDetailsScreen(childId: String, childName: String) {
                         
                         Button(
                             onClick = { 
-                                val intent = Intent(context, ContentFilteringActivity::class.java).apply {
+                                val intent = Intent(context, ContentFilterActivity::class.java).apply {
                                     putExtra("childId", childId)
+                                    putExtra("childName", childName)
                                 }
                                 context.startActivity(intent)
                             },

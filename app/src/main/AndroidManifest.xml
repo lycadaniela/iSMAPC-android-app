@@ -132,6 +132,12 @@
             android:theme="@style/Theme.ISMAPC" />
 
         <activity
+            android:name=".ContentFilterActivity"
+            android:exported="false"
+            android:label="Content Filter"
+            android:theme="@style/Theme.ISMAPC" />
+
+        <activity
             android:name=".LocationMapActivity"
             android:exported="false"
             android:label="Child Location"
@@ -190,7 +196,7 @@
             android:exported="false" />
 
         <service
-            android:name=".BrowserContentMonitorService"
+            android:name=".ContentMonitorService"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
             android:exported="false">
             <intent-filter>
