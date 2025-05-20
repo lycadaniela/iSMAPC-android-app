@@ -378,6 +378,33 @@ fun ChildDetailsScreen(childId: String, childName: String) {
                     ) {
                         Button(
                             onClick = { 
+                                val intent = Intent(context, ScreenTimeLimitActivity::class.java)
+                                intent.putExtra("childId", childId)
+                                intent.putExtra("childName", childName)
+                                context.startActivity(intent)
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = MaterialTheme.colorScheme.onPrimary
+                            ),
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp),
+                            elevation = ButtonDefaults.buttonElevation(
+                                defaultElevation = 6.dp,
+                                pressedElevation = 8.dp
+                            )
+                        ) {
+                            Text(
+                                "Screen Time Limit",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        Button(
+                            onClick = { 
                                 val intent = Intent(context, InstalledAppsActivity::class.java).apply {
                                     putExtra("childId", childId)
                                 }
@@ -398,6 +425,33 @@ fun ChildDetailsScreen(childId: String, childName: String) {
                         ) {
                             Text(
                                 "Apps",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        
+                        Button(
+                            onClick = { 
+                                val intent = Intent(context, AppUsageActivity::class.java)
+                                intent.putExtra("childId", childId)
+                                intent.putExtra("childName", childName)
+                                context.startActivity(intent)
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = MaterialTheme.colorScheme.onPrimary
+                            ),
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp),
+                            elevation = ButtonDefaults.buttonElevation(
+                                defaultElevation = 6.dp,
+                                pressedElevation = 8.dp
+                            )
+                        ) {
+                            Text(
+                                "App Usage",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )

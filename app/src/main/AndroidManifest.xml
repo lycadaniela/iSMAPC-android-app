@@ -149,6 +149,18 @@
             android:label="Installed Apps"
             android:theme="@style/Theme.ISMAPC" />
 
+        <activity
+            android:name=".ScreenTimeLimitActivity"
+            android:exported="false"
+            android:label="Screen Time Limits"
+            android:theme="@style/Theme.ISMAPC" />
+
+        <activity
+            android:name=".AppUsageActivity"
+            android:exported="false"
+            android:label="App Usage"
+            android:theme="@style/Theme.ISMAPC" />
+
         <service
             android:name=".ScreenTimeService"
             android:enabled="true"
