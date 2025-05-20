@@ -42,10 +42,12 @@ class ChildPermissionActivity : ComponentActivity() {
         Manifest.permission.FOREGROUND_SERVICE_DATA_SYNC
     )
 
+    var currentPermissionStep = 0
+
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
-        checkAllPermissionsAndFinish()
+        checkLocationPermissionAndProceed()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -63,6 +65,7 @@ class ChildPermissionActivity : ComponentActivity() {
     }
 
     fun requestPermissions() {
+        currentPermissionStep = 0
         val permissionsToRequest = requiredPermissions.filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }.toTypedArray()
@@ -70,7 +73,34 @@ class ChildPermissionActivity : ComponentActivity() {
         if (permissionsToRequest.isNotEmpty()) {
             permissionLauncher.launch(permissionsToRequest)
         } else {
-            checkAllPermissionsAndFinish()
+            checkLocationPermissionAndProceed()
+        }
+    }
+
+    private fun checkLocationPermissionAndProceed() {
+        val allLocationPermissionsGranted = requiredPermissions.all {
+            ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
+        }
+        if (allLocationPermissionsGranted) {
+            currentPermissionStep = 1
+        }
+    }
+
+    private fun checkUsageStatsAndProceed() {
+        if (checkUsageStatsPermission()) {
+            currentPermissionStep = 2
+        }
+    }
+
+    private fun checkOverlayAndProceed() {
+        if (checkOverlayPermission()) {
+            currentPermissionStep = 3
+        }
+    }
+
+    private fun checkAccessibilityAndProceed() {
+        if (checkAccessibilityPermission()) {
+            finish()
         }
     }
 
@@ -141,12 +171,14 @@ class ChildPermissionActivity : ComponentActivity() {
     }
 
     fun openUsageAccessSettings() {
+        currentPermissionStep = 1
         Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
             startActivity(this)
         }
     }
 
     fun openOverlaySettings() {
+        currentPermissionStep = 2
         Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
             data = Uri.parse("package:$packageName")
             startActivity(this)
@@ -154,6 +186,7 @@ class ChildPermissionActivity : ComponentActivity() {
     }
 
     fun openAccessibilitySettings() {
+        currentPermissionStep = 3
         Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
             startActivity(this)
         }
@@ -162,7 +195,64 @@ class ChildPermissionActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         try {
-            checkAllPermissionsAndFinish()
+            when (currentPermissionStep) {
+                0 -> {
+                    checkLocationPermissionAndProceed()
+                    // Update composable state
+                    setContent {
+                        ISMAPCTheme {
+                            Surface(
+                                modifier = Modifier.fillMaxSize(),
+                                color = MaterialTheme.colorScheme.background
+                            ) {
+                                ChildPermissionScreen(this)
+                            }
+                        }
+                    }
+                }
+                1 -> {
+                    checkUsageStatsAndProceed()
+                    // Update composable state
+                    setContent {
+                        ISMAPCTheme {
+                            Surface(
+                                modifier = Modifier.fillMaxSize(),
+                                color = MaterialTheme.colorScheme.background
+                            ) {
+                                ChildPermissionScreen(this)
+                            }
+                        }
+                    }
+                }
+                2 -> {
+                    checkOverlayAndProceed()
+                    // Update composable state
+                    setContent {
+                        ISMAPCTheme {
+                            Surface(
+                                modifier = Modifier.fillMaxSize(),
+                                color = MaterialTheme.colorScheme.background
+                            ) {
+                                ChildPermissionScreen(this)
+                            }
+                        }
+                    }
+                }
+                3 -> {
+                    checkAccessibilityAndProceed()
+                    // Update composable state
+                    setContent {
+                        ISMAPCTheme {
+                            Surface(
+                                modifier = Modifier.fillMaxSize(),
+                                color = MaterialTheme.colorScheme.background
+                            ) {
+                                ChildPermissionScreen(this)
+                            }
+                        }
+                    }
+                }
+            }
         } catch (e: Exception) {
             Log.e("ChildPermissionActivity", "Error in onResume: ${e.message}")
         }
@@ -179,7 +269,12 @@ fun ChildPermissionScreen(activity: ChildPermissionActivity) {
     var hasOverlayPermission by remember { mutableStateOf(false) }
     var hasAccessibilityPermission by remember { mutableStateOf(false) }
 
-    // Check permissions when the screen is first loaded
+    // Update current step when activity's step changes
+    LaunchedEffect(activity.currentPermissionStep) {
+        currentStep = activity.currentPermissionStep
+    }
+
+    // Check permissions when the screen is first loaded and when returning from settings
     LaunchedEffect(Unit) {
         try {
             // Check location permissions
@@ -205,6 +300,38 @@ fun ChildPermissionScreen(activity: ChildPermissionActivity) {
             hasAccessibilityPermission = enabledServices.any { it.resolveInfo.serviceInfo.packageName == context.packageName }
         } catch (e: Exception) {
             Log.e("ChildPermissionScreen", "Error checking permissions: ${e.message}")
+        }
+    }
+
+    // Add a LaunchedEffect to check permissions when returning from settings
+    LaunchedEffect(currentStep) {
+        try {
+            when (currentStep) {
+                0 -> {
+                    hasLocationPermission = activity.requiredPermissions.all {
+                        ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
+                    }
+                }
+                1 -> {
+                    val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+                    val mode = appOps.checkOpNoThrow(
+                        AppOpsManager.OPSTR_GET_USAGE_STATS,
+                        android.os.Process.myUid(),
+                        context.packageName
+                    )
+                    hasUsagePermission = mode == AppOpsManager.MODE_ALLOWED
+                }
+                2 -> {
+                    hasOverlayPermission = Settings.canDrawOverlays(context)
+                }
+                3 -> {
+                    val accessibilityManager = context.getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
+                    val enabledServices = accessibilityManager.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
+                    hasAccessibilityPermission = enabledServices.any { it.resolveInfo.serviceInfo.packageName == context.packageName }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("ChildPermissionScreen", "Error checking permissions in step $currentStep: ${e.message}")
         }
     }
 
