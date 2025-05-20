@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -56,6 +57,12 @@ fun ScreenTimeLimitScreen(childId: String, childName: String) {
         "TikTok" to 45L      // 45 minutes
     )
 
+    // Temporary device lock times
+    val tempLockTimes = listOf(
+        "Weekdays" to "9:00 PM",
+        "Weekends" to "10:00 PM"
+    )
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -74,7 +81,14 @@ fun ScreenTimeLimitScreen(childId: String, childName: String) {
                 .padding(paddingValues)
                 .padding(16.dp)
         ) {
-            // Daily limit card
+            // Device Lock Times Section
+            Text(
+                text = "Device Lock Times",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -86,26 +100,47 @@ fun ScreenTimeLimitScreen(childId: String, childName: String) {
                         .fillMaxWidth()
                         .padding(16.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Daily Screen Time Limit",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        IconButton(onClick = { /* TODO: Implement edit */ }) {
-                            Icon(Icons.Default.Edit, contentDescription = "Edit limit")
+                    tempLockTimes.forEach { (dayType, time) ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Lock,
+                                    contentDescription = "Lock time",
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                                Text(
+                                    text = dayType,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    text = time,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                IconButton(onClick = { /* TODO: Implement edit */ }) {
+                                    Icon(Icons.Default.Edit, contentDescription = "Edit lock time")
+                                }
+                            }
+                        }
+                        if (dayType != tempLockTimes.last().first) {
+                            Divider(modifier = Modifier.padding(vertical = 8.dp))
                         }
                     }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "4 hours",
-                        style = MaterialTheme.typography.headlineMedium,
-                        color = MaterialTheme.colorScheme.primary
-                    )
                 }
             }
 

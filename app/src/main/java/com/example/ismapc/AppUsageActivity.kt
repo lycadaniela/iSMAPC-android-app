@@ -44,15 +44,21 @@ fun AppUsageScreen(childId: String, childName: String) {
     val context = LocalContext.current
     
     // Temporary data for testing
+    data class AppUsage(
+        val name: String,
+        val dailyMinutes: Long,
+        val weeklyMinutes: Long
+    )
+
     val tempAppUsage = listOf(
-        "com.facebook.katana" to 120L, // 2 hours
-        "com.instagram.android" to 90L,  // 1.5 hours
-        "com.twitter.android" to 60L,    // 1 hour
-        "com.whatsapp" to 45L,           // 45 minutes
-        "com.google.android.youtube" to 30L, // 30 minutes
-        "com.spotify.music" to 20L,      // 20 minutes
-        "com.snapchat.android" to 15L,   // 15 minutes
-        "com.tiktok.android" to 10L      // 10 minutes
+        AppUsage("Facebook", 120L, 840L),      // 2h daily, 14h weekly
+        AppUsage("Instagram", 90L, 630L),      // 1.5h daily, 10.5h weekly
+        AppUsage("Twitter", 60L, 420L),        // 1h daily, 7h weekly
+        AppUsage("WhatsApp", 45L, 315L),       // 45m daily, 5.25h weekly
+        AppUsage("YouTube", 30L, 210L),        // 30m daily, 3.5h weekly
+        AppUsage("Spotify", 20L, 140L),        // 20m daily, 2.33h weekly
+        AppUsage("Snapchat", 15L, 105L),       // 15m daily, 1.75h weekly
+        AppUsage("TikTok", 10L, 70L)           // 10m daily, 1.17h weekly
     )
 
     Scaffold(
@@ -74,7 +80,7 @@ fun AppUsageScreen(childId: String, childName: String) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            items(tempAppUsage.sortedByDescending { it.second }) { (packageName, usageMinutes) ->
+            items(tempAppUsage.sortedByDescending { it.dailyMinutes }) { appUsage ->
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
@@ -85,15 +91,38 @@ fun AppUsageScreen(childId: String, childName: String) {
                             .padding(16.dp)
                     ) {
                         Text(
-                            text = packageName,
+                            text = appUsage.name,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = formatUsageTime(usageMinutes),
-                            style = MaterialTheme.typography.bodyMedium
-                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column {
+                                Text(
+                                    text = "Today",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = formatUsageTime(appUsage.dailyMinutes),
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text(
+                                    text = "This Week",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = formatUsageTime(appUsage.weeklyMinutes),
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                        }
                     }
                 }
             }

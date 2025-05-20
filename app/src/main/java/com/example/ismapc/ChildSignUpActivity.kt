@@ -181,8 +181,8 @@ class ChildSignUpActivity : ComponentActivity() {
                     firebaseAuthWithGoogle(account.idToken!!, parentEmail!!)
                 } else {
                     // Only show dialog if parent email is not provided
-                    pendingGoogleToken = account.idToken
-                    showParentEmailDialog = true
+                pendingGoogleToken = account.idToken
+                showParentEmailDialog = true
                 }
             } catch (e: ApiException) {
                 Toast.makeText(this, "Google sign in failed: ${e.message}", Toast.LENGTH_SHORT).show()
