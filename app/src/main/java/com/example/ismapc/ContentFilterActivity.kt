@@ -112,6 +112,7 @@ fun BlockedWordsTab(
     childId: String,
     modifier: Modifier = Modifier
 ) {
+    val TAG = "BlockedWordsTab"
     val context = LocalContext.current
     val firestore = FirebaseFirestore.getInstance()
     var blockedWords by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -130,7 +131,7 @@ fun BlockedWordsTab(
             blockedWords = wordsSnapshot.get("blockedWords") as? List<String> ?: emptyList()
             isLoading = false
         } catch (e: Exception) {
-            Log.e("BlockedWordsTab", "Error loading data", e)
+            Log.e(TAG, "Error loading data", e)
             Toast.makeText(context, "Error loading data: ${e.message}", Toast.LENGTH_LONG).show()
             isLoading = false
         }
@@ -231,31 +232,42 @@ fun BlockedWordsTab(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        if (newWord.isNotBlank()) {
+                        val trimmedWord = newWord.trim()
+                        if (trimmedWord.isNotBlank()) {
                             scope.launch {
                                 try {
                                     val currentWords = blockedWords.toMutableList()
-                                    if (!currentWords.contains(newWord)) {
-                                        currentWords.add(newWord)
+                                    if (!currentWords.contains(trimmedWord)) {
+                                        currentWords.add(trimmedWord)
                                         
+                                        Log.d(TAG, "Saving blocked words: $currentWords")
                                         firestore.collection("contentFiltering")
                                             .document(childId)
-                                            .set(mapOf("blockedWords" to currentWords))
-                                            .await()
-                                        
-                                        blockedWords = currentWords
-                                        Toast.makeText(context, "Word added", Toast.LENGTH_SHORT).show()
+                                            .set(mapOf("blockedWords" to currentWords), com.google.firebase.firestore.SetOptions.merge())
+                                            .addOnSuccessListener {
+                                                Log.d(TAG, "Successfully saved blocked words")
+                                                blockedWords = currentWords
+                                                Toast.makeText(context, "Word added", Toast.LENGTH_SHORT).show()
+                                                showAddDialog = false
+                                                newWord = ""
+                                            }
+                                            .addOnFailureListener { e ->
+                                                Log.e(TAG, "Error saving blocked words", e)
+                                                Toast.makeText(context, "Error adding word: ${e.message}", Toast.LENGTH_LONG).show()
+                                            }
                                     } else {
                                         Toast.makeText(context, "Word already blocked", Toast.LENGTH_SHORT).show()
+                                        showAddDialog = false
+                                        newWord = ""
                                     }
                                 } catch (e: Exception) {
-                                    Log.e("BlockedWordsTab", "Error adding word", e)
+                                    Log.e(TAG, "Error adding word", e)
                                     Toast.makeText(context, "Error adding word: ${e.message}", Toast.LENGTH_LONG).show()
                                 }
                             }
+                        } else {
+                            Toast.makeText(context, "Please enter a word to block", Toast.LENGTH_SHORT).show()
                         }
-                        showAddDialog = false
-                        newWord = ""
                     }
                 ) {
                     Text("Add")
