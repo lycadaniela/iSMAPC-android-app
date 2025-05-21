@@ -162,6 +162,7 @@ fun AppUsageScreen(childId: String, childName: String, isChildDevice: Boolean) {
             .collection("stats")
             .document("daily")
             
+        // Register the snapshot listener
         val listener = docRef.addSnapshotListener { snapshot, error ->
             if (error != null) {
                 Log.e(TAG, "Error listening for app usage updates", error)
@@ -200,35 +201,17 @@ fun AppUsageScreen(childId: String, childName: String, isChildDevice: Boolean) {
                     Log.e(TAG, "Document was last updated at ${Date(docLastUpdated)}, which is before today. Will recalculate totals.")
                 }
                 
-                // Process apps data
                 try {
+                    // Process apps data
                     @Suppress("UNCHECKED_CAST")
                     val appsData = snapshot.get("apps") as? Map<String, Map<String, Any>>
-                    
                     if (appsData != null) {
                         val newAppUsageList = mutableListOf<AppUsage>()
                         
                         for ((appName, appData) in appsData) {
-                            // Get the app's last updated timestamp
-                            val appLastUpdated = (appData["lastUpdated"] as? Number)?.toLong() ?: 0L
+                            val dailyMinutes = (appData["dailyMinutes"] as? Number)?.toLong() ?: 0L
                             val weeklyMinutes = (appData["weeklyMinutes"] as? Number)?.toLong() ?: 0L
                             val packageName = (appData["packageName"] as? String) ?: "unknown.package.$appName"
-                            
-                            // CRITICAL: Only use daily minutes from today, NEVER from yesterday
-                            // This matches what the device settings show
-                            var dailyMinutes = (appData["dailyMinutes"] as? Number)?.toLong() ?: 0L
-                            
-                            // If data is from before today, daily minutes should be ZERO
-                            if (appLastUpdated < todayStart) {
-                                Log.e(TAG, "✂️ STRICT RESET: App $appName was last updated at ${Date(appLastUpdated)}, which is before today. Force resetting daily minutes to 0.")
-                                dailyMinutes = 0L
-                            }
-                            
-                            // Skip apps with zero WEEKLY usage time (maintaining the 5 min threshold for visibility)
-                            // But still show apps with 0 daily minutes as long as they have weekly usage
-                            if (weeklyMinutes <= 0) {
-                                continue
-                            }
                             
                             // Add a sample data indicator to the name if needed
                             val displayName = if (isSampleData && !appName.contains("[SAMPLE]")) {
@@ -241,8 +224,7 @@ fun AppUsageScreen(childId: String, childName: String, isChildDevice: Boolean) {
                                 AppUsage(
                                     name = displayName,
                                     packageName = packageName,
-                                    // Do NOT enforce minimum value for daily minutes - it should be 0 if not used today
-                                    dailyMinutes = dailyMinutes, 
+                                    dailyMinutes = dailyMinutes,
                                     weeklyMinutes = weeklyMinutes
                                 )
                             )

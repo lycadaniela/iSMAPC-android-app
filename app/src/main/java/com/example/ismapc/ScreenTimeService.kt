@@ -50,7 +50,7 @@ class ScreenTimeService : Service() {
     private var isNetworkAvailable = true
     private var updateJob: Job? = null
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private val CHECK_INTERVAL = 60 * 60 * 1000L // Check every hour
+    private val CHECK_INTERVAL = 5 * 60 * 1000L // Check every 5 minutes
     private val TAG = "ScreenTimeService"
     private val NOTIFICATION_ID = 1
     private val CHANNEL_ID = "ScreenTimeServiceChannel"
