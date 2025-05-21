@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.app.usage.UsageStatsManager
+import android.app.usage.UsageEvents
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -191,24 +192,65 @@ class ScreenTimeService : Service() {
         calendar.set(Calendar.MILLISECOND, 0)
         val startOfDay = calendar.timeInMillis
 
-        Log.d(TAG, "Calculating screen time from $startOfDay to $currentTime")
+        Log.d(TAG, "⏰ DAILY RESET CHECK: Calculating screen time from ${Date(startOfDay)} to ${Date(currentTime)}")
 
         try {
-            val stats = usageStatsManager.queryUsageStats(
-                UsageStatsManager.INTERVAL_DAILY,
-                startOfDay,
-                currentTime
-            )
-
-            var totalTime = 0L
-            stats?.forEach { usageStats ->
-                val timeInForeground = usageStats.totalTimeInForeground
-                Log.d(TAG, "App ${usageStats.packageName}: $timeInForeground ms")
-                totalTime += timeInForeground
+            // CRITICAL FIX: Only query events from today, not all usage stats
+            // This ensures we're only counting today's screen time
+            val events = usageStatsManager.queryEvents(startOfDay, currentTime)
+            
+            if (events != null && events.hasNextEvent()) {
+                var totalTime = 0L
+                val event = UsageEvents.Event()
+                val lastEventTime = mutableMapOf<String, Long>()
+                val lastEventType = mutableMapOf<String, Int>()
+                
+                Log.d(TAG, "Processing ONLY today's events for accurate screen time")
+                
+                while (events.hasNextEvent()) {
+                    events.getNextEvent(event)
+                    
+                    val packageName = event.packageName
+                    val eventTime = event.timeStamp
+                    val eventType = event.eventType
+                    
+                    // Skip any events from before today
+                    if (eventTime < startOfDay) {
+                        continue
+                    }
+                    
+                    // Track foreground/background transitions to calculate actual usage time
+                    if (eventType == UsageEvents.Event.MOVE_TO_FOREGROUND || 
+                        eventType == UsageEvents.Event.MOVE_TO_BACKGROUND) {
+                        
+                        if (lastEventType[packageName] == UsageEvents.Event.MOVE_TO_FOREGROUND && 
+                            eventType == UsageEvents.Event.MOVE_TO_BACKGROUND) {
+                            
+                            val duration = eventTime - (lastEventTime[packageName] ?: eventTime)
+                            totalTime += duration
+                        }
+                        
+                        lastEventTime[packageName] = eventTime
+                        lastEventType[packageName] = eventType
+                    }
+                }
+                
+                // Account for apps still in foreground
+                val currentlyInForeground = lastEventType.filter { it.value == UsageEvents.Event.MOVE_TO_FOREGROUND }
+                for ((packageName, _) in currentlyInForeground) {
+                    val foregroundStart = lastEventTime[packageName] ?: startOfDay
+                    if (foregroundStart >= startOfDay) {
+                        val duration = currentTime - foregroundStart
+                        totalTime += duration
+                    }
+                }
+                
+                Log.d(TAG, "Total screen time calculated from events: ${totalTime / (1000 * 60)} minutes")
+                return totalTime
+            } else {
+                Log.d(TAG, "No usage events found for today")
+                return 0L
             }
-
-            Log.d(TAG, "Total screen time calculated: $totalTime ms")
-            return totalTime
         } catch (e: Exception) {
             Log.e(TAG, "Error calculating screen time", e)
             return 0L
@@ -224,43 +266,57 @@ class ScreenTimeService : Service() {
 
         try {
             val screenTime = calculateScreenTime()
-            Log.d(TAG, "Saving screen time: $screenTime ms")
+            Log.d(TAG, "Saving today's screen time: ${screenTime / (1000 * 60)} minutes")
 
+            // Get today's start timestamp for accurate tracking
+            val calendar = Calendar.getInstance()
+            calendar.set(Calendar.HOUR_OF_DAY, 0)
+            calendar.set(Calendar.MINUTE, 0)
+            calendar.set(Calendar.SECOND, 0)
+            calendar.set(Calendar.MILLISECOND, 0)
+            val todayStart = calendar.timeInMillis
+            
             // Use only the user ID as the document ID
             val documentId = currentUser.uid
-            Log.d(TAG, "Saving to document: $documentId")
-
+            
             val screenTimeData = hashMapOf(
                 "screenTime" to screenTime,
-                "lastUpdated" to FieldValue.serverTimestamp(),
-                "userId" to currentUser.uid
+                "lastUpdated" to System.currentTimeMillis(),
+                "userId" to currentUser.uid,
+                "dayTimestamp" to todayStart // Store the day this data represents
             )
             
-            Log.d(TAG, "Screen time data to save: $screenTimeData")
+            // Add values in minutes for easier debugging
+            screenTimeData["screenTimeMinutes"] = screenTime / (1000 * 60)
+            screenTimeData["dayDate"] = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(todayStart))
+            
+            Log.d(TAG, "Screen time data to save: ${screenTime / (1000 * 60)} minutes for ${Date(todayStart)}")
 
             firestore.collection("screenTime")
                 .document(documentId)
                 .set(screenTimeData)
                 .addOnSuccessListener {
-                    Log.d(TAG, "Screen time saved successfully to document: $documentId")
+                    Log.d(TAG, "✅ Screen time saved successfully: ${screenTime / (1000 * 60)} minutes")
                     // Verify the data was saved
                     firestore.collection("screenTime")
                         .document(documentId)
                         .get()
                         .addOnSuccessListener { doc ->
                             if (doc.exists()) {
-                                Log.d(TAG, "Verified saved data: ${doc.data}")
+                                val savedScreenTime = doc.getLong("screenTime") ?: 0L
+                                val savedDayTimestamp = doc.getLong("dayTimestamp") ?: 0L
+                                Log.d(TAG, "✅ Verified saved data: ${savedScreenTime / (1000 * 60)} minutes for ${Date(savedDayTimestamp)}")
                             } else {
-                                Log.e(TAG, "Document does not exist after saving!")
+                                Log.e(TAG, "❌ Document does not exist after saving!")
                             }
                         }
                 }
                 .addOnFailureListener { e ->
-                    Log.e(TAG, "Error saving screen time to document: $documentId", e)
+                    Log.e(TAG, "❌ Error saving screen time to document: $documentId", e)
                     Log.e(TAG, "Error details: ${e.message}")
                 }
         } catch (e: Exception) {
-            Log.e(TAG, "Error in saveScreenTimeToFirestore", e)
+            Log.e(TAG, "❌ Error in saveScreenTimeToFirestore", e)
             Log.e(TAG, "Error details: ${e.message}")
         }
     }
