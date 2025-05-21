@@ -385,51 +385,12 @@ fun ChildDetailsScreen(childId: String, childName: String) {
                             },
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = MaterialTheme.colorScheme.primary,
-                                contentColor = MaterialTheme.colorScheme.onPrimary
                             ),
-                            shape = RoundedCornerShape(16.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(48.dp),
-                            elevation = ButtonDefaults.buttonElevation(
-                                defaultElevation = 6.dp,
-                                pressedElevation = 8.dp
-                            )
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text(
-                                "Screen Time Limit",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
+                            Text("Screen Time Limits")
                         }
 
-                        Button(
-                            onClick = { 
-                                val intent = Intent(context, InstalledAppsActivity::class.java).apply {
-                                    putExtra("childId", childId)
-                                }
-                                context.startActivity(intent)
-                            },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.primary,
-                                contentColor = MaterialTheme.colorScheme.onPrimary
-                            ),
-                            shape = RoundedCornerShape(16.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(48.dp),
-                            elevation = ButtonDefaults.buttonElevation(
-                                defaultElevation = 6.dp,
-                                pressedElevation = 8.dp
-                            )
-                        ) {
-                            Text(
-                                "Apps",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                        
                         Button(
                             onClick = { 
                                 val intent = Intent(context, AppUsageActivity::class.java)
@@ -439,78 +400,40 @@ fun ChildDetailsScreen(childId: String, childName: String) {
                             },
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = MaterialTheme.colorScheme.primary,
-                                contentColor = MaterialTheme.colorScheme.onPrimary
                             ),
-                            shape = RoundedCornerShape(16.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(48.dp),
-                            elevation = ButtonDefaults.buttonElevation(
-                                defaultElevation = 6.dp,
-                                pressedElevation = 8.dp
-                            )
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text(
-                                "App Usage",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
+                            Text("App Usage")
                         }
-                        
+
                         Button(
                             onClick = { 
-                                val intent = Intent(context, LocationMapActivity::class.java).apply {
-                                    putExtra("childId", childId)
-                                    putExtra("childName", childName)
-                                }
+                                val intent = Intent(context, LocationMapActivity::class.java)
+                                intent.putExtra("childId", childId)
+                                intent.putExtra("childName", childName)
                                 context.startActivity(intent)
                             },
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = MaterialTheme.colorScheme.primary,
-                                contentColor = MaterialTheme.colorScheme.onPrimary
                             ),
-                            shape = RoundedCornerShape(16.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(48.dp),
-                            elevation = ButtonDefaults.buttonElevation(
-                                defaultElevation = 6.dp,
-                                pressedElevation = 8.dp
-                            )
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text(
-                                "Location",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
+                            Text("Location")
                         }
-                        
+
                         Button(
                             onClick = { 
-                                val intent = Intent(context, ContentFilterActivity::class.java).apply {
-                                    putExtra("childId", childId)
-                                    putExtra("childName", childName)
-                                }
+                                val intent = Intent(context, InstalledAppsActivity::class.java)
+                                intent.putExtra("childId", childId)
+                                intent.putExtra("childName", childName)
                                 context.startActivity(intent)
                             },
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = MaterialTheme.colorScheme.primary,
-                                contentColor = MaterialTheme.colorScheme.onPrimary
                             ),
-                            shape = RoundedCornerShape(16.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(48.dp),
-                            elevation = ButtonDefaults.buttonElevation(
-                                defaultElevation = 6.dp,
-                                pressedElevation = 8.dp
-                            )
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text(
-                                "Content Filter",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
+                            Text("Installed Apps")
                         }
                     }
                 }

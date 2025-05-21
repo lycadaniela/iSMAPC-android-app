@@ -102,10 +102,9 @@ class ChildPermissionActivity : ComponentActivity() {
             // Check special permissions
             val usageStatsGranted = checkUsageStatsPermission()
             val overlayGranted = checkOverlayPermission()
-            val accessibilityGranted = checkAccessibilityPermission()
 
             // If all permissions are granted, finish the activity
-            if (allRuntimePermissionsGranted && usageStatsGranted && overlayGranted && accessibilityGranted) {
+            if (allRuntimePermissionsGranted && usageStatsGranted && overlayGranted) {
                 Log.d("ChildPermissionActivity", "All permissions granted, finishing activity")
                 finish()
             } else {
@@ -140,17 +139,6 @@ class ChildPermissionActivity : ComponentActivity() {
         }
     }
 
-    private fun checkAccessibilityPermission(): Boolean {
-        try {
-            val accessibilityManager = getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
-            val enabledServices = accessibilityManager.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
-            return enabledServices.any { it.resolveInfo.serviceInfo.packageName == packageName }
-        } catch (e: Exception) {
-            Log.e("ChildPermissionActivity", "Error checking accessibility permission: ${e.message}")
-            return false
-        }
-    }
-
     private fun openAppSettings() {
         Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
             data = Uri.fromParts("package", packageName, null)
@@ -173,13 +161,6 @@ class ChildPermissionActivity : ComponentActivity() {
         }
     }
 
-    fun openAccessibilitySettings() {
-        currentPermissionStep = 3
-        Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
-            startActivity(this)
-        }
-    }
-
     override fun onResume() {
         super.onResume()
         // Remove the permission checking here since it's handled by the periodic check
@@ -194,7 +175,6 @@ fun ChildPermissionScreen(activity: ChildPermissionActivity) {
     var hasLocationPermission by remember { mutableStateOf(false) }
     var hasUsagePermission by remember { mutableStateOf(false) }
     var hasOverlayPermission by remember { mutableStateOf(false) }
-    var hasAccessibilityPermission by remember { mutableStateOf(false) }
     var allPermissionsGranted by remember { mutableStateOf(false) }
 
     // Update current step when activity's step changes
@@ -222,14 +202,8 @@ fun ChildPermissionScreen(activity: ChildPermissionActivity) {
             // Check overlay permission
             hasOverlayPermission = Settings.canDrawOverlays(context)
 
-            // Check accessibility permission
-            val accessibilityManager = context.getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
-            val enabledServices = accessibilityManager.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
-            hasAccessibilityPermission = enabledServices.any { it.resolveInfo.serviceInfo.packageName == context.packageName }
-
             // Check if all permissions are granted
-            allPermissionsGranted = hasLocationPermission && hasUsagePermission && 
-                                  hasOverlayPermission && hasAccessibilityPermission
+            allPermissionsGranted = hasLocationPermission && hasUsagePermission && hasOverlayPermission
         } catch (e: Exception) {
             Log.e("ChildPermissionScreen", "Error checking permissions: ${e.message}")
         }
@@ -257,7 +231,7 @@ fun ChildPermissionScreen(activity: ChildPermissionActivity) {
     ) {
         // Progress indicator
         LinearProgressIndicator(
-            progress = (currentStep + 1) / 4f,
+            progress = (currentStep + 1) / 3f,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = 32.dp),
@@ -312,12 +286,6 @@ fun ChildPermissionScreen(activity: ChildPermissionActivity) {
                     activity.openOverlaySettings()
                 }
             )
-            3 -> AccessibilityPermissionStep(
-                isGranted = hasAccessibilityPermission,
-                onGrant = {
-                    activity.openAccessibilitySettings()
-                }
-            )
         }
 
         Spacer(modifier = Modifier.height(32.dp))
@@ -342,7 +310,7 @@ fun ChildPermissionScreen(activity: ChildPermissionActivity) {
 
             Button(
                 onClick = { 
-                    if (currentStep == 3) {
+                    if (currentStep == 2) {
                         // Check if all permissions are granted before finishing
                         if (allPermissionsGranted) {
                             activity.finish()
@@ -355,11 +323,10 @@ fun ChildPermissionScreen(activity: ChildPermissionActivity) {
                     0 -> hasLocationPermission
                     1 -> hasUsagePermission
                     2 -> hasOverlayPermission
-                    3 -> hasAccessibilityPermission
                     else -> false
                 }
             ) {
-                Text(if (currentStep == 3) "Finish" else "Next")
+                Text(if (currentStep == 2) "Finish" else "Next")
             }
         }
     }
@@ -402,20 +369,6 @@ fun OverlayPermissionStep(
         title = "Display Over Other Apps",
         description = "This permission is needed to show important notifications and app lock screens. It helps ensure you're using apps safely.",
         icon = Icons.Outlined.Settings,
-        isGranted = isGranted,
-        onGrant = onGrant
-    )
-}
-
-@Composable
-fun AccessibilityPermissionStep(
-    isGranted: Boolean,
-    onGrant: () -> Unit
-) {
-    PermissionStep(
-        title = "Accessibility Service",
-        description = "This permission helps monitor browser content to ensure safe browsing. It helps protect you from inappropriate content.",
-        icon = Icons.Outlined.Lock,
         isGranted = isGranted,
         onGrant = onGrant
     )
