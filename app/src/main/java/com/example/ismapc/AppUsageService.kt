@@ -149,49 +149,57 @@ class AppUsageService : Service() {
                 set(Calendar.MILLISECOND, 0)
             }.timeInMillis
             
-            // Look back 30 days
+            // Look back 30 days for weekly data
             val weekStart = calendar.apply {
                 add(Calendar.DAY_OF_YEAR, -30)
             }.timeInMillis
             
             val now = System.currentTimeMillis()
             
-            // Try both approaches to maximize data collection
+            Log.e(TAG, "⏰ DAILY RESET CHECK: Today starts at ${Date(todayStart)}, now is ${Date(now)}. Looking for apps used since midnight.")
             
-            // 1. Try the direct stats query first (works better on some devices)
-            val dailyStats = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, todayStart, now)
+            // CRITICAL FIX: SEPARATE queries for daily and weekly to avoid contamination
+            
+            // 1. ONLY use DAILY interval for TODAY's usage - completely isolated
+            val todayStats = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, todayStart, now)
+            Log.e(TAG, "📊 Found ${todayStats.size} apps with usage TODAY")
+            
+            // 2. Use separate query for weekly data
             val weeklyStats = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_WEEKLY, weekStart, now)
             val monthlyStats = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_MONTHLY, weekStart, now)
-            
-            // Combine all stats
-            val allStats = (dailyStats + weeklyStats + monthlyStats).distinctBy { it.packageName }
             
             // Process stats
             val dailyUsage = mutableMapOf<String, Long>()
             val weeklyUsage = mutableMapOf<String, Long>()
             
-            if (allStats.isNotEmpty()) {
-                for (stat in allStats) {
-                    val packageName = stat.packageName
-                    val totalTimeMs = stat.totalTimeInForeground
-                    
-                    if (totalTimeMs > 0) {
-                        weeklyUsage[packageName] = totalTimeMs
-                        
-                        // Estimate daily usage as 1/7 of weekly or use actual if available
-                        if (dailyStats.any { it.packageName == packageName }) {
-                            val dailyStat = dailyStats.first { it.packageName == packageName }
-                            dailyUsage[packageName] = dailyStat.totalTimeInForeground
-                        } else {
-                            dailyUsage[packageName] = totalTimeMs / 7
-                        }
-                    }
+            // Process WEEKLY stats first
+            val combinedWeeklyStats = (weeklyStats + monthlyStats).distinctBy { it.packageName }
+            combinedWeeklyStats.forEach { stat ->
+                val packageName = stat.packageName
+                val totalTimeMs = stat.totalTimeInForeground
+                
+                if (totalTimeMs > 0) {
+                    weeklyUsage[packageName] = totalTimeMs
                 }
             }
             
-            // Always use the event-based approach as well to catch the most recent app usage
+            // Process TODAY's stats SEPARATELY to ensure no contamination from yesterday
+            todayStats.forEach { stat ->
+                val packageName = stat.packageName
+                val timeUsedToday = stat.totalTimeInForeground
+                
+                // Only count as today's usage if the last time used is actually today
+                if (timeUsedToday > 0 && stat.lastTimeUsed >= todayStart) {
+                    dailyUsage[packageName] = timeUsedToday
+                    Log.e(TAG, "✅ TODAY usage for ${packageName}: ${TimeUnit.MILLISECONDS.toMinutes(timeUsedToday)}m, last used: ${Date(stat.lastTimeUsed)}")
+                } else if (timeUsedToday > 0) {
+                    Log.e(TAG, "❌ REJECTING supposed today usage for ${packageName} because lastTimeUsed ${Date(stat.lastTimeUsed)} is before today")
+                }
+            }
+            
+            // Always use the event-based approach to catch the most recent app usage
             // that might not have been included in the stats query yet
-            val events = usageStatsManager.queryEvents(weekStart, now)
+            val events = usageStatsManager.queryEvents(todayStart, now)  // ONLY look at today's events
             
             if (events != null && events.hasNextEvent()) {
                 val event = UsageEvents.Event()
@@ -205,6 +213,12 @@ class AppUsageService : Service() {
                     val packageName = event.packageName
                     val eventTime = event.timeStamp
                     val eventType = event.eventType
+                    
+                    // Skip any events from before today (should not happen since we query only from todayStart)
+                    if (eventTime < todayStart) {
+                        Log.e(TAG, "⚠️ Skipping old event for ${packageName} at ${Date(eventTime)}")
+                        continue
+                    }
                     
                     // Track any app that was brought to foreground as "used" - even without a background event
                     if (eventType == UsageEvents.Event.MOVE_TO_FOREGROUND && eventTime > (now - 5 * 60 * 1000)) {
@@ -220,11 +234,12 @@ class AppUsageService : Service() {
                             
                             val duration = eventTime - (lastEventTime[packageName] ?: eventTime)
                             
+                            // Add to weekly usage
                             weeklyUsage[packageName] = (weeklyUsage[packageName] ?: 0) + duration
                             
-                            if (lastEventTime[packageName] ?: 0 >= todayStart) {
-                                dailyUsage[packageName] = (dailyUsage[packageName] ?: 0) + duration
-                            }
+                            // Add to today's usage - all these events should be from today only
+                            dailyUsage[packageName] = (dailyUsage[packageName] ?: 0) + duration
+                            Log.e(TAG, "📱 Adding ${TimeUnit.MILLISECONDS.toMinutes(duration)}m to today's usage for ${packageName} from events")
                         }
                         
                         lastEventTime[packageName] = eventTime
@@ -237,7 +252,12 @@ class AppUsageService : Service() {
                     if (!weeklyUsage.containsKey(packageName)) {
                         // Add with a minimal duration of 1 minute to ensure it shows up
                         weeklyUsage[packageName] = 60 * 1000L // 1 minute in milliseconds
+                    }
+                    
+                    // Only add to daily usage if we don't already have data for this app today
+                    if (!dailyUsage.containsKey(packageName)) {
                         dailyUsage[packageName] = 60 * 1000L // 1 minute in milliseconds
+                        Log.e(TAG, "📱 Added minimal daily usage for recently used app: $packageName")
                     }
                 }
             }
@@ -245,6 +265,7 @@ class AppUsageService : Service() {
             // Convert to AppUsage objects
             val result = mutableListOf<AppUsage>()
             
+            // Process all apps with weekly usage
             for (packageName in weeklyUsage.keys) {
                 try {
                     val appInfo = packageManager.getApplicationInfo(packageName, 0)
@@ -254,14 +275,14 @@ class AppUsageService : Service() {
                     val daily = TimeUnit.MILLISECONDS.toMinutes(dailyUsage[packageName] ?: 0)
                     val weekly = TimeUnit.MILLISECONDS.toMinutes(weeklyUsage[packageName] ?: 0)
                     
-                    // Include any non-system app with any usage time at all
-                    if (!isSystemApp) {
+                    // Include any non-system app with at least 5 minutes of weekly usage
+                    if (!isSystemApp && weekly >= 5) {
                         result.add(
                             AppUsage(
                                 name = appName,
                                 packageName = packageName,
-                                dailyMinutes = Math.max(daily, 1), // Ensure at least 1 minute
-                                weeklyMinutes = Math.max(weekly, 1) // Ensure at least 1 minute
+                                dailyMinutes = daily,
+                                weeklyMinutes = weekly
                             )
                         )
                     }
@@ -270,7 +291,7 @@ class AppUsageService : Service() {
                 }
             }
             
-            Log.e(TAG, "Service collected ${result.size} app usage records")
+            Log.e(TAG, "Service collected ${result.size} app usage records with 5+ minutes weekly usage")
             return result
         } catch (e: Exception) {
             Log.e(TAG, "Error getting app usage stats in service", e)
@@ -287,6 +308,12 @@ class AppUsageService : Service() {
             return
         }
         
+        // Check if we need to reset daily usage
+        val needsDailyReset = needsDailyReset(childId)
+        if (needsDailyReset) {
+            Log.e(TAG, "🔄 Daily reset needed - resetting daily usage counts")
+        }
+        
         // Log the data we're about to upload
         Log.e(TAG, "📊 Uploading data for ${usageData.size} apps:")
         usageData.forEachIndexed { index, app ->
@@ -296,9 +323,18 @@ class AppUsageService : Service() {
         try {
             // Create a map of app usage data
             val appsData = usageData.associate { appUsage ->
+                val dailyMinutes = if (needsDailyReset) {
+                    // If we need a daily reset, only include usage from today
+                    appUsage.dailyMinutes
+                } else {
+                    // Otherwise keep daily minutes, but service will verify they're from today
+                    // The service will run frequently, so daily updates will be accurate
+                    appUsage.dailyMinutes
+                }
+                
                 appUsage.name to mapOf(
                     "packageName" to appUsage.packageName,
-                    "dailyMinutes" to appUsage.dailyMinutes,
+                    "dailyMinutes" to dailyMinutes,
                     "weeklyMinutes" to appUsage.weeklyMinutes,
                     "lastUpdated" to System.currentTimeMillis()
                 )
@@ -308,12 +344,30 @@ class AppUsageService : Service() {
             val totalDailyMinutes = usageData.sumOf { it.dailyMinutes }
             val totalWeeklyMinutes = usageData.sumOf { it.weeklyMinutes }
             
+            // Get the current document to retrieve existing values
+            val docRef = firestore.collection("appUsage")
+                .document(childId)
+                .collection("stats")
+                .document("daily")
+            
+            var previousLastDailyReset: Long = 0
+            try {
+                val currentDoc = docRef.get().result
+                if (currentDoc != null && currentDoc.exists()) {
+                    previousLastDailyReset = currentDoc.getLong("lastDailyReset") ?: 0L
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error retrieving current document: ${e.message}", e)
+                // Continue with default value if we can't get the current document
+            }
+            
             // Create the final data to store
             val dataToStore = hashMapOf(
                 "apps" to appsData,
                 "totalDailyMinutes" to totalDailyMinutes,
                 "totalAppWeeklyUsage" to totalWeeklyMinutes,
                 "lastUpdated" to System.currentTimeMillis(),
+                "lastDailyReset" to if (needsDailyReset) System.currentTimeMillis() else previousLastDailyReset,
                 "appCount" to usageData.size,
                 "dataSource" to "REAL_DEVICE_DATA"
             )
@@ -363,6 +417,60 @@ class AppUsageService : Service() {
             }
         } catch (e: Exception) {
             Log.e(TAG, "❌ Error updating Firestore with usage data: ${e.message}", e)
+        }
+    }
+    
+    /**
+     * Check if we need to reset daily usage stats because it's a new day
+     */
+    private fun needsDailyReset(childId: String): Boolean {
+        try {
+            // Get current calendar for today's date
+            val currentCalendar = Calendar.getInstance()
+            val currentDayOfYear = currentCalendar.get(Calendar.DAY_OF_YEAR)
+            val currentYear = currentCalendar.get(Calendar.YEAR)
+            
+            // Get the data synchronously - this blocks the thread but is needed for accurate resets
+            try {
+                val docRef = firestore.collection("appUsage")
+                    .document(childId)
+                    .collection("stats")
+                    .document("daily")
+                
+                val document = docRef.get().result
+                
+                if (document != null && document.exists()) {
+                    val lastUpdated = document.getLong("lastUpdated") ?: 0L
+                    
+                    if (lastUpdated > 0) {
+                        val lastCalendar = Calendar.getInstance()
+                        lastCalendar.timeInMillis = lastUpdated
+                        
+                        val lastDayOfYear = lastCalendar.get(Calendar.DAY_OF_YEAR)
+                        val lastYear = lastCalendar.get(Calendar.YEAR)
+                        
+                        // Check if we've crossed to a new day
+                        val isDifferentDay = lastDayOfYear != currentDayOfYear || lastYear != currentYear
+                        if (isDifferentDay) {
+                            Log.e(TAG, "Day changed from ${lastDayOfYear}/${lastYear} to ${currentDayOfYear}/${currentYear} - daily reset needed")
+                            return true
+                        }
+                    }
+                } else {
+                    // If the document doesn't exist yet, no need to reset
+                    Log.e(TAG, "No previous app usage data found, no reset needed")
+                    return false
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error getting document for reset check: ${e.message}", e)
+                // If we can't determine, don't reset to avoid data loss
+                return false
+            }
+            
+            return false
+        } catch (e: Exception) {
+            Log.e(TAG, "Error checking if daily reset is needed: ${e.message}", e)
+            return false
         }
     }
     

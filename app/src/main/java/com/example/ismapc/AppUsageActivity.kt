@@ -153,200 +153,155 @@ fun AppUsageScreen(childId: String, childName: String, isChildDevice: Boolean) {
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var isSampleData by remember { mutableStateOf(false) }
     var totalAppUsage by remember { mutableStateOf<Long>(0) }
-    var forceRefresh by remember { mutableStateOf(false) }
     var lastUpdated by remember { mutableStateOf<Long?>(null) }
     
-    // Debug button to force data collection
-    val forceTriggerData = {
-        forceRefresh = true
-        Toast.makeText(context, "Forcing data refresh...", Toast.LENGTH_SHORT).show()
-    }
-    
-    // Fetch app usage data
-    LaunchedEffect(Unit, forceRefresh) {
-        withContext(Dispatchers.IO) {
-            try {
-                Log.e(TAG, "Started fetching app usage data for childId: $childId, force refresh: $forceRefresh")
+    // Set up a snapshot listener for real-time updates
+    DisposableEffect(childId) {
+        val docRef = firestore.collection("appUsage")
+            .document(childId)
+            .collection("stats")
+            .document("daily")
+            
+        val listener = docRef.addSnapshotListener { snapshot, error ->
+            if (error != null) {
+                Log.e(TAG, "Error listening for app usage updates", error)
+                errorMessage = "Error getting real-time updates: ${error.message}"
+                return@addSnapshotListener
+            }
+            
+            if (snapshot != null && snapshot.exists()) {
+                Log.e(TAG, "Real-time update received for app usage data")
                 
-                // The approach differs based on whether this is the child's device or parent viewing
-                val usageData: List<AppUsage> = try {
-                    if (isChildDevice) {
-                        // Child device: Get real-time stats and update Firestore
-                        Log.e(TAG, "Getting usage stats from device (child account)")
+                // Get last updated timestamp
+                lastUpdated = snapshot.getLong("lastUpdated")
+                
+                // Get data source to check if it's sample data
+                val dataSource = snapshot.getString("dataSource")
+                isSampleData = dataSource == "SAMPLE_DATA"
+                
+                // Get today's start timestamp (midnight)
+                val calendar = Calendar.getInstance()
+                calendar.set(Calendar.HOUR_OF_DAY, 0)
+                calendar.set(Calendar.MINUTE, 0)
+                calendar.set(Calendar.SECOND, 0)
+                calendar.set(Calendar.MILLISECOND, 0)
+                val todayStart = calendar.timeInMillis
+                
+                Log.e(TAG, "Today starts at: ${Date(todayStart)}")
+                
+                // Only use official total if it's from today, otherwise recalculate
+                val docLastUpdated = snapshot.getLong("lastUpdated") ?: 0
+                val useTotalFromDoc = docLastUpdated >= todayStart
+                
+                if (useTotalFromDoc) {
+                    // Get total app usage from document if it's recent
+                    totalAppUsage = snapshot.getLong("totalAppWeeklyUsage") ?: 0
+                } else {
+                    Log.e(TAG, "Document was last updated at ${Date(docLastUpdated)}, which is before today. Will recalculate totals.")
+                }
+                
+                // Process apps data
+                try {
+                    @Suppress("UNCHECKED_CAST")
+                    val appsData = snapshot.get("apps") as? Map<String, Map<String, Any>>
+                    
+                    if (appsData != null) {
+                        val newAppUsageList = mutableListOf<AppUsage>()
                         
-                        try {
-                            // Try to get real data from device
-                            var localData = getAppUsageStats(context)
-                            Log.e(TAG, "Retrieved ${localData.size} app usage records from device")
+                        for ((appName, appData) in appsData) {
+                            // Get the app's last updated timestamp
+                            val appLastUpdated = (appData["lastUpdated"] as? Number)?.toLong() ?: 0L
+                            val weeklyMinutes = (appData["weeklyMinutes"] as? Number)?.toLong() ?: 0L
+                            val packageName = (appData["packageName"] as? String) ?: "unknown.package.$appName"
                             
-                            // Calculate total screen time
-                            totalAppUsage = localData.sumOf { it.weeklyMinutes }
-                            
-                            // Filter out apps with zero usage and system apps to get a cleaner list
-                            if (localData.isNotEmpty()) {
-                                val nonSystemApps = localData.filter { !it.name.contains("(System)") }
-                                
-                                if (nonSystemApps.isNotEmpty()) {
-                                    Log.e(TAG, "Using ${nonSystemApps.size} non-system apps only")
-                                    localData = nonSystemApps
-                                } else {
-                                    Log.e(TAG, "Keeping all apps since no non-system apps were found")
-                                }
+                            // Only use daily minutes from today, otherwise use 0
+                            var dailyMinutes = (appData["dailyMinutes"] as? Number)?.toLong() ?: 0L
+                            if (appLastUpdated < todayStart) {
+                                Log.e(TAG, "App $appName was last updated at ${Date(appLastUpdated)}, which is before today. Resetting daily minutes from $dailyMinutes to 0.")
+                                dailyMinutes = 0L
                             }
                             
-                            // Store the data to Firestore if we have data
-                            if (localData.isNotEmpty()) {
-                                Log.e(TAG, "✅ Updating Firestore with REAL device data (${localData.size} apps)")
-                                updateFirestoreWithUsageData(firestore, childId, localData)
-                                
-                                // Verify it was saved
-                                try {
-                                    val doc = firestore.collection("appUsage")
-                                        .document(childId)
-                                        .collection("stats")
-                                        .document("daily")
-                                        .get()
-                                        .await()
-                                        
-                                    if (doc.exists()) {
-                                        val dataSource = doc.getString("dataSource")
-                                        lastUpdated = doc.getLong("lastUpdated")
-                                        Log.e(TAG, "✅ Verification passed! Data source: $dataSource, Last updated: $lastUpdated")
-                                    } else {
-                                        Log.e(TAG, "❌ Verification failed! Document doesn't exist!")
-                                    }
-                                } catch (e: Exception) {
-                                    Log.e(TAG, "❌ Verification failed! Exception: ${e.message}")
-                                }
-                                
-                                localData
+                            // Skip apps with zero WEEKLY usage time (maintaining the 5 min threshold for visibility)
+                            // But still show apps with 0 daily minutes as long as they have weekly usage
+                            if (weeklyMinutes <= 0) {
+                                continue
+                            }
+                            
+                            // Add a sample data indicator to the name if needed
+                            val displayName = if (isSampleData && !appName.contains("[SAMPLE]")) {
+                                "$appName [SAMPLE]"
                             } else {
-                                Log.e(TAG, "No local app usage data found - might be a permission issue or no app usage")
-                                errorMessage = "Could not collect app usage data from this device.\n\n" +
-                                        "Troubleshooting steps:\n" +
-                                        "1. Grant 'Usage Access' permission in device settings\n" +
-                                        "2. Use apps on this device for several minutes\n" +
-                                        "3. Tap 'Force Refresh' to try again"
-                                
-                                // ONLY use fallback data if we really couldn't get any data
-                                Log.e(TAG, "⚠️ Using FALLBACK data because no real data could be collected")
-                                val sampleData = getFallbackData()
-                                updateFirestoreWithUsageData(firestore, childId, sampleData)
-                                isSampleData = true
-                                sampleData
+                                appName
                             }
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Error getting local app usage data", e)
-                            errorMessage = "Error collecting usage data: ${e.message}"
-                            throw e // Re-throw to be caught by outer try-catch
+                            
+                            newAppUsageList.add(
+                                AppUsage(
+                                    name = displayName,
+                                    packageName = packageName,
+                                    // Do NOT enforce minimum value for daily minutes - it should be 0 if not used today
+                                    dailyMinutes = dailyMinutes, 
+                                    weeklyMinutes = weeklyMinutes
+                                )
+                            )
+                        }
+                        
+                        // If we couldn't use the total from the document, calculate it from app list
+                        if (!useTotalFromDoc) {
+                            totalAppUsage = newAppUsageList.sumOf { it.weeklyMinutes }
+                        }
+                        
+                        // Update the app usage list
+                        appUsageList = newAppUsageList
+                        Log.e(TAG, "Updated app usage list with ${newAppUsageList.size} apps")
+                        
+                        // Clear loading and error states
+                        isLoading = false
+                        if (newAppUsageList.isNotEmpty()) {
+                            errorMessage = null
                         }
                     } else {
-                        // Parent device: Get data from Firestore with improved error handling
-                        Log.e(TAG, "Getting usage stats from Firestore (parent account viewing child data)")
-                        try {
-                            val document = firestore.collection("appUsage")
-                                .document(childId)
-                                .collection("stats")
-                                .document("daily")
-                                .get()
-                                .await()
-                            
-                            if (!document.exists()) {
-                                Log.e(TAG, "No app usage data found in Firestore for child: $childId")
-                                errorMessage = "No usage data has been collected from this child's device yet.\n\n" +
-                                        "Make sure:\n" +
-                                        "1. The child device has the app installed\n" +
-                                        "2. Usage access permission is granted on the child device\n" +
-                                        "3. The child has used their device recently"
-                                val sampleData = getFallbackData()
-                                isSampleData = true
-                                sampleData
-                            } else {
-                                // Get last updated timestamp
-                                lastUpdated = document.getLong("lastUpdated")
-                                
-                                // Check if this is sample data
-                                val dataSource = document.getString("dataSource")
-                                isSampleData = dataSource == "SAMPLE_DATA"
-                                
-                                // Get total app usage
-                                totalAppUsage = document.getLong("totalAppWeeklyUsage") ?: 0L
-                                
-                                // Get app details
-                                @Suppress("UNCHECKED_CAST")
-                                val appsData = document.get("apps") as? Map<String, Map<String, Any>> 
-                                    ?: emptyMap()
-                                
-                                val result = mutableListOf<AppUsage>()
-                                
-                                for ((appName, appData) in appsData) {
-                                    val dailyMinutes = (appData["dailyMinutes"] as? Number)?.toLong() ?: 0L
-                                    val weeklyMinutes = (appData["weeklyMinutes"] as? Number)?.toLong() ?: 0L
-                                    val packageName = (appData["packageName"] as? String) ?: "unknown.package.$appName"
-                                    
-                                    // Skip apps with zero usage time
-                                    if (weeklyMinutes <= 0) {
-                                        continue
-                                    }
-                                    
-                                    // Add a sample data indicator to the name if needed
-                                    val displayName = if (isSampleData && !appName.contains("[SAMPLE]")) {
-                                        "$appName [SAMPLE]"
-                                    } else {
-                                        appName
-                                    }
-                                    
-                                    result.add(
-                                        AppUsage(
-                                            name = displayName,
-                                            packageName = packageName,
-                                            dailyMinutes = dailyMinutes,
-                                            weeklyMinutes = weeklyMinutes
-                                        )
-                                    )
-                                }
-                                
-                                Log.e(TAG, "Successfully retrieved ${result.size} app usage records from Firestore")
-                                result
-                            }
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Error retrieving app usage data from Firestore", e)
-                            errorMessage = "Error retrieving app usage data: ${e.message}"
-                            val sampleData = getFallbackData()
-                            isSampleData = true
-                            sampleData
-                        }
+                        Log.e(TAG, "No apps data found in snapshot")
+                        errorMessage = "No app usage data available"
                     }
                 } catch (e: Exception) {
-                    Log.e(TAG, "Error getting app usage data, falling back to sample data", e)
-                    errorMessage = "Error processing app usage data: ${e.message}"
-                    isSampleData = true
-                    getFallbackData()
-                } finally {
-                    // Reset the force refresh flag
-                    forceRefresh = false
+                    Log.e(TAG, "Error processing app data from snapshot", e)
+                    errorMessage = "Error processing app data: ${e.message}"
                 }
-                
-                if (usageData.isEmpty()) {
-                    Log.e(TAG, "No usage data found - using fallback data")
-                    appUsageList = getFallbackData()
-                    isSampleData = true
-                    if (errorMessage == null) {
-                        errorMessage = "No app usage data found - showing sample data"
+            } else {
+                Log.e(TAG, "No app usage data document exists")
+                errorMessage = "No app usage data available"
+            }
+        }
+        
+        // Return the cleanup function
+        onDispose {
+            listener.remove()
+            Log.e(TAG, "Removed app usage snapshot listener")
+        }
+    }
+    
+    // Handle initial loading for child devices
+    if (isChildDevice) {
+        LaunchedEffect(Unit) {
+            withContext(Dispatchers.IO) {
+                try {
+                    val localData = getAppUsageStats(context)
+                    
+                    if (localData.isNotEmpty()) {
+                        Log.e(TAG, "Initial load: Retrieved ${localData.size} app usage records from device")
+                        
+                        // Calculate total screen time
+                        totalAppUsage = localData.sumOf { it.weeklyMinutes }
+                        
+                        // Store the data to Firestore
+                        updateFirestoreWithUsageData(firestore, childId, localData, false)
                     }
-                } else {
-                    Log.e(TAG, "Successfully fetched ${usageData.size} app usage records")
-                    appUsageList = usageData
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error getting initial app usage data", e)
+                } finally {
+                    // Snapshot listener will handle the rest
+                    isLoading = false
                 }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error fetching app usage data: ${e.message}", e)
-                if (errorMessage == null) {
-                    errorMessage = "Could not load app usage data: ${e.message}"
-                }
-                appUsageList = getFallbackData()
-                isSampleData = true
-            } finally {
-                isLoading = false
             }
         }
     }
@@ -358,17 +313,6 @@ fun AppUsageScreen(childId: String, childName: String, isChildDevice: Boolean) {
                 navigationIcon = {
                     IconButton(onClick = { (context as? ComponentActivity)?.finish() }) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                actions = {
-                    // Always show refresh button for both parent and child
-                    IconButton(onClick = {
-                        forceTriggerData()
-                    }) {
-                        Icon(
-                            imageVector = Icons.Default.Refresh,
-                            contentDescription = "Force Refresh"
-                        )
                     }
                 }
             )
@@ -409,13 +353,6 @@ fun AppUsageScreen(childId: String, childName: String, isChildDevice: Boolean) {
                             color = MaterialTheme.colorScheme.error
                         )
                     }
-                    
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Button(onClick = {
-                        forceTriggerData()
-                    }) {
-                        Text("Force Refresh")
-                    }
                 }
             }
         } else {
@@ -453,17 +390,6 @@ fun AppUsageScreen(childId: String, childName: String, isChildDevice: Boolean) {
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onErrorContainer
                             )
-                            
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Button(
-                                onClick = { forceTriggerData() },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.onErrorContainer,
-                                    contentColor = MaterialTheme.colorScheme.errorContainer
-                                )
-                            ) {
-                                Text("Try Again")
-                            }
                         }
                     }
                 } else {
@@ -502,24 +428,6 @@ fun AppUsageScreen(childId: String, childName: String, isChildDevice: Boolean) {
                                     color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
                                 )
                             }
-                            
-                            // Add refresh button
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Button(
-                                onClick = { forceTriggerData() },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.primary
-                                ),
-                                modifier = Modifier.align(Alignment.End)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Refresh,
-                                    contentDescription = "Refresh",
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Refresh")
-                            }
                         }
                     }
                 }
@@ -530,59 +438,59 @@ fun AppUsageScreen(childId: String, childName: String, isChildDevice: Boolean) {
                     modifier = Modifier.padding(start = 16.dp, top = 8.dp)
                 )
                 
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
                     items(appUsageList.sortedByDescending { it.dailyMinutes }) { appUsage ->
-                        Card(
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                    ) {
+                        Text(
+                            text = appUsage.name,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
                             modifier = Modifier.fillMaxWidth(),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp)
-                            ) {
+                            Column {
                                 Text(
-                                    text = appUsage.name,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold
+                                    text = "Today",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Column {
-                                        Text(
-                                            text = "Today",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                        Text(
-                                            text = formatUsageTime(appUsage.dailyMinutes),
-                                            style = MaterialTheme.typography.bodyMedium
-                                        )
-                                    }
-                                    Column(horizontalAlignment = Alignment.End) {
-                                        Text(
-                                            text = "This Week",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                        Text(
-                                            text = formatUsageTime(appUsage.weeklyMinutes),
-                                            style = MaterialTheme.typography.bodyMedium
-                                        )
-                                    }
-                                }
+                                Text(
+                                    text = formatUsageTime(appUsage.dailyMinutes),
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text(
+                                    text = "This Week",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = formatUsageTime(appUsage.weeklyMinutes),
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
                             }
                         }
                     }
                 }
+            }
+        }
             }
         }
     }
@@ -672,11 +580,8 @@ private suspend fun getAppUsageFromFirestore(firestore: FirebaseFirestore, child
     }
 }
 
-private fun updateFirestoreWithUsageData(firestore: FirebaseFirestore, childId: String, usageData: List<AppUsage>) {
+private fun updateFirestoreWithUsageData(firestore: FirebaseFirestore, childId: String, usageData: List<AppUsage>, isSampleData: Boolean = false) {
     val TAG = "FirestoreUpdate"
-    
-    // Check if this is sample data
-    val isSampleData = usageData.any { it.packageName.contains(".SAMPLE") || it.name.contains("[SAMPLE]") }
     
     if (isSampleData) {
         Log.w(TAG, "⚠️ CAUTION: Updating Firestore with SAMPLE data for child: $childId")
@@ -960,17 +865,19 @@ private fun getAppUsageStats(context: Context): List<AppUsage> {
                 val daily = TimeUnit.MILLISECONDS.toMinutes(dailyUsage[packageName] ?: 0)
                 val weekly = TimeUnit.MILLISECONDS.toMinutes(weeklyUsage[packageName] ?: 0)
                 
-                // Include any app with usage
-                result.add(
-                    AppUsage(
-                        name = if (isSystemApp) "$appName (System)" else appName,
-                        packageName = packageName,
-                        dailyMinutes = Math.max(daily, 1), // Ensure at least 1 minute
-                        weeklyMinutes = Math.max(weekly, 1) // Ensure at least 1 minute
+                // Only include apps with at least 5 minutes of weekly usage
+                if (weekly >= 5) {
+                    result.add(
+                        AppUsage(
+                            name = if (isSystemApp) "$appName (System)" else appName,
+                            packageName = packageName,
+                            dailyMinutes = Math.max(daily, 1), // Ensure at least 1 minute
+                            weeklyMinutes = weekly
+                        )
                     )
-                )
-                
-                Log.e(TAG, "Added app: ${appName}, isSystem: $isSystemApp, Daily: $daily min, Weekly: $weekly min")
+                    
+                    Log.e(TAG, "Added app: ${appName}, isSystem: $isSystemApp, Daily: $daily min, Weekly: $weekly min")
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Error processing app $packageName: ${e.message}")
             }
