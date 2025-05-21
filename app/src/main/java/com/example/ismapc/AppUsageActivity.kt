@@ -152,7 +152,7 @@ fun AppUsageScreen(childId: String, childName: String, isChildDevice: Boolean) {
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var isSampleData by remember { mutableStateOf(false) }
-    var totalScreenTime by remember { mutableStateOf<Long>(0) }
+    var totalAppUsage by remember { mutableStateOf<Long>(0) }
     var forceRefresh by remember { mutableStateOf(false) }
     
     // Debug button to force data collection
@@ -179,7 +179,7 @@ fun AppUsageScreen(childId: String, childName: String, isChildDevice: Boolean) {
                             Log.e(TAG, "Retrieved ${localData.size} app usage records from device")
                             
                             // Calculate total screen time
-                            totalScreenTime = localData.sumOf { it.weeklyMinutes }
+                            totalAppUsage = localData.sumOf { it.weeklyMinutes }
                             
                             // Filter out apps with zero usage and system apps to get a cleaner list
                             if (localData.isNotEmpty()) {
@@ -244,7 +244,7 @@ fun AppUsageScreen(childId: String, childName: String, isChildDevice: Boolean) {
                         val firestoreData = getAppUsageFromFirestore(firestore, childId)
                         
                         // Calculate total screen time
-                        totalScreenTime = firestoreData.sumOf { it.weeklyMinutes }
+                        totalAppUsage = firestoreData.sumOf { it.weeklyMinutes }
                         
                         if (firestoreData.isEmpty()) {
                             // If no data in Firestore, create some sample data
@@ -427,13 +427,13 @@ fun AppUsageScreen(childId: String, childName: String, isChildDevice: Boolean) {
                             modifier = Modifier.padding(16.dp)
                         ) {
                             Text(
-                                "📱 Weekly Screen Time",
+                                "📱 Weekly App Usage",
                                 style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                formatUsageTime(totalScreenTime),
+                                formatUsageTime(totalAppUsage),
                                 style = MaterialTheme.typography.headlineMedium,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer
                             )
@@ -630,11 +630,11 @@ private fun updateFirestoreWithUsageData(firestore: FirebaseFirestore, childId: 
             "lastUpdated" to Calendar.getInstance().timeInMillis,
             "dataSource" to if (isSampleData) "SAMPLE_DATA" else "REAL_DEVICE_DATA",
             "totalDailyMinutes" to usageData.sumOf { it.dailyMinutes },
-            "totalWeeklyMinutes" to usageData.sumOf { it.weeklyMinutes },
+            "totalAppWeeklyUsage" to usageData.sumOf { it.weeklyMinutes },
             "appCount" to usageData.size
         )
         
-        Log.d(TAG, "Storing app usage data to Firestore with metadata: totalDaily=${dataToStore["totalDailyMinutes"]}, totalWeekly=${dataToStore["totalWeeklyMinutes"]}, count=${dataToStore["appCount"]}")
+        Log.d(TAG, "Storing app usage data to Firestore with metadata: totalDaily=${dataToStore["totalDailyMinutes"]}, totalAppWeekly=${dataToStore["totalAppWeeklyUsage"]}, count=${dataToStore["appCount"]}")
         
         // Full Firestore path for debugging
         val firestorePath = "appUsage/$childId/stats/daily"
@@ -658,9 +658,9 @@ private fun updateFirestoreWithUsageData(firestore: FirebaseFirestore, childId: 
                         if (document.exists()) {
                             val appsMap = document.get("apps") as? Map<*, *>
                             val appCount = appsMap?.size ?: 0
-                            val totalWeekly = document.getLong("totalWeeklyMinutes") ?: 0
+                            val totalWeekly = document.getLong("totalAppWeeklyUsage") ?: 0
                             
-                            Log.d(TAG, "Verified data was written: ${appCount} apps, ${totalWeekly}m total weekly usage")
+                            Log.d(TAG, "Verified data was written: ${appCount} apps, ${totalWeekly}m total app weekly usage")
                             
                             // Check if we wrote sample or real data
                             val dataSource = document.getString("dataSource") ?: "UNKNOWN"

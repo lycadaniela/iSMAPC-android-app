@@ -267,7 +267,7 @@ class AppUsageService : Service() {
                 "lastUpdated" to Calendar.getInstance().timeInMillis,
                 "dataSource" to "REAL_DEVICE_DATA",
                 "totalDailyMinutes" to usageData.sumOf { it.dailyMinutes },
-                "totalWeeklyMinutes" to usageData.sumOf { it.weeklyMinutes },
+                "totalAppWeeklyUsage" to usageData.sumOf { it.weeklyMinutes },
                 "appCount" to usageData.size
             )
             
