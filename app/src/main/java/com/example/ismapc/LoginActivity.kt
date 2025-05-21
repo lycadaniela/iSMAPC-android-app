@@ -178,8 +178,36 @@ class LoginActivity : ComponentActivity() {
                                         } else {
                                             sharedPreferences.edit().clear().apply()
                                         }
-                                        startActivity(Intent(context, MainActivity::class.java))
-                                        finish()
+                                        
+                                        val user = auth.currentUser
+                                        if (user != null) {
+                                            // Check if this is a child account
+                                            val db = FirebaseFirestore.getInstance()
+                                            db.collection("users")
+                                                .document("child")
+                                                .collection("profile")
+                                                .document(user.uid)
+                                                .get()
+                                                .addOnSuccessListener { childDoc ->
+                                                    if (childDoc.exists()) {
+                                                        // User is a child, start app usage service
+                                                        Log.d("LoginActivity", "Email login: User is a child, starting AppUsageService")
+                                                        startAppUsageService()
+                                                    }
+                                                    
+                                                    // Proceed to MainActivity
+                                                    startActivity(Intent(context, MainActivity::class.java))
+                                                    finish()
+                                                }
+                                                .addOnFailureListener {
+                                                    // Just proceed to MainActivity on failure
+                                                    startActivity(Intent(context, MainActivity::class.java))
+                                                    finish()
+                                                }
+                                        } else {
+                                            startActivity(Intent(context, MainActivity::class.java))
+                                            finish()
+                                        }
                                     } else {
                                         Toast.makeText(context, "Incorrect email or password", Toast.LENGTH_LONG).show()
                                     }
@@ -279,7 +307,10 @@ class LoginActivity : ComponentActivity() {
                                         .addOnSuccessListener { childDoc ->
                                             Log.d("LoginActivity", "Child doc exists: ${childDoc.exists()}")
                                             if (childDoc.exists()) {
-                                                // User is a child, proceed to MainActivity
+                                                // User is a child, start app usage service and proceed to MainActivity
+                                                Log.d("LoginActivity", "User is a child, starting AppUsageService")
+                                                startAppUsageService()
+                                                
                                                 Log.d("LoginActivity", "User is a child, proceeding to MainActivity")
                                                 startActivity(Intent(this, MainActivity::class.java))
                                                 finish()
@@ -369,6 +400,22 @@ class LoginActivity : ComponentActivity() {
             val networkInfo = connectivityManager.activeNetworkInfo ?: return false
             @Suppress("DEPRECATION")
             return networkInfo.isConnected
+        }
+    }
+
+    private fun startAppUsageService() {
+        try {
+            Log.e("LoginActivity", "Starting AppUsageService")
+            val serviceIntent = Intent(this, AppUsageService::class.java)
+            
+            // Start as a foreground service to ensure it keeps running
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                startForegroundService(serviceIntent)
+            } else {
+                startService(serviceIntent)
+            }
+        } catch (e: Exception) {
+            Log.e("LoginActivity", "Error starting AppUsageService", e)
         }
     }
 

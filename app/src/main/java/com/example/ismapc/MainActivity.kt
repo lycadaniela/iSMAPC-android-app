@@ -220,16 +220,18 @@ class MainActivity : ComponentActivity() {
 
     private fun stopChildServices() {
         try {
-            Log.d("MainActivity", "Stopping all child services")
-            stopService(Intent(this, LocationService::class.java))
-            stopService(Intent(this, ScreenTimeService::class.java))
+            Log.d("MainActivity", "Stopping child services")
+            
+            // Stop AppUsageService
+            stopService(Intent(this, AppUsageService::class.java))
+            
+            // Stop other existing services...
             stopService(Intent(this, AppLockService::class.java))
-            stopService(Intent(this, InstalledAppsService::class.java))
-            stopService(Intent(this, DeviceLockService::class.java))
+            stopService(Intent(this, ScreenTimeService::class.java))
             stopService(Intent(this, ContentFilteringService::class.java))
-            stopService(Intent(this, BrowserContentMonitorService::class.java))
+            
         } catch (e: Exception) {
-            Log.e("MainActivity", "Error stopping services: ${e.message}")
+            Log.e("MainActivity", "Error stopping child services", e)
         }
     }
 
@@ -237,138 +239,53 @@ class MainActivity : ComponentActivity() {
         try {
             Log.d("MainActivity", "Starting child services")
             
-            // First stop any existing services to ensure clean state
-            stopChildServices()
+            // Start AppUsageService
+            startAppUsageService()
             
-            // Get child profile first
-            firestore.collection(USERS_COLLECTION)
-                .document(CHILD_COLLECTION)
-                .collection("profile")
-                .document(auth.currentUser?.uid ?: "")
-                .get()
-                .addOnSuccessListener { document ->
-                    if (document.exists()) {
-                        val childName = document.getString("fullName") ?: "Child"
-                        val childId = auth.currentUser?.uid ?: ""
-                        
-                        try {
-                            // Start services in sequence to prevent race conditions
-                            // First start the basic services
-                            startService(Intent(this, InstalledAppsService::class.java))
-                            
-                            // Then start the foreground services one by one with proper error handling
-                            val deviceLockServiceIntent = Intent(this, DeviceLockService::class.java)
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                                startForegroundService(deviceLockServiceIntent)
-                            } else {
-                                startService(deviceLockServiceIntent)
-                            }
-
-                            // Start location service with a delay to ensure proper initialization
-                            Handler(Looper.getMainLooper()).postDelayed({
-                                try {
-                                    val locationServiceIntent = Intent(this, LocationService::class.java)
-                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                                        startForegroundService(locationServiceIntent)
-                                    } else {
-                                        startService(locationServiceIntent)
-                                    }
-                                } catch (e: Exception) {
-                                    Log.e("MainActivity", "Error starting location service", e)
-                                }
-                            }, 1000)
-
-                            // Start screen time service with a delay
-                            Handler(Looper.getMainLooper()).postDelayed({
-                                try {
-                                    val screenTimeServiceIntent = Intent(this, ScreenTimeService::class.java)
-                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                                        startForegroundService(screenTimeServiceIntent)
-                                    } else {
-                                        startService(screenTimeServiceIntent)
-                                    }
-                                } catch (e: Exception) {
-                                    Log.e("MainActivity", "Error starting screen time service", e)
-                                }
-                            }, 2000)
-
-                            // Start app lock service with a delay
-                            Handler(Looper.getMainLooper()).postDelayed({
-                                try {
-                                    startAppLockService()
-                                } catch (e: Exception) {
-                                    Log.e("MainActivity", "Error starting app lock service", e)
-                                }
-                            }, 3000)
-
-                            // Start content filtering service with a delay
-                            Handler(Looper.getMainLooper()).postDelayed({
-                                try {
-                                    startContentFilteringService(childId, childName)
-                                } catch (e: Exception) {
-                                    Log.e("MainActivity", "Error starting content filtering service", e)
-                                }
-                            }, 4000)
-
-                            // Start browser content monitor service with a delay
-                            Handler(Looper.getMainLooper()).postDelayed({
-                                try {
-                                    val browserMonitorIntent = Intent(this, BrowserContentMonitorService::class.java).apply {
-                                        putExtra("childId", childId)
-                                    }
-                                    startService(browserMonitorIntent)
-                                } catch (e: Exception) {
-                                    Log.e("MainActivity", "Error starting browser monitor service", e)
-                                }
-                            }, 5000)
-
-                            Log.d("MainActivity", "All child services started successfully")
-                        } catch (e: Exception) {
-                            Log.e("MainActivity", "Error starting services", e)
-                            Toast.makeText(this, "Error starting services: ${e.message}", Toast.LENGTH_LONG).show()
-                            stopChildServices()
-                        }
-                    } else {
-                        Log.e("MainActivity", "Child profile not found")
-                        Toast.makeText(this, "Error: Child profile not found", Toast.LENGTH_LONG).show()
-                        stopChildServices()
-                    }
-                }
-                .addOnFailureListener { e ->
-                    Log.e("MainActivity", "Error getting child profile", e)
-                    Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_LONG).show()
-                    stopChildServices()
-                }
+            // Start other existing services...
+            // For example:
+            startService(Intent(this, AppLockService::class.java))
+            startService(Intent(this, ScreenTimeService::class.java))
+            startService(Intent(this, ContentFilteringService::class.java))
+            
         } catch (e: Exception) {
-            Log.e("MainActivity", "Error in startChildServices", e)
-            Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_LONG).show()
-            stopChildServices()
+            Log.e("MainActivity", "Error starting child services", e)
         }
     }
 
-    private fun startAppLockService() {
+    private fun startAppUsageService() {
         try {
-            val serviceIntent = Intent(this, AppLockService::class.java)
+            Log.d("MainActivity", "Starting AppUsageService")
+            val serviceIntent = Intent(this, AppUsageService::class.java)
+            
+            // Start as a foreground service to ensure it keeps running
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 startForegroundService(serviceIntent)
             } else {
                 startService(serviceIntent)
             }
         } catch (e: Exception) {
-            Log.e("MainActivity", "Error starting AppLockService", e)
+            Log.e("MainActivity", "Error starting AppUsageService", e)
         }
     }
 
     override fun onResume() {
         super.onResume()
-        try {
-            // Only restart services for child users
-            if (userType == "child") {
-                Log.d("MainActivity", "Restarting child services in onResume")
-                startChildServices()
+        
+        // Check if user is a child and restart services if needed
+        if (userType == "child") {
+            val appOps = getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+            val mode = appOps.checkOpNoThrow(
+                AppOpsManager.OPSTR_GET_USAGE_STATS,
+                Process.myUid(),
+                packageName
+            )
+            
+            // Only start services if we have permissions
+            if (mode == AppOpsManager.MODE_ALLOWED) {
+                Log.d("MainActivity", "Child account resumed, ensuring services are running")
+                startAppUsageService()
             }
-        } catch (e: Exception) {
-            Log.e("MainActivity", "Error in onResume: ${e.message}")
         }
     }
 

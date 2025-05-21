@@ -163,6 +163,30 @@ service cloud.firestore {
       );
     }
 
+    // App usage collection
+    match /appUsage/{childId} {
+      allow read: if isAuthenticated() && (
+        childId == request.auth.uid ||
+        isParentOfChild(childId)
+      );
+      allow write: if isAuthenticated() && (
+        childId == request.auth.uid ||
+        isParentOfChild(childId)
+      );
+      
+      // Stats subcollection
+      match /stats/{documentId} {
+        allow read: if isAuthenticated() && (
+          childId == request.auth.uid ||
+          isParentOfChild(childId)
+        );
+        allow write: if isAuthenticated() && (
+          childId == request.auth.uid ||
+          isParentOfChild(childId)
+        );
+      }
+    }
+
     // Deletion requests collection
     match /deletionRequests/{userId} {
       allow read: if isAuthenticated() && (
