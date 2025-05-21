@@ -139,107 +139,68 @@ class AppUsageService : Service() {
         try {
             val usageStatsManager = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
             val packageManager = packageManager
+            
+            // Get today's start time (midnight)
             val calendar = Calendar.getInstance()
+            calendar.set(Calendar.HOUR_OF_DAY, 0)
+            calendar.set(Calendar.MINUTE, 0)
+            calendar.set(Calendar.SECOND, 0)
+            calendar.set(Calendar.MILLISECOND, 0)
+            val todayStart = calendar.timeInMillis
             
-            // Get today's start time
-            val todayStart = calendar.apply {
-                set(Calendar.HOUR_OF_DAY, 0)
-                set(Calendar.MINUTE, 0)
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
-            }.timeInMillis
-            
-            // Look back 30 days for weekly data
+            // Get 30 days ago for weekly stats
             val weekStart = calendar.apply {
                 add(Calendar.DAY_OF_YEAR, -30)
             }.timeInMillis
             
             val now = System.currentTimeMillis()
             
-            Log.e(TAG, "⏰ DAILY RESET CHECK: Today starts at ${Date(todayStart)}, now is ${Date(now)}. Looking for apps used since midnight.")
+            Log.e(TAG, "⏰ EXACT MATCH FIX: Today starts at ${Date(todayStart)}, now is ${Date(now)}")
             
-            // CRITICAL FIX: SEPARATE queries for daily and weekly to avoid contamination
-            
-            // 1. ONLY use DAILY interval for TODAY's usage - completely isolated
-            val todayStats = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, todayStart, now)
-            Log.e(TAG, "📊 Found ${todayStats.size} apps with usage TODAY")
-            
-            // 2. Use separate query for weekly data
-            val weeklyStats = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_WEEKLY, weekStart, now)
-            val monthlyStats = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_MONTHLY, weekStart, now)
-            
-            // Process stats
+            // Initialize maps for storing usage data
             val dailyUsage = mutableMapOf<String, Long>()
             val weeklyUsage = mutableMapOf<String, Long>()
             
-            // Process WEEKLY stats first
-            val combinedWeeklyStats = (weeklyStats + monthlyStats).distinctBy { it.packageName }
-            combinedWeeklyStats.forEach { stat ->
-                val packageName = stat.packageName
-                val totalTimeMs = stat.totalTimeInForeground
-                
-                if (totalTimeMs > 0) {
-                    weeklyUsage[packageName] = totalTimeMs
-                }
-            }
-            
-            // Process TODAY's stats SEPARATELY to ensure no contamination from yesterday
-            todayStats.forEach { stat ->
-                val packageName = stat.packageName
-                val timeUsedToday = stat.totalTimeInForeground
-                
-                // Only count as today's usage if the last time used is actually today
-                if (timeUsedToday > 0 && stat.lastTimeUsed >= todayStart) {
-                    dailyUsage[packageName] = timeUsedToday
-                    Log.e(TAG, "✅ TODAY usage for ${packageName}: ${TimeUnit.MILLISECONDS.toMinutes(timeUsedToday)}m, last used: ${Date(stat.lastTimeUsed)}")
-                } else if (timeUsedToday > 0) {
-                    Log.e(TAG, "❌ REJECTING supposed today usage for ${packageName} because lastTimeUsed ${Date(stat.lastTimeUsed)} is before today")
-                }
-            }
-            
-            // Always use the event-based approach to catch the most recent app usage
-            // that might not have been included in the stats query yet
-            val events = usageStatsManager.queryEvents(todayStart, now)  // ONLY look at today's events
+            // 1. ONLY process events for exact matching with device settings
+            // This is the most accurate method and matches what device settings shows
+            val events = usageStatsManager.queryEvents(todayStart, now)
             
             if (events != null && events.hasNextEvent()) {
+                var eventCount = 0
                 val event = UsageEvents.Event()
                 val lastEventTime = mutableMapOf<String, Long>()
                 val lastEventType = mutableMapOf<String, Int>()
-                val recentlyUsedApps = mutableSetOf<String>() // Track recently used apps even without duration
+                
+                Log.e(TAG, "🔄 Processing ONLY today's events for exact time tracking")
                 
                 while (events.hasNextEvent()) {
                     events.getNextEvent(event)
+                    eventCount++
                     
                     val packageName = event.packageName
                     val eventTime = event.timeStamp
                     val eventType = event.eventType
                     
-                    // Skip any events from before today (should not happen since we query only from todayStart)
+                    // Skip any events from before today
                     if (eventTime < todayStart) {
-                        Log.e(TAG, "⚠️ Skipping old event for ${packageName} at ${Date(eventTime)}")
                         continue
                     }
                     
-                    // Track any app that was brought to foreground as "used" - even without a background event
-                    if (eventType == UsageEvents.Event.MOVE_TO_FOREGROUND && eventTime > (now - 5 * 60 * 1000)) {
-                        // If app was used in the last 5 minutes, consider it used even without duration
-                        recentlyUsedApps.add(packageName)
-                    }
-                    
+                    // Only track FOREGROUND and BACKGROUND events
                     if (eventType == UsageEvents.Event.MOVE_TO_FOREGROUND || 
                         eventType == UsageEvents.Event.MOVE_TO_BACKGROUND) {
                         
+                        // Calculate duration when app moves to background after being in foreground
                         if (lastEventType[packageName] == UsageEvents.Event.MOVE_TO_FOREGROUND && 
                             eventType == UsageEvents.Event.MOVE_TO_BACKGROUND) {
                             
                             val duration = eventTime - (lastEventTime[packageName] ?: eventTime)
                             
-                            // Add to weekly usage
+                            // Add to both weekly and daily usage
                             weeklyUsage[packageName] = (weeklyUsage[packageName] ?: 0) + duration
-                            
-                            // Add to today's usage - all these events should be from today only
                             dailyUsage[packageName] = (dailyUsage[packageName] ?: 0) + duration
-                            Log.e(TAG, "📱 Adding ${TimeUnit.MILLISECONDS.toMinutes(duration)}m to today's usage for ${packageName} from events")
+                            
+                            Log.e(TAG, "📱 App ${packageName}: Used for ${TimeUnit.MILLISECONDS.toMinutes(duration)}m")
                         }
                         
                         lastEventTime[packageName] = eventTime
@@ -247,25 +208,40 @@ class AppUsageService : Service() {
                     }
                 }
                 
-                // Add recently used apps that don't have duration (just opened)
-                for (packageName in recentlyUsedApps) {
-                    if (!weeklyUsage.containsKey(packageName)) {
-                        // Add with a minimal duration of 1 minute to ensure it shows up
-                        weeklyUsage[packageName] = 60 * 1000L // 1 minute in milliseconds
+                Log.e(TAG, "✅ Processed $eventCount events from today")
+                
+                // Handle apps still in foreground
+                val currentlyInForeground = lastEventType.filter { it.value == UsageEvents.Event.MOVE_TO_FOREGROUND }
+                for ((packageName, _) in currentlyInForeground) {
+                    val foregroundStart = lastEventTime[packageName] ?: todayStart
+                    if (foregroundStart >= todayStart) {
+                        val duration = now - foregroundStart
+                        
+                        weeklyUsage[packageName] = (weeklyUsage[packageName] ?: 0) + duration
+                        dailyUsage[packageName] = (dailyUsage[packageName] ?: 0) + duration
+                        
+                        Log.e(TAG, "📱 App ${packageName}: Still in foreground for ${TimeUnit.MILLISECONDS.toMinutes(duration)}m")
                     }
-                    
-                    // Only add to daily usage if we don't already have data for this app today
-                    if (!dailyUsage.containsKey(packageName)) {
-                        dailyUsage[packageName] = 60 * 1000L // 1 minute in milliseconds
-                        Log.e(TAG, "📱 Added minimal daily usage for recently used app: $packageName")
-                    }
+                }
+            } else {
+                Log.e(TAG, "⚠️ No usage events found for today")
+            }
+            
+            // Get additional weekly data (for apps not used today)
+            val weeklyStats = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_WEEKLY, weekStart, now)
+            weeklyStats.forEach { stat ->
+                val packageName = stat.packageName
+                val weeklyTimeMs = stat.totalTimeInForeground
+                
+                // Only update weekly usage if it's larger than what we already calculated
+                if (weeklyTimeMs > 0 && (weeklyTimeMs > (weeklyUsage[packageName] ?: 0))) {
+                    weeklyUsage[packageName] = weeklyTimeMs
                 }
             }
             
             // Convert to AppUsage objects
             val result = mutableListOf<AppUsage>()
             
-            // Process all apps with weekly usage
             for (packageName in weeklyUsage.keys) {
                 try {
                     val appInfo = packageManager.getApplicationInfo(packageName, 0)
@@ -275,7 +251,7 @@ class AppUsageService : Service() {
                     val daily = TimeUnit.MILLISECONDS.toMinutes(dailyUsage[packageName] ?: 0)
                     val weekly = TimeUnit.MILLISECONDS.toMinutes(weeklyUsage[packageName] ?: 0)
                     
-                    // Include any non-system app with at least 5 minutes of weekly usage
+                    // Include non-system apps with at least 5 minutes weekly usage
                     if (!isSystemApp && weekly >= 5) {
                         result.add(
                             AppUsage(
@@ -285,16 +261,18 @@ class AppUsageService : Service() {
                                 weeklyMinutes = weekly
                             )
                         )
+                        
+                        Log.e(TAG, "📊 Final data: ${appName} - Daily: ${daily}m, Weekly: ${weekly}m")
                     }
                 } catch (e: Exception) {
                     // Skip apps we can't resolve
                 }
             }
             
-            Log.e(TAG, "Service collected ${result.size} app usage records with 5+ minutes weekly usage")
+            Log.e(TAG, "🏁 Finished collecting ${result.size} app usage records")
             return result
         } catch (e: Exception) {
-            Log.e(TAG, "Error getting app usage stats in service", e)
+            Log.e(TAG, "❌ Error getting app usage stats", e)
             return emptyList()
         }
     }

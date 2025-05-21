@@ -214,10 +214,13 @@ fun AppUsageScreen(childId: String, childName: String, isChildDevice: Boolean) {
                             val weeklyMinutes = (appData["weeklyMinutes"] as? Number)?.toLong() ?: 0L
                             val packageName = (appData["packageName"] as? String) ?: "unknown.package.$appName"
                             
-                            // Only use daily minutes from today, otherwise use 0
+                            // CRITICAL: Only use daily minutes from today, NEVER from yesterday
+                            // This matches what the device settings show
                             var dailyMinutes = (appData["dailyMinutes"] as? Number)?.toLong() ?: 0L
+                            
+                            // If data is from before today, daily minutes should be ZERO
                             if (appLastUpdated < todayStart) {
-                                Log.e(TAG, "App $appName was last updated at ${Date(appLastUpdated)}, which is before today. Resetting daily minutes from $dailyMinutes to 0.")
+                                Log.e(TAG, "✂️ STRICT RESET: App $appName was last updated at ${Date(appLastUpdated)}, which is before today. Force resetting daily minutes to 0.")
                                 dailyMinutes = 0L
                             }
                             

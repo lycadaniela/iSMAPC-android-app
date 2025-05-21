@@ -254,6 +254,15 @@ class MainActivity : ComponentActivity() {
             startService(Intent(this, ScreenTimeService::class.java))
             startService(Intent(this, ContentFilteringService::class.java))
             
+            // Start DeviceLockService for device lock/unlock functionality
+            val deviceLockIntent = Intent(this, DeviceLockService::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(deviceLockIntent)
+            } else {
+                startService(deviceLockIntent)
+            }
+            Log.d("MainActivity", "DeviceLockService started")
+            
         } catch (e: Exception) {
             Log.e("MainActivity", "Error starting child services", e)
         }
@@ -291,6 +300,15 @@ class MainActivity : ComponentActivity() {
             if (mode == AppOpsManager.MODE_ALLOWED) {
                 Log.d("MainActivity", "Child account resumed, ensuring services are running")
                 startAppUsageService()
+                
+                // Ensure DeviceLockService is running
+                val deviceLockIntent = Intent(this, DeviceLockService::class.java)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    startForegroundService(deviceLockIntent)
+                } else {
+                    startService(deviceLockIntent)
+                }
+                Log.d("MainActivity", "DeviceLockService restarted in onResume")
             }
         }
     }
