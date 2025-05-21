@@ -48,11 +48,10 @@ fun SplashScreen() {
             painter = painterResource(id = R.drawable.splash_logo),
             contentDescription = "App Logo",
             modifier = Modifier
-                .size(180.dp)
-                .padding(16.dp)
-                .alpha(0.9f)
-                .scale(1.1f),
-            contentScale = ContentScale.Fit
+                .size(240.dp)
+                .padding(8.dp)
+                .alpha(0.9f),
+            contentScale = ContentScale.Inside
         )
     }
 } 

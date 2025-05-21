@@ -13,10 +13,12 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -218,302 +220,353 @@ fun ParentSignUpScreen(
         selectedImageUri = uri
     }
 
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+            .background(MaterialTheme.colorScheme.background)
     ) {
-        // Back button row
-        Row(
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 16.dp),
-            horizontalArrangement = Arrangement.Start
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            IconButton(
-                onClick = { 
-                    (context as? ComponentActivity)?.let { activity ->
-                        activity.finish()
+            // Title and Subtitle
+            Text(
+                text = "Create Parent Account",
+                style = MaterialTheme.typography.headlineMedium.copy(
+                    fontWeight = FontWeight.Bold
+                ),
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+
+            Text(
+                text = "Join ISMAPC to manage your child's device",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 32.dp)
+            )
+
+            // Profile Image Picker with improved styling
+            Box(
+                modifier = Modifier
+                    .size(120.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surface)
+                    .border(
+                        width = 2.dp,
+                        color = MaterialTheme.colorScheme.primary,
+                        shape = CircleShape
+                    )
+                    .clickable { imagePicker.launch("image/*") },
+                contentAlignment = Alignment.Center
+            ) {
+                if (selectedImageUri != null) {
+                    Image(
+                        painter = painterResource(id = R.drawable.profile_placeholder),
+                        contentDescription = "Selected profile image",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = "Add profile picture",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(32.dp)
+                    )
+                }
+            }
+
+            Text(
+                text = "Add Profile Picture",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(vertical = 8.dp)
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Form fields with improved styling
+            OutlinedTextField(
+                value = fullName,
+                onValueChange = { 
+                    fullName = it
+                    fullNameError = false
+                },
+                label = { Text("Full Name") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = if (fullNameError) 4.dp else 16.dp),
+                singleLine = true,
+                isError = fullNameError,
+                shape = RoundedCornerShape(12.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                ),
+                keyboardOptions = KeyboardOptions(
+                    imeAction = ImeAction.Next
+                )
+            )
+
+            if (fullNameError) {
+                Text(
+                    text = "Please enter your full name",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, bottom = 16.dp)
+                )
+            }
+
+            OutlinedTextField(
+                value = email,
+                onValueChange = { 
+                    email = it
+                    emailError = false
+                },
+                label = { Text("Email") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = if (emailError) 4.dp else 16.dp),
+                singleLine = true,
+                isError = emailError,
+                shape = RoundedCornerShape(12.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                ),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Email,
+                    imeAction = ImeAction.Next
+                )
+            )
+
+            if (emailError) {
+                Text(
+                    text = "Please enter a valid email address",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, bottom = 16.dp)
+                )
+            }
+
+            OutlinedTextField(
+                value = phoneNumber,
+                onValueChange = { 
+                    phoneNumber = it
+                    phoneNumberError = false
+                },
+                label = { Text("Phone Number") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = if (phoneNumberError) 4.dp else 16.dp),
+                singleLine = true,
+                isError = phoneNumberError,
+                shape = RoundedCornerShape(12.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                ),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Phone,
+                    imeAction = ImeAction.Next
+                )
+            )
+
+            if (phoneNumberError) {
+                Text(
+                    text = "Please enter a valid phone number",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, bottom = 16.dp)
+                )
+            }
+
+            OutlinedTextField(
+                value = password,
+                onValueChange = { 
+                    password = it
+                    passwordError = false
+                },
+                label = { Text("Password") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = if (passwordError) 4.dp else 16.dp),
+                singleLine = true,
+                isError = passwordError,
+                shape = RoundedCornerShape(12.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                ),
+                visualTransformation = PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Password,
+                    imeAction = ImeAction.Next
+                )
+            )
+
+            if (passwordError) {
+                Text(
+                    text = "Password must be at least 6 characters",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, bottom = 16.dp)
+                )
+            }
+
+            OutlinedTextField(
+                value = confirmPassword,
+                onValueChange = { 
+                    confirmPassword = it
+                    confirmPasswordError = false
+                },
+                label = { Text("Confirm Password") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = if (confirmPasswordError) 4.dp else 24.dp),
+                singleLine = true,
+                isError = confirmPasswordError,
+                shape = RoundedCornerShape(12.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                ),
+                visualTransformation = PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Password,
+                    imeAction = ImeAction.Done
+                )
+            )
+
+            if (confirmPasswordError) {
+                Text(
+                    text = "Passwords do not match",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, bottom = 16.dp)
+                )
+            }
+
+            // Sign Up Button with improved styling
+            Button(
+                onClick = {
+                    // Validate all fields
+                    fullNameError = fullName.isEmpty()
+                    emailError = !android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()
+                    phoneNumberError = phoneNumber.isEmpty()
+                    passwordError = password.length < 6
+                    confirmPasswordError = password != confirmPassword
+
+                    if (!fullNameError && !emailError && !phoneNumberError && 
+                        !passwordError && !confirmPasswordError) {
+                        onSignUp(email, password, fullName, phoneNumber, selectedImageUri)
                     }
                 },
                 modifier = Modifier
-                    .size(48.dp)
-                    .offset(x = (-12).dp)
+                    .fillMaxWidth()
+                    .height(56.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary
+                )
             ) {
-                Icon(
-                    imageVector = Icons.Default.ArrowBack,
-                    contentDescription = "Back",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(32.dp)
+                Text(
+                    "Create Account",
+                    style = MaterialTheme.typography.titleMedium
                 )
             }
-        }
 
-        // Title
-        Text(
-            text = "Create Parent Account",
-            style = MaterialTheme.typography.headlineMedium.copy(
-                fontWeight = FontWeight.Bold
-            ),
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(bottom = 32.dp)
-        )
-
-        // Profile Image Picker
-        Box(
-            modifier = Modifier
-                .size(120.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-                .clickable { imagePicker.launch("image/*") },
-            contentAlignment = Alignment.Center
-        ) {
-            if (selectedImageUri != null) {
-                Image(
-                    painter = painterResource(id = R.drawable.profile_placeholder),
-                    contentDescription = "Selected profile image",
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
-            } else {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = "Add profile picture",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(32.dp)
-                )
-            }
-        }
-
-        Text(
-            text = "Add Profile Picture",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(vertical = 8.dp)
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Form fields
-        OutlinedTextField(
-            value = fullName,
-            onValueChange = { 
-                fullName = it
-                fullNameError = false
-            },
-            label = { Text("Full Name") },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = if (fullNameError) 4.dp else 16.dp),
-            singleLine = true,
-            isError = fullNameError,
-            keyboardOptions = KeyboardOptions(
-                imeAction = ImeAction.Next
-            )
-        )
-
-        if (fullNameError) {
-            Text(
-                text = "Please enter your full name",
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 16.dp, bottom = 16.dp)
-            )
-        }
-
-        OutlinedTextField(
-            value = email,
-            onValueChange = { 
-                email = it
-                emailError = false
-            },
-            label = { Text("Email") },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = if (emailError) 4.dp else 16.dp),
-            singleLine = true,
-            isError = emailError,
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Email,
-                imeAction = ImeAction.Next
-            )
-        )
-
-        if (emailError) {
-            Text(
-                text = "Please enter a valid email address",
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 16.dp, bottom = 16.dp)
-            )
-        }
-
-        OutlinedTextField(
-            value = phoneNumber,
-            onValueChange = { 
-                phoneNumber = it
-                phoneNumberError = false
-            },
-            label = { Text("Phone Number") },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = if (phoneNumberError) 4.dp else 16.dp),
-            singleLine = true,
-            isError = phoneNumberError,
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Phone,
-                imeAction = ImeAction.Next
-            )
-        )
-
-        if (phoneNumberError) {
-            Text(
-                text = "Please enter a valid phone number",
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 16.dp, bottom = 16.dp)
-            )
-        }
-
-        OutlinedTextField(
-            value = password,
-            onValueChange = { 
-                password = it
-                passwordError = false
-                if (confirmPassword.isNotEmpty()) {
-                    confirmPasswordError = password != confirmPassword
-                }
-            },
-            label = { Text("Password") },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = if (passwordError) 4.dp else 16.dp),
-            singleLine = true,
-            isError = passwordError,
-            visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Password,
-                imeAction = ImeAction.Next
-            )
-        )
-
-        if (passwordError) {
-            Text(
-                text = "Password must be at least 6 characters",
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 16.dp, bottom = 16.dp)
-            )
-        }
-
-        OutlinedTextField(
-            value = confirmPassword,
-            onValueChange = { 
-                confirmPassword = it
-                confirmPasswordError = password != it
-            },
-            label = { Text("Confirm Password") },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = if (confirmPasswordError) 4.dp else 32.dp),
-            singleLine = true,
-            isError = confirmPasswordError,
-            visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Password,
-                imeAction = ImeAction.Done
-            )
-        )
-
-        if (confirmPasswordError) {
-            Text(
-                text = "Passwords do not match",
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 16.dp, bottom = 16.dp)
-            )
-        }
-
-        Button(
-            onClick = {
-                // Validate all fields
-                fullNameError = fullName.isBlank()
-                emailError = !android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()
-                phoneNumberError = phoneNumber.length < 10
-                passwordError = password.length < 6
-                confirmPasswordError = password != confirmPassword
-
-                if (!fullNameError && !emailError && !phoneNumberError && 
-                    !passwordError && !confirmPasswordError) {
-                    onSignUp(email, password, fullName, phoneNumber, selectedImageUri)
-                }
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp)
-        ) {
-            Text("Sign Up")
-        }
-
-        // Or divider
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Divider(
-                modifier = Modifier.weight(1f),
-                color = MaterialTheme.colorScheme.outlineVariant
-            )
-            Text(
-                "OR",
-                modifier = Modifier.padding(horizontal = 16.dp),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Divider(
-                modifier = Modifier.weight(1f),
-                color = MaterialTheme.colorScheme.outlineVariant
-            )
-        }
-
-        // Google Sign Up Button
-        OutlinedButton(
-            onClick = onGoogleSignUp,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-            colors = ButtonDefaults.outlinedButtonColors(
-                contentColor = MaterialTheme.colorScheme.onBackground
-            )
-        ) {
+            // Or divider with improved styling
             Row(
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 24.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    painter = painterResource(id = R.drawable.ic_google_logo),
-                    contentDescription = "Google logo",
-                    modifier = Modifier.size(24.dp),
-                    tint = Color.Unspecified
+                Divider(
+                    modifier = Modifier.weight(1f),
+                    color = MaterialTheme.colorScheme.outlineVariant
                 )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Sign up with Google")
+                Text(
+                    "OR",
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Divider(
+                    modifier = Modifier.weight(1f),
+                    color = MaterialTheme.colorScheme.outlineVariant
+                )
+            }
+
+            // Google Sign-In Button with improved styling
+            OutlinedButton(
+                onClick = onGoogleSignUp,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.onBackground
+                )
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_google_logo),
+                        contentDescription = "Google logo",
+                        modifier = Modifier.size(24.dp),
+                        tint = Color.Unspecified
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        "Continue with Google",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Sign In Link
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "Already have an account?",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                TextButton(
+                    onClick = {
+                        (context as? ComponentActivity)?.finish()
+                    }
+                ) {
+                    Text(
+                        "Sign In",
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
             }
         }
     }
