@@ -601,18 +601,147 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                     title = { Text("Parent Dashboard") },
                     actions = {
                         // Notifications Icon
-                        IconButton(onClick = { showNotificationsMenu = true }) {
-                            Icon(
-                                imageVector = Icons.Default.Notifications,
-                                contentDescription = "Notifications"
-                            )
+                        Box {
+                            IconButton(onClick = { showNotificationsMenu = true }) {
+                                Icon(
+                                    imageVector = Icons.Default.Notifications,
+                                    contentDescription = "Notifications"
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = showNotificationsMenu,
+                                onDismissRequest = { showNotificationsMenu = false },
+                                modifier = Modifier
+                                    .background(MaterialTheme.colorScheme.surface)
+                                    .border(
+                                        width = 1.dp,
+                                        color = MaterialTheme.colorScheme.outline,
+                                        shape = MaterialTheme.shapes.medium
+                                    )
+                            ) {
+                                DropdownMenuItem(
+                                    text = { 
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Notifications,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary
+                                            )
+                                            Text("No new notifications")
+                                        }
+                                    },
+                                    onClick = {
+                                        showNotificationsMenu = false
+                                    }
+                                )
+                            }
                         }
                         // Settings Icon
-                        IconButton(onClick = { showSettingsMenu = true }) {
-                            Icon(
-                                imageVector = Icons.Default.Settings,
-                                contentDescription = "Settings"
-                            )
+                        Box {
+                            IconButton(onClick = { showSettingsMenu = true }) {
+                                Icon(
+                                    imageVector = Icons.Default.Settings,
+                                    contentDescription = "Settings"
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = showSettingsMenu,
+                                onDismissRequest = { showSettingsMenu = false },
+                                modifier = Modifier
+                                    .background(MaterialTheme.colorScheme.surface)
+                                    .border(
+                                        width = 1.dp,
+                                        color = MaterialTheme.colorScheme.outline,
+                                        shape = MaterialTheme.shapes.medium
+                                    )
+                            ) {
+                                DropdownMenuItem(
+                                    text = { 
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Lock,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary
+                                            )
+                                            Text("Change Password")
+                                        }
+                                    },
+                                    onClick = {
+                                        showSettingsMenu = false
+                                        val intent = Intent(context, ChangePasswordActivity::class.java)
+                                        context.startActivity(intent)
+                                    }
+                                )
+                                Divider()
+                                DropdownMenuItem(
+                                    text = { 
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Info,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary
+                                            )
+                                            Text("About")
+                                        }
+                                    },
+                                    onClick = {
+                                        context.startActivity(Intent(context, AboutActivity::class.java))
+                                        showSettingsMenu = false
+                                    }
+                                )
+                                Divider()
+                                DropdownMenuItem(
+                                    text = { 
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Delete,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.error
+                                            )
+                                            Text(
+                                                "Delete Account",
+                                                color = MaterialTheme.colorScheme.error
+                                            )
+                                        }
+                                    },
+                                    onClick = {
+                                        showSettingsMenu = false
+                                        showDeleteAccountDialog = true
+                                    }
+                                )
+                                Divider()
+                                DropdownMenuItem(
+                                    text = { 
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.ExitToApp,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary
+                                            )
+                                            Text("Logout")
+                                        }
+                                    },
+                                    onClick = {
+                                        showSettingsMenu = false
+                                        onLogout()
+                                    }
+                                )
+                            }
                         }
                     }
                 )
@@ -638,7 +767,7 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
                         )
                     ) {
                         Row(
@@ -652,7 +781,7 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                 modifier = Modifier
                                     .size(64.dp)
                                     .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                                    .background(MaterialTheme.colorScheme.surface)
                                     .border(
                                         width = 2.dp,
                                         color = MaterialTheme.colorScheme.primary,
@@ -684,17 +813,17 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                 Text(
                                     text = parentData?.get("fullName")?.toString() ?: "Parent",
                                     style = MaterialTheme.typography.titleLarge,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 Text(
                                     text = parentData?.get("email")?.toString() ?: "",
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 Text(
                                     text = parentData?.get("phoneNumber")?.toString() ?: "",
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
 
@@ -712,7 +841,7 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                 Icon(
                                     imageVector = Icons.Default.Edit,
                                     contentDescription = "Edit Profile",
-                                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
@@ -782,12 +911,12 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Info,
-                                    contentDescription = "Information",
+                                    contentDescription = "FAQ",
                                     tint = MaterialTheme.colorScheme.onSecondaryContainer
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text(
-                                    text = "Info",
+                                    text = "FAQ",
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSecondaryContainer
                                 )
@@ -923,11 +1052,6 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                             text = child["fullName"] as String,
                                             style = MaterialTheme.typography.titleMedium
                                         )
-                                        Text(
-                                            text = child["email"] as String,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
                                     }
 
                                     if (isDeleteMode) {
@@ -1034,128 +1158,85 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                 }
             }
         }
+    }
 
-        // Settings Menu
-        DropdownMenu(
-            expanded = showSettingsMenu,
-            onDismissRequest = { showSettingsMenu = false }
-        ) {
-            DropdownMenuItem(
-                text = { Text("Edit Profile") },
-                onClick = {
-                    showSettingsMenu = false
-                    // TODO: Implement edit profile
+    // Delete Account Dialog
+    if (showDeleteAccountDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                if (!isDeletingAccount) {
+                    showDeleteAccountDialog = false
                 }
-            )
-            DropdownMenuItem(
-                text = { Text("Delete Account") },
-                onClick = {
-                    showSettingsMenu = false
-                    showDeleteAccountDialog = true
-                }
-            )
-            Divider()
-            DropdownMenuItem(
-                text = { Text("Logout") },
-                onClick = {
-                    showSettingsMenu = false
-                    onLogout()
-                }
-            )
-        }
-
-        // Notifications Menu
-        DropdownMenu(
-            expanded = showNotificationsMenu,
-            onDismissRequest = { showNotificationsMenu = false }
-        ) {
-            DropdownMenuItem(
-                text = { Text("View All Notifications") },
-                onClick = {
-                    showNotificationsMenu = false
-                    // TODO: Implement notifications view
-                }
-            )
-        }
-
-        // Delete Account Dialog
-        if (showDeleteAccountDialog) {
-            AlertDialog(
-                onDismissRequest = {
-                    if (!isDeletingAccount) {
-                        showDeleteAccountDialog = false
-                    }
-                },
-                title = {
+            },
+            title = {
+                Text(
+                    "Delete Account",
+                    style = MaterialTheme.typography.headlineSmall
+                )
+            },
+            text = {
+                Column {
                     Text(
-                        "Delete Account",
-                        style = MaterialTheme.typography.headlineSmall
+                        "Are you sure you want to delete your account? This action cannot be undone and will:",
+                        style = MaterialTheme.typography.bodyLarge
                     )
-                },
-                text = {
-                    Column {
-                        Text(
-                            "Are you sure you want to delete your account? This action cannot be undone and will:",
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            "• Delete your parent account",
-                            style = MaterialTheme.typography.bodyMedium,
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        "• Delete your parent account",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    Text(
+                        "• Delete all associated child accounts",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    Text(
+                        "• Permanently delete all data",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        "Note: Your account will be permanently deleted within 24 hours after submitting the request.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        deleteParentAccount()
+                    },
+                    enabled = !isDeletingAccount
+                ) {
+                    if (isDeletingAccount) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
                             color = MaterialTheme.colorScheme.error
                         )
+                    } else {
                         Text(
-                            "• Delete all associated child accounts",
-                            style = MaterialTheme.typography.bodyMedium,
+                            "Delete Account",
                             color = MaterialTheme.colorScheme.error
                         )
-                        Text(
-                            "• Permanently delete all data",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.error
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            "Note: Your account will be permanently deleted within 24 hours after submitting the request.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error
-                        )
-                    }
-                },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            deleteParentAccount()
-                        },
-                        enabled = !isDeletingAccount
-                    ) {
-                        if (isDeletingAccount) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(24.dp),
-                                color = MaterialTheme.colorScheme.error
-                            )
-                        } else {
-                            Text(
-                                "Delete Account",
-                                color = MaterialTheme.colorScheme.error
-                            )
-                        }
-                    }
-                },
-                dismissButton = {
-                    TextButton(
-                        onClick = {
-                            if (!isDeletingAccount) {
-                                showDeleteAccountDialog = false
-                            }
-                        },
-                        enabled = !isDeletingAccount
-                    ) {
-                        Text("Cancel")
                     }
                 }
-            )
-        }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        if (!isDeletingAccount) {
+                            showDeleteAccountDialog = false
+                        }
+                    },
+                    enabled = !isDeletingAccount
+                ) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }
 
