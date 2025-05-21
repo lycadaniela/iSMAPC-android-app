@@ -21,17 +21,25 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.Assessment
+import androidx.compose.material.icons.filled.PersonOff
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -380,11 +388,10 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun ParentMainScreen(onLogout: () -> Unit) {
     val currentUser = FirebaseAuth.getInstance().currentUser
-    Log.d("AuthCheck", "User email: ${currentUser?.email}")
     var parentData by remember { mutableStateOf<Map<String, Any>?>(null) }
     var childrenData by remember { mutableStateOf<List<Map<String, Any>>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
-    var isTrashMode by remember { mutableStateOf(false) }
+    var isDeleteMode by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val profilePictureManager = remember { ProfilePictureManager(context) }
     var profileBitmap by remember { mutableStateOf<Bitmap?>(null) }
@@ -584,579 +591,361 @@ fun ParentMainScreen(onLogout: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.White)
+            .background(MaterialTheme.colorScheme.background)
     ) {
         Scaffold(
             modifier = Modifier.fillMaxSize(),
-            containerColor = Color.Transparent
+            containerColor = Color.Transparent,
+            topBar = {
+                TopAppBar(
+                    title = { Text("Parent Dashboard") },
+                    actions = {
+                        // Notifications Icon
+                        IconButton(onClick = { showNotificationsMenu = true }) {
+                            Icon(
+                                imageVector = Icons.Default.Notifications,
+                                contentDescription = "Notifications"
+                            )
+                        }
+                        // Settings Icon
+                        IconButton(onClick = { showSettingsMenu = true }) {
+                            Icon(
+                                imageVector = Icons.Default.Settings,
+                                contentDescription = "Settings"
+                            )
+                        }
+                    }
+                )
+            }
         ) { paddingValues ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                // Main Content
+            if (isLoading) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
+            } else {
                 Column(
                     modifier = Modifier
-                        .fillMaxSize(),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(paddingValues)
+                        .padding(horizontal = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    if (isLoading) {
-                        CircularProgressIndicator(
-                            color = MaterialTheme.colorScheme.primary
+                    // Profile Section
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer
                         )
-                    } else {
-                        // Top Section with Theme Background
-                        Box(
+                    ) {
+                        Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .shadow(
-                                    elevation = 8.dp,
-                                    shape = RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp),
-                                    clip = false
-                                )
-                                .background(
-                                    brush = Brush.verticalGradient(
-                                        colors = listOf(
-                                            Color(0xFFE0852D), // ISMAPC Orange
-                                            Color(0xFFFFB27D)  // ISMAPC LightOrange
-                                        )
-                                    ),
-                                    shape = RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp)
-                                )
-                                .padding(vertical = 16.dp)
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Column(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                // Top Bar Row with Info and Action Icons
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    // Info Icon with curved white background
-                                    Box(
-                                        modifier = Modifier
-                                            .width(64.dp)
-                                            .height(48.dp)
-                                            .offset(x = (-16).dp)
-                                            .background(
-                                                color = Color.White,
-                                                shape = RoundedCornerShape(topEnd = 24.dp, bottomEnd = 24.dp)
-                                            )
-                                            .clickable { 
-                                                val intent = Intent(context, InfoActivity::class.java)
-                                                context.startActivity(intent)
-                                            },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Info,
-                                            contentDescription = "Information",
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(32.dp)
-                                        )
-                                    }
-
-                                    // Settings and Notifications Icons
-                                    Row(
-                                        modifier = Modifier.padding(end = 16.dp)
-                                    ) {
-                                        // Notifications Icon with Dropdown
-                                        Box {
-                                            IconButton(
-                                                onClick = { showNotificationsMenu = true }
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Default.Notifications,
-                                                    contentDescription = "Notifications",
-                                                    tint = Color.White,
-                                                    modifier = Modifier.size(32.dp)
-                                                )
-                                            }
-                                            
-                                            DropdownMenu(
-                                                expanded = showNotificationsMenu,
-                                                onDismissRequest = { showNotificationsMenu = false },
-                                                modifier = Modifier
-                                                    .width(280.dp)
-                                                    .background(
-                                                        MaterialTheme.colorScheme.surface,
-                                                        RoundedCornerShape(12.dp)
-                                                    )
-                                            ) {
-                                                // Notifications Header
-                                                Text(
-                                                    text = "NOTIFICATIONS",
-                                                    style = MaterialTheme.typography.labelMedium,
-                                                    color = MaterialTheme.colorScheme.primary,
-                                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                                                )
-                                                
-                                                // Sample notification items (replace with actual notifications)
-                                                DropdownMenuItem(
-                                                    text = { 
-                                                        Column {
-                                                            Text(
-                                                                "New Message",
-                                                                style = MaterialTheme.typography.bodyLarge
-                                                            )
-                                                            Text(
-                                                                "You have a new message from John",
-                                                                style = MaterialTheme.typography.bodySmall,
-                                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                            )
-                                                        }
-                                                    },
-                                                    onClick = {
-                                                        showNotificationsMenu = false
-                                                        // TODO: Handle notification click
-                                                    },
-                                                    modifier = Modifier.height(64.dp)
-                                                )
-                                                
-                                                DropdownMenuItem(
-                                                    text = { 
-                                                        Column {
-                                                            Text(
-                                                                "Location Update",
-                                                                style = MaterialTheme.typography.bodyLarge
-                                                            )
-                                                            Text(
-                                                                "Sarah has arrived at school",
-                                                                style = MaterialTheme.typography.bodySmall,
-                                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                            )
-                                                        }
-                                                    },
-                                                    onClick = {
-                                                        showNotificationsMenu = false
-                                                        // TODO: Handle notification click
-                                                    },
-                                                    modifier = Modifier.height(64.dp)
-                                                )
-                                                
-                                                Divider(
-                                                    modifier = Modifier.padding(horizontal = 16.dp),
-                                                    color = MaterialTheme.colorScheme.outlineVariant
-                                                )
-                                                
-                                                // View All option
-                                                DropdownMenuItem(
-                                                    text = { 
-                                                        Text(
-                                                            "View All Notifications",
-                                                            style = MaterialTheme.typography.bodyLarge,
-                                                            color = MaterialTheme.colorScheme.primary
-                                                        )
-                                                    },
-                                                    onClick = {
-                                                        showNotificationsMenu = false
-                                                        // TODO: Navigate to all notifications
-                                                    },
-                                                    modifier = Modifier.height(48.dp)
-                                                )
-                                            }
-                                        }
-                                        
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        
-                                        // Settings Icon with Dropdown
-                                        Box {
-                                            IconButton(
-                                                onClick = { showSettingsMenu = true }
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Default.Settings,
-                                                    contentDescription = "Settings",
-                                                    tint = Color.White,
-                                                    modifier = Modifier.size(32.dp)
-                                                )
-                                            }
-                                            
-                                            DropdownMenu(
-                                                expanded = showSettingsMenu,
-                                                onDismissRequest = { showSettingsMenu = false },
-                                                modifier = Modifier
-                                                    .width(240.dp)
-                                                    .background(
-                                                        MaterialTheme.colorScheme.surface,
-                                                        RoundedCornerShape(12.dp)
-                                                    )
-                                            ) {
-                                                // General Section
-                                                Text(
-                                                    text = "GENERAL",
-                                                    style = MaterialTheme.typography.labelMedium,
-                                                    color = MaterialTheme.colorScheme.primary,
-                                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                                                )
-                                                
-                                                DropdownMenuItem(
-                                                    text = { 
-                                                        Text(
-                                                            "Notifications",
-                                                            style = MaterialTheme.typography.bodyLarge
-                                                        )
-                                                    },
-                                                    onClick = {
-                                                        showSettingsMenu = false
-                                                        // TODO: Navigate to Notifications
-                                                    },
-                                                    modifier = Modifier.height(48.dp)
-                                                )
-                                                
-                                                Divider(
-                                                    modifier = Modifier.padding(horizontal = 16.dp),
-                                                    color = MaterialTheme.colorScheme.outlineVariant
-                                                )
-                                                
-                                                // Account Section
-                                                Text(
-                                                    text = "ACCOUNT",
-                                                    style = MaterialTheme.typography.labelMedium,
-                                                    color = MaterialTheme.colorScheme.primary,
-                                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                                                )
-                                                
-                                                DropdownMenuItem(
-                                                    text = { 
-                                                        Text(
-                                                            "Change Password",
-                                                            style = MaterialTheme.typography.bodyLarge
-                                                        )
-                                                    },
-                                                    onClick = {
-                                                        showSettingsMenu = false
-                                                        val intent = Intent(context, ChangePasswordActivity::class.java)
-                                                        context.startActivity(intent)
-                                                    },
-                                                    modifier = Modifier.height(48.dp)
-                                                )
-                                                
-                                                DropdownMenuItem(
-                                                    text = { 
-                                                        Text(
-                                                            "Delete Account",
-                                                            style = MaterialTheme.typography.bodyLarge,
-                                                            color = MaterialTheme.colorScheme.error
-                                                        )
-                                                    },
-                                                    onClick = {
-                                                        showSettingsMenu = false
-                                                        showDeleteAccountDialog = true
-                                                    },
-                                                    modifier = Modifier.height(48.dp)
-                                                )
-                                                
-                                                DropdownMenuItem(
-                                                    text = { 
-                                                        Text(
-                                                            "Logout",
-                                                            style = MaterialTheme.typography.bodyLarge
-                                                        )
-                                                    },
-                                                    onClick = {
-                                                        showSettingsMenu = false
-                                                        onLogout()
-                                                    },
-                                                    modifier = Modifier.height(48.dp)
-                                                )
-                                                
-                                                Divider(
-                                                    modifier = Modifier.padding(horizontal = 16.dp),
-                                                    color = MaterialTheme.colorScheme.outlineVariant
-                                                )
-                                                
-                                                // Info Section
-                                                Text(
-                                                    text = "INFO",
-                                                    style = MaterialTheme.typography.labelMedium,
-                                                    color = MaterialTheme.colorScheme.primary,
-                                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                                                )
-                                                
-                                                DropdownMenuItem(
-                                                    text = { 
-                                                        Text(
-                                                            "About",
-                                                            style = MaterialTheme.typography.bodyLarge
-                                                        )
-                                                    },
-                                                    onClick = {
-                                                        showSettingsMenu = false
-                                                        // TODO: Navigate to About
-                                                    },
-                                                    modifier = Modifier.height(48.dp)
-                                                )
-                                                
-                                                DropdownMenuItem(
-                                                    text = { 
-                                                        Text(
-                                                            "Terms & Conditions",
-                                                            style = MaterialTheme.typography.bodyLarge
-                                                        )
-                                                    },
-                                                    onClick = {
-                                                        showSettingsMenu = false
-                                                        // TODO: Navigate to Terms & Conditions
-                                                    },
-                                                    modifier = Modifier.height(48.dp)
-                                                )
-                                                
-                                                DropdownMenuItem(
-                                                    text = { 
-                                                        Text(
-                                                            "Privacy Policy",
-                                                            style = MaterialTheme.typography.bodyLarge
-                                                        )
-                                                    },
-                                                    onClick = {
-                                                        showSettingsMenu = false
-                                                        // TODO: Navigate to Privacy Policy
-                                                    },
-                                                    modifier = Modifier.height(48.dp)
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-
-                                // Parent Profile Section
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    // Profile Picture
-                                    Box(
-                                        modifier = Modifier
-                                            .size(160.dp)
-                                            .border(
-                                                width = 4.dp,
-                                                color = Color.White,
-                                                shape = CircleShape
-                                            )
-                                            .clip(CircleShape)
-                                            .background(Color(0xFFD6D7D3)), // LightGray background
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        if (profileBitmap != null) {
-                                            Image(
-                                                bitmap = profileBitmap!!.asImageBitmap(),
-                                                contentDescription = "Profile Picture",
-                                                modifier = Modifier.fillMaxSize(),
-                                                contentScale = ContentScale.Crop
-                                            )
-                                        } else {
-                                            Icon(
-                                                imageVector = Icons.Default.Person,
-                                                contentDescription = "Profile Picture",
-                                                tint = Color.Black,
-                                                modifier = Modifier.size(80.dp)
-                                            )
-                                        }
-                                    }
-
-                                    Spacer(modifier = Modifier.height(16.dp))
-
-                                    // Parent Name
-                                    parentData?.get("fullName")?.let { name ->
-                                        Text(
-                                            text = name.toString(),
-                                            style = MaterialTheme.typography.headlineMedium,
-                                            color = Color.White
-                                        )
-                                    }
-
-                                    Spacer(modifier = Modifier.height(8.dp))
-
-                                    // Parent Email
-                                    parentData?.get("email")?.let { email ->
-                                        Text(
-                                            text = email.toString(),
-                                            style = MaterialTheme.typography.bodyLarge,
-                                            color = Color.White.copy(alpha = 0.8f)
-                                        )
-                                    }
-
-                                    Spacer(modifier = Modifier.height(8.dp))
-
-                                    // Parent and Phone Number Row
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.Center,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(
-                                            text = "Parent",
-                                            style = MaterialTheme.typography.bodyLarge,
-                                            color = Color.White
-                                        )
-                                        
-                                        VerticalDivider(
-                                            modifier = Modifier
-                                                .height(24.dp)
-                                                .padding(horizontal = 16.dp),
-                                            color = Color.White.copy(alpha = 0.5f)
-                                        )
-                                        
-                                        parentData?.get("phoneNumber")?.let { phone ->
-                                            Text(
-                                                text = phone.toString(),
-                                                style = MaterialTheme.typography.bodyLarge,
-                                                color = Color.White
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        // Children Section
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp)
-                        ) {
-                            Spacer(modifier = Modifier.height(8.dp))
-
-                            // Add Child Button Section
-                            Row(
+                            // Profile Picture
+                            Box(
                                 modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 8.dp),
-                                horizontalArrangement = Arrangement.Center,
-                                verticalAlignment = Alignment.CenterVertically
+                                    .size(64.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                                    .border(
+                                        width = 2.dp,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        shape = CircleShape
+                                    ),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Button(
-                                    onClick = { 
-                                        val intent = Intent(context, ChildSignUpActivity::class.java).apply {
-                                            putExtra("parentEmail", parentData?.get("email") as? String)
-                                        }
-                                        context.startActivity(intent)
-                                    },
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = Color(0xFFD6D7D3) // LightGray from theme
-                                    ),
-                                    shape = RoundedCornerShape(24.dp),
-                                    modifier = Modifier
-                                        .height(48.dp)
-                                        .width(200.dp)
-                                        .shadow(
-                                            elevation = 4.dp,
-                                            shape = RoundedCornerShape(24.dp),
-                                            clip = false
-                                        ),
-                                    contentPadding = PaddingValues(0.dp)
-                                ) {
-                                    Box(
+                                if (profileBitmap != null) {
+                                    Image(
+                                        bitmap = profileBitmap!!.asImageBitmap(),
+                                        contentDescription = "Profile Picture",
                                         modifier = Modifier.fillMaxSize(),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Add,
-                                            contentDescription = "Add Child",
-                                            tint = Color.Black,
-                                            modifier = Modifier.size(32.dp)
-                                        )
-                                    }
-                                }
-
-                                Spacer(modifier = Modifier.width(16.dp))
-
-                                Button(
-                                    onClick = { isTrashMode = !isTrashMode },
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = if (isTrashMode) Color(0xFF8B0000) else Color.Red
-                                    ),
-                                    shape = RoundedCornerShape(24.dp),
-                                    modifier = Modifier
-                                        .height(48.dp)
-                                        .width(48.dp)
-                                        .shadow(
-                                            elevation = 4.dp,
-                                            shape = RoundedCornerShape(24.dp),
-                                            clip = false
-                                        ),
-                                    contentPadding = PaddingValues(0.dp)
-                                ) {
+                                        contentScale = ContentScale.Crop
+                                    )
+                                } else {
                                     Icon(
-                                        imageVector = Icons.Default.Delete,
-                                        contentDescription = "Delete",
-                                        tint = Color.White,
+                                        imageVector = Icons.Default.Person,
+                                        contentDescription = "Profile Picture",
+                                        tint = MaterialTheme.colorScheme.primary,
                                         modifier = Modifier.size(32.dp)
                                     )
                                 }
                             }
 
-                            // Children List with Scrollable Content
-                            Box(
+                            Spacer(modifier = Modifier.width(16.dp))
+
+                            // Parent Info
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = parentData?.get("fullName")?.toString() ?: "Parent",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                                Text(
+                                    text = parentData?.get("email")?.toString() ?: "",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                                )
+                                Text(
+                                    text = parentData?.get("phoneNumber")?.toString() ?: "",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                                )
+                            }
+
+                            // Edit Profile Button
+                            IconButton(
+                                onClick = {
+                                    val intent = Intent(context, ParentEditProfileActivity::class.java)
+                                    intent.putExtra("parentId", currentUser?.uid)
+                                    intent.putExtra("parentName", parentData?.get("fullName")?.toString())
+                                    intent.putExtra("parentEmail", parentData?.get("email")?.toString())
+                                    intent.putExtra("parentPhone", parentData?.get("phoneNumber")?.toString())
+                                    context.startActivity(intent)
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Edit,
+                                    contentDescription = "Edit Profile",
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            }
+                        }
+                    }
+
+                    // Quick Actions Section
+                    Text(
+                        text = "Quick Actions",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // Add Child Button
+                        Card(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable {
+                                    val intent = Intent(context, ChildSignUpActivity::class.java)
+                                    intent.putExtra("parentEmail", parentData?.get("email")?.toString())
+                                    context.startActivity(intent)
+                                },
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer
+                            )
+                        ) {
+                            Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .weight(1f)
+                                    .padding(16.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                LazyColumn(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(horizontal = 16.dp),
-                                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                                    contentPadding = PaddingValues(vertical = 16.dp)
-                                ) {
-                                    items(childrenData) { child ->
-                                        ChildProfileCard(
-                                            childProfile = child,
-                                            onClick = {
-                                                if (!isTrashMode) {
-                                                    val intent = Intent(context, ChildDetailsActivity::class.java).apply {
-                                                        // Get the document ID which contains the child's UID
-                                                        val childDocId = child["documentId"] as? String
-                                                        if (childDocId != null) {
-                                                            putExtra("childId", childDocId)
-                                                            putExtra("childName", child["fullName"] as? String)
-                                                            Log.d("ParentMainScreen", "Starting ChildDetailsActivity with childId: $childDocId")
-                                                        } else {
-                                                            Log.e("ParentMainScreen", "Child document ID is null")
-                                                            Toast.makeText(context, "Error: Child ID not found", Toast.LENGTH_SHORT).show()
-                                                        }
-                                                    }
-                                                    context.startActivity(intent)
-                                                }
-                                            },
-                                            isTrashMode = isTrashMode,
-                                            onDelete = { childId ->
-                                                // Delete child account from Firestore and Auth
-                                                val auth = FirebaseAuth.getInstance()
-                                                val firestore = FirebaseFirestore.getInstance()
-                                                
-                                                // Create a batch operation
-                                                val batch = firestore.batch()
-                                                
-                                                // Function to delete all documents in a collection
-                                                fun deleteCollection(collectionRef: CollectionReference, batch: WriteBatch) {
-                                                    collectionRef.get()
-                                                        .addOnSuccessListener { documents ->
-                                                            for (document in documents) {
-                                                                // Add document to batch for deletion
-                                                                batch.delete(document.reference)
-                                                            }
-                                                        }
-                                                }
+                                Icon(
+                                    imageVector = Icons.Default.PersonAdd,
+                                    contentDescription = "Add Child",
+                                    tint = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "Add Child",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                            }
+                        }
 
-                                                // Delete main profile
-                                                val profileRef = firestore.collection(MainActivity.USERS_COLLECTION)
+                        // Device Management Button
+                        Card(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable {
+                                    val intent = Intent(context, InfoActivity::class.java)
+                                    context.startActivity(intent)
+                                },
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer
+                            )
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Info,
+                                    contentDescription = "Information",
+                                    tint = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "Info",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                            }
+                        }
+                    }
+
+                    // Children Section
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Your Children",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        
+                        // Delete Mode Toggle
+                        IconButton(
+                            onClick = { isDeleteMode = !isDeleteMode }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = if (isDeleteMode) "Exit Delete Mode" else "Enter Delete Mode",
+                                tint = if (isDeleteMode) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    if (childrenData.isEmpty()) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                            )
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.PersonOff,
+                                    contentDescription = "No Children",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(48.dp)
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Text(
+                                    text = "No children added yet",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "Add a child to start monitoring their device",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                )
+                            }
+                        }
+                    } else {
+                        childrenData.forEach { child ->
+                            var isLocked by remember { mutableStateOf(false) }
+                            var isUpdating by remember { mutableStateOf(false) }
+                            
+                            // Set up real-time listener for device lock state
+                            LaunchedEffect(child["documentId"] as String) {
+                                val childId = child["documentId"] as String
+                                if (childId.isNotBlank()) {
+                                    FirebaseFirestore.getInstance().collection("deviceLocks")
+                                        .document(childId)
+                                        .addSnapshotListener { snapshot, error ->
+                                            if (error != null) {
+                                                Log.e("ParentMainScreen", "Error listening to device lock state", error)
+                                                return@addSnapshotListener
+                                            }
+
+                                            if (snapshot != null && snapshot.exists()) {
+                                                isLocked = snapshot.getBoolean("isLocked") ?: false
+                                            } else {
+                                                isLocked = false
+                                            }
+                                        }
+                                }
+                            }
+
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        if (!isDeleteMode) {
+                                            val intent = Intent(context, ChildDetailsActivity::class.java)
+                                            intent.putExtra("childId", child["documentId"] as String)
+                                            intent.putExtra("childName", child["fullName"] as String)
+                                            context.startActivity(intent)
+                                        }
+                                    },
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surface
+                                )
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    // Child Avatar
+                                    Box(
+                                        modifier = Modifier
+                                            .size(48.dp)
+                                            .clip(CircleShape)
+                                            .background(MaterialTheme.colorScheme.primaryContainer),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = (child["fullName"] as String).firstOrNull()?.toString()?.uppercase() ?: "?",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.width(16.dp))
+
+                                    // Child Info
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = child["fullName"] as String,
+                                            style = MaterialTheme.typography.titleMedium
+                                        )
+                                        Text(
+                                            text = child["email"] as String,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+
+                                    if (isDeleteMode) {
+                                        // Delete Button
+                                        IconButton(
+                                            onClick = {
+                                                val childId = child["documentId"] as String
+                                                val batch = FirebaseFirestore.getInstance().batch()
+                                                
+                                                // Delete child's profile
+                                                val profileRef = FirebaseFirestore.getInstance()
+                                                    .collection(MainActivity.USERS_COLLECTION)
                                                     .document(MainActivity.CHILD_COLLECTION)
                                                     .collection("profile")
                                                     .document(childId)
                                                 batch.delete(profileRef)
 
-                                                // Delete all data in collections that use the child's ID
+                                                // Delete child's data from other collections
                                                 val collectionsToDelete = listOf(
                                                     "screenTime",
                                                     "locations",
@@ -1167,55 +956,76 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                                     "deviceLocks"
                                                 )
 
-                                                // Add all documents to batch
                                                 collectionsToDelete.forEach { collectionName ->
-                                                    val collectionRef = firestore.collection(collectionName)
                                                     // Delete documents where childId matches
-                                                    collectionRef.whereEqualTo("childId", childId)
+                                                    FirebaseFirestore.getInstance().collection(collectionName)
+                                                        .whereEqualTo("childId", childId)
                                                         .get()
-                                                        .addOnSuccessListener { documents ->
-                                                            for (document in documents) {
-                                                                batch.delete(document.reference)
+                                                        .addOnSuccessListener { docs ->
+                                                            docs.forEach { doc ->
+                                                                batch.delete(doc.reference)
                                                             }
                                                         }
+                                                    
+                                                    // Also delete documents where the document ID is the childId
+                                                    batch.delete(FirebaseFirestore.getInstance().collection(collectionName).document(childId))
                                                 }
 
-                                                // Also delete documents where the document ID is the childId
-                                                collectionsToDelete.forEach { collectionName ->
-                                                    val docRef = firestore.collection(collectionName).document(childId)
-                                                    batch.delete(docRef)
-                                                }
-
-                                                // Commit the batch
+                                                // Commit all deletions
                                                 batch.commit()
                                                     .addOnSuccessListener {
-                                                        // Then delete from Auth
-                                                        try {
-                                                            // Delete the user from Firebase Auth
-                                                            auth.currentUser?.let { currentUser ->
-                                                                if (currentUser.uid == childId) {
-                                                                    currentUser.delete()
-                                                                        .addOnSuccessListener {
-                                                                            Toast.makeText(context, "Child account and all associated data deleted successfully", Toast.LENGTH_SHORT).show()
-                                                                        }
-                                                                        .addOnFailureListener { e ->
-                                                                            Toast.makeText(context, "Error deleting child account: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
-                                                                        }
-                                                                } else {
-                                                                    // If we can't delete directly, we need to use Admin SDK
-                                                                    // For now, just show a message
-                                                                    Toast.makeText(context, "Please use the Firebase Console to delete the child account", Toast.LENGTH_LONG).show()
-                                                                }
-                                                            }
-                                                        } catch (e: Exception) {
-                                                            Toast.makeText(context, "Error: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
-                                                        }
+                                                        Toast.makeText(context, "Child account deleted successfully", Toast.LENGTH_SHORT).show()
                                                     }
                                                     .addOnFailureListener { e ->
-                                                        Toast.makeText(context, "Error deleting child data: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+                                                        Toast.makeText(context, "Error deleting child account: ${e.message}", Toast.LENGTH_SHORT).show()
                                                     }
                                             }
-                                        )
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Delete,
+                                                contentDescription = "Delete Child",
+                                                tint = MaterialTheme.colorScheme.error
+                                            )
+                                        }
+                                    } else {
+                                        // Lock/Unlock Button
+                                        IconButton(
+                                            onClick = {
+                                                if (!isUpdating) {
+                                                    isUpdating = true
+                                                    val childId = child["documentId"] as String
+                                                    val updates = hashMapOf(
+                                                        "isLocked" to !isLocked,
+                                                        "lastUpdated" to FieldValue.serverTimestamp()
+                                                    )
+
+                                                    FirebaseFirestore.getInstance().collection("deviceLocks")
+                                                        .document(childId)
+                                                        .set(updates)
+                                                        .addOnSuccessListener {
+                                                            isUpdating = false
+                                                        }
+                                                        .addOnFailureListener { e ->
+                                                            Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                                                            isUpdating = false
+                                                        }
+                                                }
+                                            },
+                                            enabled = !isUpdating
+                                        ) {
+                                            if (isUpdating) {
+                                                CircularProgressIndicator(
+                                                    modifier = Modifier.size(24.dp),
+                                                    color = MaterialTheme.colorScheme.primary
+                                                )
+                                            } else {
+                                                Icon(
+                                                    imageVector = if (isLocked) Icons.Default.Lock else Icons.Default.LockOpen,
+                                                    contentDescription = if (isLocked) "Unlock Device" else "Lock Device",
+                                                    tint = if (isLocked) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                                                )
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -1224,87 +1034,128 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                 }
             }
         }
-    }
 
-    // Delete Account Confirmation Dialog
-    if (showDeleteAccountDialog) {
-        AlertDialog(
-            onDismissRequest = { 
-                if (!isDeletingAccount) {
-                    showDeleteAccountDialog = false 
+        // Settings Menu
+        DropdownMenu(
+            expanded = showSettingsMenu,
+            onDismissRequest = { showSettingsMenu = false }
+        ) {
+            DropdownMenuItem(
+                text = { Text("Edit Profile") },
+                onClick = {
+                    showSettingsMenu = false
+                    // TODO: Implement edit profile
                 }
-            },
-            title = {
-                Text(
-                    "Delete Account",
-                    style = MaterialTheme.typography.headlineSmall
-                )
-            },
-            text = {
-                Column {
-                    Text(
-                        "Are you sure you want to delete your account? This action cannot be undone and will:",
-                        style = MaterialTheme.typography.bodyLarge
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        "• Delete your parent account",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.error
-                    )
-                    Text(
-                        "• Delete all associated child accounts",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.error
-                    )
-                    Text(
-                        "• Permanently delete all data",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.error
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        "Note: Your account will be permanently deleted within 24 hours after submitting the request.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error
-                    )
+            )
+            DropdownMenuItem(
+                text = { Text("Delete Account") },
+                onClick = {
+                    showSettingsMenu = false
+                    showDeleteAccountDialog = true
                 }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        if (!isDeletingAccount) {
-                            deleteParentAccount()
-                        }
-                    },
-                    enabled = !isDeletingAccount
-                ) {
-                    if (isDeletingAccount) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(24.dp),
+            )
+            Divider()
+            DropdownMenuItem(
+                text = { Text("Logout") },
+                onClick = {
+                    showSettingsMenu = false
+                    onLogout()
+                }
+            )
+        }
+
+        // Notifications Menu
+        DropdownMenu(
+            expanded = showNotificationsMenu,
+            onDismissRequest = { showNotificationsMenu = false }
+        ) {
+            DropdownMenuItem(
+                text = { Text("View All Notifications") },
+                onClick = {
+                    showNotificationsMenu = false
+                    // TODO: Implement notifications view
+                }
+            )
+        }
+
+        // Delete Account Dialog
+        if (showDeleteAccountDialog) {
+            AlertDialog(
+                onDismissRequest = {
+                    if (!isDeletingAccount) {
+                        showDeleteAccountDialog = false
+                    }
+                },
+                title = {
+                    Text(
+                        "Delete Account",
+                        style = MaterialTheme.typography.headlineSmall
+                    )
+                },
+                text = {
+                    Column {
+                        Text(
+                            "Are you sure you want to delete your account? This action cannot be undone and will:",
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            "• Delete your parent account",
+                            style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.error
                         )
-                    } else {
                         Text(
-                            "Delete",
+                            "• Delete all associated child accounts",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        Text(
+                            "• Permanently delete all data",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            "Note: Your account will be permanently deleted within 24 hours after submitting the request.",
+                            style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.error
                         )
                     }
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = { 
-                        if (!isDeletingAccount) {
-                            showDeleteAccountDialog = false 
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            deleteParentAccount()
+                        },
+                        enabled = !isDeletingAccount
+                    ) {
+                        if (isDeletingAccount) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        } else {
+                            Text(
+                                "Delete Account",
+                                color = MaterialTheme.colorScheme.error
+                            )
                         }
-                    },
-                    enabled = !isDeletingAccount
-                ) {
-                    Text("Cancel")
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = {
+                            if (!isDeletingAccount) {
+                                showDeleteAccountDialog = false
+                            }
+                        },
+                        enabled = !isDeletingAccount
+                    ) {
+                        Text("Cancel")
+                    }
                 }
-            }
-        )
+            )
+        }
     }
 }
 
@@ -1483,9 +1334,9 @@ fun ChildProfileCard(
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Lock,
+                                imageVector = if (isLocked) Icons.Default.Lock else Icons.Default.LockOpen,
                                 contentDescription = if (isLocked) "Unlock Device" else "Lock Device",
-                                tint = if (isLocked) Color.White else Color.Black
+                                tint = if (isLocked) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
                             )
                             Text(
                                 text = if (isLocked) "Unlock" else "Lock",

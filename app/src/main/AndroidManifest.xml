@@ -156,6 +156,10 @@
             android:label="Dashboard"
             android:theme="@style/Theme.ISMAPC" />
 
+        <activity
+            android:name=".ParentEditProfileActivity"
+            android:exported="false" />
+
         <service
             android:name=".ScreenTimeService"
             android:enabled="true"
