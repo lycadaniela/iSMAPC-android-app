@@ -67,6 +67,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.border
 import coil.compose.AsyncImage
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 
 class ChildDetailsActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -125,7 +127,7 @@ fun ChildDetailsScreen(childId: String, childName: String) {
         firestore.collection("users")
             .document("child")
             .collection("profile")
-                .document(childId)
+            .document(childId)
             .get()
             .addOnSuccessListener { document ->
                 if (document.exists()) {
@@ -138,16 +140,28 @@ fun ChildDetailsScreen(childId: String, childName: String) {
             }
             .addOnFailureListener { e ->
                 Log.e("ChildDetails", "Error fetching child data", e)
+            }
+    }
+
+    // Set up real-time listener for screen time updates
+    DisposableEffect(childId) {
+        val screenTimeListener = firestore.collection("screenTime")
+            .document(childId)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.e("ChildDetails", "Error listening to screen time updates", error)
+                    return@addSnapshotListener
                 }
 
-        // Fetch screen time for progress calculation
-            firestore.collection("screenTime")
-                .document(childId)
-                .get()
-            .addOnSuccessListener { document ->
-                screenTime = document.getLong("screenTime") ?: 0L
-                Log.d("ChildDetails", "Screen time fetched: $screenTime")
+                if (snapshot != null && snapshot.exists()) {
+                    screenTime = snapshot.getLong("screenTime") ?: 0L
+                    Log.d("ChildDetails", "Screen time updated: $screenTime")
+                }
             }
+
+        onDispose {
+            screenTimeListener.remove()
+        }
     }
 
     // Fetch installed apps when Apps button is clicked

@@ -593,8 +593,8 @@ private fun updateFirestoreWithUsageData(firestore: FirebaseFirestore, childId: 
                 "dailyMinutes" to appUsage.dailyMinutes,
                 "weeklyMinutes" to appUsage.weeklyMinutes,
                 "lastUpdated" to Calendar.getInstance().timeInMillis,
-                "packageName" to appUsage.packageName, // Store package name to help distinguish real from sample data
-                "isSampleData" to isSampleData // Explicitly mark if this is sample data
+                "packageName" to appUsage.packageName,
+                "isSampleData" to isSampleData
             )
         }
         
@@ -613,6 +613,7 @@ private fun updateFirestoreWithUsageData(firestore: FirebaseFirestore, childId: 
         val firestorePath = "appUsage/$childId/stats/daily"
         Log.d(TAG, "Writing to Firestore path: $firestorePath")
         
+        // Update app usage data
         firestore.collection("appUsage")
             .document(childId)
             .collection("stats")
@@ -620,6 +621,23 @@ private fun updateFirestoreWithUsageData(firestore: FirebaseFirestore, childId: 
             .set(dataToStore)
             .addOnSuccessListener {
                 Log.d(TAG, "App usage data successfully updated in Firestore")
+                
+                // Also update the screen time data
+                val totalDailyMinutes = usageData.sumOf { it.dailyMinutes }
+                val screenTimeMs = totalDailyMinutes * 60 * 1000 // Convert minutes to milliseconds
+                
+                firestore.collection("screenTime")
+                    .document(childId)
+                    .set(mapOf(
+                        "screenTime" to screenTimeMs,
+                        "lastUpdated" to Calendar.getInstance().timeInMillis
+                    ))
+                    .addOnSuccessListener {
+                        Log.d(TAG, "Screen time data successfully updated in Firestore")
+                    }
+                    .addOnFailureListener { e ->
+                        Log.e(TAG, "Error updating screen time data", e)
+                    }
                 
                 // Verify data was written by reading it back
                 firestore.collection("appUsage")
