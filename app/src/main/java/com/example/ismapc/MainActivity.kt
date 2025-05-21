@@ -767,7 +767,7 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                            containerColor = MaterialTheme.colorScheme.surface
                         )
                     ) {
                         Row(
@@ -784,7 +784,7 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                     .background(MaterialTheme.colorScheme.surface)
                                     .border(
                                         width = 2.dp,
-                                        color = MaterialTheme.colorScheme.primary,
+                                        color = Color(0xFFE0852D),
                                         shape = CircleShape
                                     ),
                                 contentAlignment = Alignment.Center
@@ -800,7 +800,7 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                     Icon(
                                         imageVector = Icons.Default.Person,
                                         contentDescription = "Profile Picture",
-                                        tint = MaterialTheme.colorScheme.primary,
+                                        tint = Color(0xFFE0852D),
                                         modifier = Modifier.size(32.dp)
                                     )
                                 }
@@ -813,17 +813,17 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                 Text(
                                     text = parentData?.get("fullName")?.toString() ?: "Parent",
                                     style = MaterialTheme.typography.titleLarge,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = Color(0xFFE0852D)
                                 )
                                 Text(
                                     text = parentData?.get("email")?.toString() ?: "",
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
                                     text = parentData?.get("phoneNumber")?.toString() ?: "",
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
                             }
 
@@ -841,7 +841,7 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                 Icon(
                                     imageVector = Icons.Default.Edit,
                                     contentDescription = "Edit Profile",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    tint = Color(0xFFE0852D)
                                 )
                             }
                         }
@@ -851,6 +851,7 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                     Text(
                         text = "Quick Actions",
                         style = MaterialTheme.typography.titleMedium,
+                        color = Color(0xFFE0852D),
                         modifier = Modifier.padding(top = 8.dp)
                     )
 
@@ -891,7 +892,7 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                             }
                         }
 
-                        // Device Management Button
+                        // FAQ Button
                         Card(
                             modifier = Modifier
                                 .weight(1f)
@@ -900,7 +901,7 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                     context.startActivity(intent)
                                 },
                             colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.secondaryContainer
+                                containerColor = MaterialTheme.colorScheme.tertiaryContainer
                             )
                         ) {
                             Column(
@@ -912,13 +913,13 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                 Icon(
                                     imageVector = Icons.Default.Info,
                                     contentDescription = "FAQ",
-                                    tint = MaterialTheme.colorScheme.onSecondaryContainer
+                                    tint = MaterialTheme.colorScheme.onSurface
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text(
                                     text = "FAQ",
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
                             }
                         }
@@ -934,7 +935,8 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                     ) {
                         Text(
                             text = "Your Children",
-                            style = MaterialTheme.typography.titleMedium
+                            style = MaterialTheme.typography.titleMedium,
+                            color = Color(0xFFE0852D)
                         )
                         
                         // Delete Mode Toggle
@@ -944,7 +946,7 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                             Icon(
                                 imageVector = Icons.Default.Delete,
                                 contentDescription = if (isDeleteMode) "Exit Delete Mode" else "Enter Delete Mode",
-                                tint = if (isDeleteMode) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+                                tint = if (isDeleteMode) MaterialTheme.colorScheme.error else Color(0xFFE0852D)
                             )
                         }
                     }
@@ -1306,13 +1308,13 @@ fun ChildProfileCard(
             Box(
                 modifier = Modifier
                     .size(64.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surface)
                     .border(
                         width = 2.dp,
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.primary,
                         shape = CircleShape
-                    )
-                    .clip(CircleShape)
-                    .background(Color(0xFFD6D7D3)), // LightGray background
+                    ),
                 contentAlignment = Alignment.Center
             ) {
                 if (profileBitmap != null) {
@@ -1326,7 +1328,7 @@ fun ChildProfileCard(
                     Icon(
                         imageVector = Icons.Default.Person,
                         contentDescription = "Profile Picture",
-                        tint = Color.Black,
+                        tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(32.dp)
                     )
                 }
