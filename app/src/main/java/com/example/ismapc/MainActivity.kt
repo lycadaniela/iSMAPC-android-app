@@ -60,6 +60,10 @@ import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.firebase.firestore.CollectionReference
 import com.google.firebase.firestore.WriteBatch
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
+import java.util.concurrent.TimeUnit
 
 class MainActivity : ComponentActivity() {
     companion object {
@@ -114,6 +118,8 @@ class MainActivity : ComponentActivity() {
                                         Log.d("MainActivity", "User is a child")
                                         // Initialize UI first
                                         initializeUI()
+                                        // Schedule content suggestion worker
+                                        scheduleContentSuggestionWorker()
                                         // Then check permissions before starting services
                                         checkAndRequestPermissions()
                                     } else {
@@ -326,6 +332,29 @@ class MainActivity : ComponentActivity() {
 
     private fun stopContentFilteringService() {
         stopService(Intent(this, ContentFilteringService::class.java))
+    }
+
+    private fun scheduleContentSuggestionWorker() {
+        try {
+            Log.d("MainActivity", "Scheduling content suggestion worker")
+            
+            // Create a periodic work request
+            val contentSuggestionWorkRequest = PeriodicWorkRequestBuilder<ContentSuggestionWorker>(
+                ContentSuggestionWorker.REFRESH_INTERVAL_HOURS,
+                TimeUnit.HOURS
+            ).build()
+            
+            // Schedule the work
+            WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+                ContentSuggestionWorker.WORKER_TAG,
+                ExistingPeriodicWorkPolicy.KEEP, // Keep existing if already scheduled
+                contentSuggestionWorkRequest
+            )
+            
+            Log.d("MainActivity", "Content suggestion worker scheduled")
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Error scheduling content suggestion worker", e)
+        }
     }
 }
 
@@ -1535,6 +1564,21 @@ fun ChildMainScreen(onLogout: () -> Unit) {
                 style = MaterialTheme.typography.headlineMedium,
                 color = MaterialTheme.colorScheme.primary
             )
+            
+            Spacer(modifier = Modifier.height(32.dp))
+            
+            // Dashboard button
+            Button(
+                onClick = {
+                    context.startActivity(Intent(context, ChildDashboardActivity::class.java))
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp)
+                    .padding(horizontal = 32.dp)
+            ) {
+                Text("Open My Dashboard")
+            }
         }
     }
 }

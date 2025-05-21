@@ -50,6 +50,7 @@ dependencies {
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
+    implementation("androidx.compose.material:material-icons-extended:1.6.2")
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -64,6 +65,7 @@ dependencies {
     implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-firestore")
     implementation("com.google.firebase:firebase-common-ktx")
+    implementation("com.google.firebase:firebase-firestore-ktx")
     
     implementation("io.coil-kt:coil-compose:2.5.0")
     implementation("io.coil-kt:coil:2.5.0")
@@ -76,4 +78,7 @@ dependencies {
     implementation("androidx.datastore:datastore-preferences:1.0.0")
     implementation("org.osmdroid:osmdroid-android:6.1.16")
     implementation("com.google.ai.client.generativeai:generativeai:0.2.1")
+    
+    // WorkManager for background processing
+    implementation("androidx.work:work-runtime-ktx:2.8.1")
 }
