@@ -87,29 +87,40 @@ class AppUsageService : Service() {
                         
                         // Check for usage stats permission
                         if (!hasUsageStatsPermission()) {
-                            Log.e(TAG, "No usage stats permission, cannot collect data")
+                            Log.e(TAG, "Missing usage stats permission, cannot collect data")
+                            delay(30 * 1000L) // Check again in 30 seconds during testing
+                            continue
+                        }
+                        
+                        // Collect usage data
+                        val appUsage = getAppUsageStats()
+                        
+                        if (appUsage.isEmpty()) {
+                            Log.e(TAG, "No app usage data collected")
                         } else {
-                            // Collect and upload data
-                            val appUsageData = getAppUsageStats()
+                            Log.e(TAG, "Collected usage data for ${appUsage.size} apps")
                             
-                            if (appUsageData.isNotEmpty()) {
-                                Log.e(TAG, "Collected ${appUsageData.size} app usage records, uploading to Firestore")
-                                updateFirestoreWithUsageData(childId, appUsageData)
-                            } else {
-                                Log.e(TAG, "No app usage data collected, skipping upload")
+                            // Create a formatted list of all apps for the log
+                            val appsList = appUsage.joinToString("\n") { 
+                                "${it.name}: ${it.dailyMinutes} min today, ${it.weeklyMinutes} min this week"
                             }
+                            Log.e(TAG, "Apps usage data:\n$appsList")
+                            
+                            // Upload to Firestore
+                            updateFirestoreWithUsageData(childId, appUsage)
                         }
                     } catch (e: Exception) {
-                        Log.e(TAG, "Error in app usage data collection: ${e.message}", e)
+                        Log.e(TAG, "Error in usage data collection cycle", e)
                     }
                     
-                    // Wait for the next collection interval (15 minutes)
-                    delay(15 * 60 * 1000L)
+                    // Wait for the next collection interval (30 seconds during testing)
+                    delay(30 * 1000L)
                 }
             } catch (e: CancellationException) {
-                Log.e(TAG, "App usage data collection job cancelled")
+                // Job was cancelled - normal behavior
+                Log.e(TAG, "Usage data collection job cancelled")
             } catch (e: Exception) {
-                Log.e(TAG, "Error in app usage data collection loop: ${e.message}", e)
+                Log.e(TAG, "Error in usage data collection job", e)
             }
         }
     }
@@ -176,40 +187,57 @@ class AppUsageService : Service() {
                         }
                     }
                 }
-            } else {
-                // 2. Try the event-based approach if stats query didn't work
-                val events = usageStatsManager.queryEvents(weekStart, now)
+            }
+            
+            // Always use the event-based approach as well to catch the most recent app usage
+            // that might not have been included in the stats query yet
+            val events = usageStatsManager.queryEvents(weekStart, now)
+            
+            if (events != null && events.hasNextEvent()) {
+                val event = UsageEvents.Event()
+                val lastEventTime = mutableMapOf<String, Long>()
+                val lastEventType = mutableMapOf<String, Int>()
+                val recentlyUsedApps = mutableSetOf<String>() // Track recently used apps even without duration
                 
-                if (events != null && events.hasNextEvent()) {
-                    val event = UsageEvents.Event()
-                    val lastEventTime = mutableMapOf<String, Long>()
-                    val lastEventType = mutableMapOf<String, Int>()
+                while (events.hasNextEvent()) {
+                    events.getNextEvent(event)
                     
-                    while (events.hasNextEvent()) {
-                        events.getNextEvent(event)
+                    val packageName = event.packageName
+                    val eventTime = event.timeStamp
+                    val eventType = event.eventType
+                    
+                    // Track any app that was brought to foreground as "used" - even without a background event
+                    if (eventType == UsageEvents.Event.MOVE_TO_FOREGROUND && eventTime > (now - 5 * 60 * 1000)) {
+                        // If app was used in the last 5 minutes, consider it used even without duration
+                        recentlyUsedApps.add(packageName)
+                    }
+                    
+                    if (eventType == UsageEvents.Event.MOVE_TO_FOREGROUND || 
+                        eventType == UsageEvents.Event.MOVE_TO_BACKGROUND) {
                         
-                        val packageName = event.packageName
-                        val eventTime = event.timeStamp
-                        val eventType = event.eventType
-                        
-                        if (eventType == UsageEvents.Event.MOVE_TO_FOREGROUND || 
+                        if (lastEventType[packageName] == UsageEvents.Event.MOVE_TO_FOREGROUND && 
                             eventType == UsageEvents.Event.MOVE_TO_BACKGROUND) {
                             
-                            if (lastEventType[packageName] == UsageEvents.Event.MOVE_TO_FOREGROUND && 
-                                eventType == UsageEvents.Event.MOVE_TO_BACKGROUND) {
-                                
-                                val duration = eventTime - (lastEventTime[packageName] ?: eventTime)
-                                
-                                weeklyUsage[packageName] = (weeklyUsage[packageName] ?: 0) + duration
-                                
-                                if (lastEventTime[packageName] ?: 0 >= todayStart) {
-                                    dailyUsage[packageName] = (dailyUsage[packageName] ?: 0) + duration
-                                }
-                            }
+                            val duration = eventTime - (lastEventTime[packageName] ?: eventTime)
                             
-                            lastEventTime[packageName] = eventTime
-                            lastEventType[packageName] = eventType
+                            weeklyUsage[packageName] = (weeklyUsage[packageName] ?: 0) + duration
+                            
+                            if (lastEventTime[packageName] ?: 0 >= todayStart) {
+                                dailyUsage[packageName] = (dailyUsage[packageName] ?: 0) + duration
+                            }
                         }
+                        
+                        lastEventTime[packageName] = eventTime
+                        lastEventType[packageName] = eventType
+                    }
+                }
+                
+                // Add recently used apps that don't have duration (just opened)
+                for (packageName in recentlyUsedApps) {
+                    if (!weeklyUsage.containsKey(packageName)) {
+                        // Add with a minimal duration of 1 minute to ensure it shows up
+                        weeklyUsage[packageName] = 60 * 1000L // 1 minute in milliseconds
+                        dailyUsage[packageName] = 60 * 1000L // 1 minute in milliseconds
                     }
                 }
             }
@@ -226,14 +254,14 @@ class AppUsageService : Service() {
                     val daily = TimeUnit.MILLISECONDS.toMinutes(dailyUsage[packageName] ?: 0)
                     val weekly = TimeUnit.MILLISECONDS.toMinutes(weeklyUsage[packageName] ?: 0)
                     
-                    // Only include non-system apps with usage greater than 1 minute
-                    if (!isSystemApp && weekly > 1) {
+                    // Include any non-system app with any usage time at all
+                    if (!isSystemApp) {
                         result.add(
                             AppUsage(
                                 name = appName,
                                 packageName = packageName,
-                                dailyMinutes = daily,
-                                weeklyMinutes = weekly
+                                dailyMinutes = Math.max(daily, 1), // Ensure at least 1 minute
+                                weeklyMinutes = Math.max(weekly, 1) // Ensure at least 1 minute
                             )
                         )
                     }
@@ -251,39 +279,90 @@ class AppUsageService : Service() {
     }
     
     private fun updateFirestoreWithUsageData(childId: String, usageData: List<AppUsage>) {
+        Log.e(TAG, "🔄 Updating Firestore with app usage data for childId: $childId")
+        
+        // Don't continue if there's no data
+        if (usageData.isEmpty()) {
+            Log.e(TAG, "⚠️ No usage data to upload")
+            return
+        }
+        
+        // Log the data we're about to upload
+        Log.e(TAG, "📊 Uploading data for ${usageData.size} apps:")
+        usageData.forEachIndexed { index, app ->
+            Log.e(TAG, "  $index. ${app.name}: daily=${app.dailyMinutes}m, weekly=${app.weeklyMinutes}m")
+        }
+        
         try {
+            // Create a map of app usage data
             val appsData = usageData.associate { appUsage ->
                 appUsage.name to mapOf(
+                    "packageName" to appUsage.packageName,
                     "dailyMinutes" to appUsage.dailyMinutes,
                     "weeklyMinutes" to appUsage.weeklyMinutes,
-                    "lastUpdated" to Calendar.getInstance().timeInMillis,
-                    "packageName" to appUsage.packageName,
-                    "isSampleData" to false
+                    "lastUpdated" to System.currentTimeMillis()
                 )
             }
             
-            val dataToStore = mapOf(
+            // Calculate total usage
+            val totalDailyMinutes = usageData.sumOf { it.dailyMinutes }
+            val totalWeeklyMinutes = usageData.sumOf { it.weeklyMinutes }
+            
+            // Create the final data to store
+            val dataToStore = hashMapOf(
                 "apps" to appsData,
-                "lastUpdated" to Calendar.getInstance().timeInMillis,
-                "dataSource" to "REAL_DEVICE_DATA",
-                "totalDailyMinutes" to usageData.sumOf { it.dailyMinutes },
-                "totalAppWeeklyUsage" to usageData.sumOf { it.weeklyMinutes },
-                "appCount" to usageData.size
+                "totalDailyMinutes" to totalDailyMinutes,
+                "totalAppWeeklyUsage" to totalWeeklyMinutes,
+                "lastUpdated" to System.currentTimeMillis(),
+                "appCount" to usageData.size,
+                "dataSource" to "REAL_DEVICE_DATA"
             )
             
-            firestore.collection("appUsage")
-                .document(childId)
-                .collection("stats")
-                .document("daily")
-                .set(dataToStore)
-                .addOnSuccessListener {
-                    Log.e(TAG, "Service successfully updated app usage data in Firestore")
+            // Store the data to Firestore
+            Log.e(TAG, "🔥 Writing to Firestore path: appUsage/$childId/stats/daily")
+            Log.e(TAG, "📊 Total stats: daily=${totalDailyMinutes}m, weekly=${totalWeeklyMinutes}m, count=${usageData.size}")
+            
+            // Use a transaction to ensure data is properly saved
+            firestore.runTransaction { transaction ->
+                val docRef = firestore.collection("appUsage")
+                    .document(childId)
+                    .collection("stats")
+                    .document("daily")
+                
+                // Set data in transaction
+                transaction.set(docRef, dataToStore)
+            }.addOnSuccessListener {
+                Log.e(TAG, "✅ Successfully updated app usage data in Firestore")
+                
+                // Verify the data was written correctly by reading it back
+                firestore.collection("appUsage")
+                    .document(childId)
+                    .collection("stats")
+                    .document("daily")
+                    .get()
+                    .addOnSuccessListener { document ->
+                        if (document.exists()) {
+                            @Suppress("UNCHECKED_CAST")
+                            val apps = document.get("apps") as? Map<String, Any>
+                            val count = apps?.size ?: 0
+                            val total = document.getLong("totalAppWeeklyUsage") ?: 0
+                            
+                            Log.e(TAG, "✅ Verification successful - data was saved: count=$count, totalWeekly=$total")
+                        } else {
+                            Log.e(TAG, "❌ Verification failed - document doesn't exist after saving")
+                        }
+                    }
+                    .addOnFailureListener { e ->
+                        Log.e(TAG, "❌ Verification failed: ${e.message}", e)
+                    }
+            }.addOnFailureListener { e ->
+                Log.e(TAG, "❌ Failed to update app usage data: ${e.message}", e)
+                if (e.message?.contains("permission_denied") == true) {
+                    Log.e(TAG, "❌ Permission denied - check Firestore security rules")
                 }
-                .addOnFailureListener { e ->
-                    Log.e(TAG, "Service failed to update app usage data in Firestore", e)
-                }
+            }
         } catch (e: Exception) {
-            Log.e(TAG, "Error in service updating Firestore with usage data", e)
+            Log.e(TAG, "❌ Error updating Firestore with usage data: ${e.message}", e)
         }
     }
     

@@ -154,11 +154,12 @@ fun AppUsageScreen(childId: String, childName: String, isChildDevice: Boolean) {
     var isSampleData by remember { mutableStateOf(false) }
     var totalAppUsage by remember { mutableStateOf<Long>(0) }
     var forceRefresh by remember { mutableStateOf(false) }
+    var lastUpdated by remember { mutableStateOf<Long?>(null) }
     
     // Debug button to force data collection
     val forceTriggerData = {
         forceRefresh = true
-        Toast.makeText(context, "Forcing data collection...", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, "Forcing data refresh...", Toast.LENGTH_SHORT).show()
     }
     
     // Fetch app usage data
@@ -209,7 +210,8 @@ fun AppUsageScreen(childId: String, childName: String, isChildDevice: Boolean) {
                                         
                                     if (doc.exists()) {
                                         val dataSource = doc.getString("dataSource")
-                                        Log.e(TAG, "✅ Verification passed! Data source: $dataSource")
+                                        lastUpdated = doc.getLong("lastUpdated")
+                                        Log.e(TAG, "✅ Verification passed! Data source: $dataSource, Last updated: $lastUpdated")
                                     } else {
                                         Log.e(TAG, "❌ Verification failed! Document doesn't exist!")
                                     }
@@ -239,29 +241,80 @@ fun AppUsageScreen(childId: String, childName: String, isChildDevice: Boolean) {
                             throw e // Re-throw to be caught by outer try-catch
                         }
                     } else {
-                        // Parent device: Get data from Firestore
+                        // Parent device: Get data from Firestore with improved error handling
                         Log.e(TAG, "Getting usage stats from Firestore (parent account viewing child data)")
-                        val firestoreData = getAppUsageFromFirestore(firestore, childId)
-                        
-                        // Calculate total screen time
-                        totalAppUsage = firestoreData.sumOf { it.weeklyMinutes }
-                        
-                        if (firestoreData.isEmpty()) {
-                            // If no data in Firestore, create some sample data
-                            Log.e(TAG, "No Firestore app usage data found for child")
-                            errorMessage = "No usage data has been collected from this child's device yet.\n\n" +
-                                    "Make sure:\n" +
-                                    "1. The child device has the app installed\n" +
-                                    "2. Usage access permission is granted on the child device\n" +
-                                    "3. The child has used their device recently"
+                        try {
+                            val document = firestore.collection("appUsage")
+                                .document(childId)
+                                .collection("stats")
+                                .document("daily")
+                                .get()
+                                .await()
+                            
+                            if (!document.exists()) {
+                                Log.e(TAG, "No app usage data found in Firestore for child: $childId")
+                                errorMessage = "No usage data has been collected from this child's device yet.\n\n" +
+                                        "Make sure:\n" +
+                                        "1. The child device has the app installed\n" +
+                                        "2. Usage access permission is granted on the child device\n" +
+                                        "3. The child has used their device recently"
+                                val sampleData = getFallbackData()
+                                isSampleData = true
+                                sampleData
+                            } else {
+                                // Get last updated timestamp
+                                lastUpdated = document.getLong("lastUpdated")
+                                
+                                // Check if this is sample data
+                                val dataSource = document.getString("dataSource")
+                                isSampleData = dataSource == "SAMPLE_DATA"
+                                
+                                // Get total app usage
+                                totalAppUsage = document.getLong("totalAppWeeklyUsage") ?: 0L
+                                
+                                // Get app details
+                                @Suppress("UNCHECKED_CAST")
+                                val appsData = document.get("apps") as? Map<String, Map<String, Any>> 
+                                    ?: emptyMap()
+                                
+                                val result = mutableListOf<AppUsage>()
+                                
+                                for ((appName, appData) in appsData) {
+                                    val dailyMinutes = (appData["dailyMinutes"] as? Number)?.toLong() ?: 0L
+                                    val weeklyMinutes = (appData["weeklyMinutes"] as? Number)?.toLong() ?: 0L
+                                    val packageName = (appData["packageName"] as? String) ?: "unknown.package.$appName"
+                                    
+                                    // Skip apps with zero usage time
+                                    if (weeklyMinutes <= 0) {
+                                        continue
+                                    }
+                                    
+                                    // Add a sample data indicator to the name if needed
+                                    val displayName = if (isSampleData && !appName.contains("[SAMPLE]")) {
+                                        "$appName [SAMPLE]"
+                                    } else {
+                                        appName
+                                    }
+                                    
+                                    result.add(
+                                        AppUsage(
+                                            name = displayName,
+                                            packageName = packageName,
+                                            dailyMinutes = dailyMinutes,
+                                            weeklyMinutes = weeklyMinutes
+                                        )
+                                    )
+                                }
+                                
+                                Log.e(TAG, "Successfully retrieved ${result.size} app usage records from Firestore")
+                                result
+                            }
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error retrieving app usage data from Firestore", e)
+                            errorMessage = "Error retrieving app usage data: ${e.message}"
                             val sampleData = getFallbackData()
-                            updateFirestoreWithUsageData(firestore, childId, sampleData)
                             isSampleData = true
                             sampleData
-                        } else {
-                            // Check if the data we got is sample data
-                            isSampleData = firestoreData.any { it.name.contains("[SAMPLE]") || it.packageName.contains(".SAMPLE") }
-                            firestoreData
                         }
                     }
                 } catch (e: Exception) {
@@ -308,16 +361,14 @@ fun AppUsageScreen(childId: String, childName: String, isChildDevice: Boolean) {
                     }
                 },
                 actions = {
-                    // Add a force refresh button that's visible all the time
-                    if (isChildDevice) {
-                        IconButton(onClick = {
-                            forceTriggerData()
-                        }) {
-                            Icon(
-                                imageVector = Icons.Default.Refresh,
-                                contentDescription = "Force Refresh"
-                            )
-                        }
+                    // Always show refresh button for both parent and child
+                    IconButton(onClick = {
+                        forceTriggerData()
+                    }) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "Force Refresh"
+                        )
                     }
                 }
             )
@@ -328,7 +379,13 @@ fun AppUsageScreen(childId: String, childName: String, isChildDevice: Boolean) {
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
-                CircularProgressIndicator()
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    CircularProgressIndicator()
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("Loading app usage data...", style = MaterialTheme.typography.bodyLarge)
+                }
             }
         } else if (appUsageList.isEmpty()) {
             Box(
@@ -353,13 +410,11 @@ fun AppUsageScreen(childId: String, childName: String, isChildDevice: Boolean) {
                         )
                     }
                     
-                    if (isChildDevice) {
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Button(onClick = {
-                            forceTriggerData()
-                        }) {
-                            Text("Force Refresh")
-                        }
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Button(onClick = {
+                        forceTriggerData()
+                    }) {
+                        Text("Force Refresh")
                     }
                 }
             }
@@ -399,17 +454,15 @@ fun AppUsageScreen(childId: String, childName: String, isChildDevice: Boolean) {
                                 color = MaterialTheme.colorScheme.onErrorContainer
                             )
                             
-                            if (isChildDevice) {
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Button(
-                                    onClick = { forceTriggerData() },
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = MaterialTheme.colorScheme.onErrorContainer,
-                                        contentColor = MaterialTheme.colorScheme.errorContainer
-                                    )
-                                ) {
-                                    Text("Try Again")
-                                }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Button(
+                                onClick = { forceTriggerData() },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.onErrorContainer,
+                                    contentColor = MaterialTheme.colorScheme.errorContainer
+                                )
+                            ) {
+                                Text("Try Again")
                             }
                         }
                     }
@@ -437,6 +490,36 @@ fun AppUsageScreen(childId: String, childName: String, isChildDevice: Boolean) {
                                 style = MaterialTheme.typography.headlineMedium,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer
                             )
+                            
+                            // Show last updated time if available
+                            lastUpdated?.let { timestamp ->
+                                Spacer(modifier = Modifier.height(8.dp))
+                                val date = Date(timestamp)
+                                val dateFormat = java.text.SimpleDateFormat("MMM d, yyyy h:mm a", Locale.getDefault())
+                                Text(
+                                    "Last updated: ${dateFormat.format(date)}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                                )
+                            }
+                            
+                            // Add refresh button
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Button(
+                                onClick = { forceTriggerData() },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.primary
+                                ),
+                                modifier = Modifier.align(Alignment.End)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Refresh,
+                                    contentDescription = "Refresh",
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Refresh")
+                            }
                         }
                     }
                 }
@@ -752,103 +835,119 @@ private fun getAppUsageStats(context: Context): List<AppUsage> {
         val androidVersion = android.os.Build.VERSION.RELEASE
         Log.e(TAG, "Device info: $deviceManufacturer $deviceModel, Android $androidVersion")
         
-        // Try a direct query approach first - this is more reliable on some devices
-        try {
-            Log.e(TAG, "⚠️ Trying direct query approach first (more reliable on some devices)")
-            val result = getAlternativeAppUsageStats(context)
-            if (result.isNotEmpty()) {
-                Log.e(TAG, "✅ Direct query approach successful! Found ${result.size} apps")
-                return result
+        // First get usage stats from direct query
+        val dailyStats = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, todayStart, now)
+        val weeklyStats = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_WEEKLY, weekStart, now)
+        val monthlyStats = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_MONTHLY, weekStart, now)
+        
+        // Combine all stats
+        val allStats = (dailyStats + weeklyStats + monthlyStats).distinctBy { it.packageName }
+        Log.e(TAG, "Found ${allStats.size} apps via direct stats query")
+        
+        // Process stats
+        val dailyUsage = mutableMapOf<String, Long>()
+        val weeklyUsage = mutableMapOf<String, Long>()
+        
+        if (allStats.isNotEmpty()) {
+            for (stat in allStats) {
+                val packageName = stat.packageName
+                val totalTimeMs = stat.totalTimeInForeground
+                
+                if (totalTimeMs > 0) {
+                    weeklyUsage[packageName] = totalTimeMs
+                    
+                    // Estimate daily usage as 1/7 of weekly or use actual if available
+                    if (dailyStats.any { it.packageName == packageName }) {
+                        val dailyStat = dailyStats.first { it.packageName == packageName }
+                        dailyUsage[packageName] = dailyStat.totalTimeInForeground
+                    } else {
+                        dailyUsage[packageName] = totalTimeMs / 7
+                    }
+                }
             }
-            Log.e(TAG, "❌ Direct query approach failed. Falling back to events approach.")
-        } catch (e: Exception) {
-            Log.e(TAG, "Error in direct query approach", e)
         }
         
-        // Get events from the past week
+        // Always use the event-based approach to catch recent activity
         val events = usageStatsManager.queryEvents(weekStart, now)
         
         if (events == null) {
             Log.e(TAG, "Failed to get usage events - null returned")
-            return emptyList()
-        }
-        
-        // Check if we have any events
-        if (!events.hasNextEvent()) {
+        } else if (!events.hasNextEvent()) {
             Log.e(TAG, "No usage events found despite having permission. The device may not track usage stats.")
-            return emptyList()
-        }
-        
-        val event = UsageEvents.Event()
-        
-        // Track app usage
-        val dailyUsage = mutableMapOf<String, Long>()
-        val weeklyUsage = mutableMapOf<String, Long>()
-        val lastEventTime = mutableMapOf<String, Long>()
-        val lastEventType = mutableMapOf<String, Int>()
-        
-        var eventCount = 0
-        var foregroundEvents = 0
-        var backgroundEvents = 0
-        var otherEvents = 0
-        
-        while (events.hasNextEvent()) {
-            events.getNextEvent(event)
-            eventCount++
+        } else {
+            val event = UsageEvents.Event()
             
-            val packageName = event.packageName
-            val eventTime = event.timeStamp
-            val eventType = event.eventType
+            // Track app usage
+            val lastEventTime = mutableMapOf<String, Long>()
+            val lastEventType = mutableMapOf<String, Int>()
+            val recentlyUsedApps = mutableSetOf<String>() // Track recently used apps even without duration
             
-            // Track event types for debugging
-            when (eventType) {
-                UsageEvents.Event.MOVE_TO_FOREGROUND -> foregroundEvents++
-                UsageEvents.Event.MOVE_TO_BACKGROUND -> backgroundEvents++
-                else -> otherEvents++
-            }
+            var eventCount = 0
+            var foregroundEvents = 0
+            var backgroundEvents = 0
+            var otherEvents = 0
             
-            // Handle MOVE_TO_FOREGROUND and MOVE_TO_BACKGROUND events
-            if (eventType == UsageEvents.Event.MOVE_TO_FOREGROUND || 
-                eventType == UsageEvents.Event.MOVE_TO_BACKGROUND) {
+            while (events.hasNextEvent()) {
+                events.getNextEvent(event)
+                eventCount++
                 
-                if (lastEventType[packageName] == UsageEvents.Event.MOVE_TO_FOREGROUND && 
-                    eventType == UsageEvents.Event.MOVE_TO_BACKGROUND) {
-                    
-                    val duration = eventTime - (lastEventTime[packageName] ?: eventTime)
-                    
-                    // Update weekly usage
-                    weeklyUsage[packageName] = (weeklyUsage[packageName] ?: 0) + duration
-                    
-                    // Update daily usage if the event was today
-                    if (lastEventTime[packageName] ?: 0 >= todayStart) {
-                        dailyUsage[packageName] = (dailyUsage[packageName] ?: 0) + duration
-                    }
+                val packageName = event.packageName
+                val eventTime = event.timeStamp
+                val eventType = event.eventType
+                
+                // Track event types for debugging
+                when (eventType) {
+                    UsageEvents.Event.MOVE_TO_FOREGROUND -> foregroundEvents++
+                    UsageEvents.Event.MOVE_TO_BACKGROUND -> backgroundEvents++
+                    else -> otherEvents++
                 }
                 
-                lastEventTime[packageName] = eventTime
-                lastEventType[packageName] = eventType
+                // Track any app that was brought to foreground recently as "used"
+                if (eventType == UsageEvents.Event.MOVE_TO_FOREGROUND && eventTime > (now - 10 * 60 * 1000)) {
+                    // If app was used in the last 10 minutes, consider it used even without duration
+                    recentlyUsedApps.add(packageName)
+                    Log.e(TAG, "Recently used app detected: $packageName")
+                }
+                
+                // Handle MOVE_TO_FOREGROUND and MOVE_TO_BACKGROUND events
+                if (eventType == UsageEvents.Event.MOVE_TO_FOREGROUND || 
+                    eventType == UsageEvents.Event.MOVE_TO_BACKGROUND) {
+                    
+                    if (lastEventType[packageName] == UsageEvents.Event.MOVE_TO_FOREGROUND && 
+                        eventType == UsageEvents.Event.MOVE_TO_BACKGROUND) {
+                        
+                        val duration = eventTime - (lastEventTime[packageName] ?: eventTime)
+                        
+                        // Update weekly usage
+                        weeklyUsage[packageName] = (weeklyUsage[packageName] ?: 0) + duration
+                        
+                        // Update daily usage if the event was today
+                        if (lastEventTime[packageName] ?: 0 >= todayStart) {
+                            dailyUsage[packageName] = (dailyUsage[packageName] ?: 0) + duration
+                        }
+                    }
+                    
+                    lastEventTime[packageName] = eventTime
+                    lastEventType[packageName] = eventType
+                }
             }
+            
+            // Add recently used apps that don't have duration yet
+            for (packageName in recentlyUsedApps) {
+                if (!weeklyUsage.containsKey(packageName) || weeklyUsage[packageName] == 0L) {
+                    // Add with a minimal duration of 1 minute to ensure it shows up
+                    weeklyUsage[packageName] = 60 * 1000L // 1 minute in milliseconds
+                    dailyUsage[packageName] = 60 * 1000L // 1 minute in milliseconds
+                    Log.e(TAG, "Added minimal usage for recently used app: $packageName")
+                }
+            }
+            
+            Log.e(TAG, "Processed $eventCount events (Foreground: $foregroundEvents, Background: $backgroundEvents, Other: $otherEvents)")
         }
         
-        Log.e(TAG, "Processed $eventCount events (Foreground: $foregroundEvents, Background: $backgroundEvents, Other: $otherEvents)")
         Log.e(TAG, "Found ${weeklyUsage.size} apps with usage data")
         
-        // Log all the apps we found for debugging
-        if (weeklyUsage.isNotEmpty()) {
-            Log.e(TAG, "All apps with raw weekly usage data:")
-            weeklyUsage.keys.forEachIndexed { index, pkg ->
-                val minutes = TimeUnit.MILLISECONDS.toMinutes(weeklyUsage[pkg] ?: 0)
-                Log.e(TAG, "$index: Package: $pkg, Minutes: $minutes")
-            }
-        }
-        
-        // If no usage data was found, return empty list but add more detailed logs
-        if (weeklyUsage.isEmpty()) {
-            Log.e(TAG, "No app usage data found after processing $eventCount events")
-            return emptyList()
-        }
-        
-        // Convert to AppUsage objects and filter
+        // Convert to AppUsage objects and don't filter system apps yet
         val result = mutableListOf<AppUsage>()
         
         weeklyUsage.keys.forEach { packageName ->
@@ -861,13 +960,13 @@ private fun getAppUsageStats(context: Context): List<AppUsage> {
                 val daily = TimeUnit.MILLISECONDS.toMinutes(dailyUsage[packageName] ?: 0)
                 val weekly = TimeUnit.MILLISECONDS.toMinutes(weeklyUsage[packageName] ?: 0)
                 
-                // Don't filter at all - accept everything with usage
+                // Include any app with usage
                 result.add(
                     AppUsage(
                         name = if (isSystemApp) "$appName (System)" else appName,
                         packageName = packageName,
-                        dailyMinutes = daily,
-                        weeklyMinutes = weekly
+                        dailyMinutes = Math.max(daily, 1), // Ensure at least 1 minute
+                        weeklyMinutes = Math.max(weekly, 1) // Ensure at least 1 minute
                     )
                 )
                 
@@ -877,144 +976,18 @@ private fun getAppUsageStats(context: Context): List<AppUsage> {
             }
         }
         
-        if (result.isEmpty()) {
-            Log.e(TAG, "⚠️ No apps with usage data found after processing")
-        } else {
-            Log.e(TAG, "✅ Found ${result.size} app usage records")
-            
-            // Log all the data to make sure it's visible
-            result.forEachIndexed { index, app ->
-                Log.e(TAG, "Final result app #$index: ${app.name}, Daily: ${app.dailyMinutes}m, Weekly: ${app.weeklyMinutes}m")
-            }
-        }
+        // Filter out system apps for the final result, but only if we have enough user apps
+        val userApps = result.filter { !it.name.contains("(System)") }
+        val finalResult = if (userApps.size >= 3) userApps else result
+        
+        Log.e(TAG, "Final result: ${finalResult.size} apps")
         
         Log.e(TAG, "========== COMPLETED APP USAGE DATA COLLECTION ==========")
-        return result
+        return finalResult
     } catch (e: Exception) {
         Log.e(TAG, "Error getting app usage stats", e)
         Log.e(TAG, "Exception details:", e)
         throw e
-    }
-}
-
-// Fix the alternate usage stats method to ensure it works on more devices
-private fun getAlternativeAppUsageStats(context: Context): List<AppUsage> {
-    val TAG = "AlternativeAppUsageStats"
-    Log.e(TAG, "⚠️ USING ALTERNATIVE APPROACH: Getting app usage stats using queryUsageStats directly")
-    
-    try {
-        val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
-        val packageManager = context.packageManager
-        val calendar = Calendar.getInstance()
-        
-        // Get today's start time
-        val todayStart = calendar.apply {
-            set(Calendar.HOUR_OF_DAY, 0)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }.timeInMillis
-        
-        // Get week's start time (try a much larger time window to be safe)
-        val weekStart = calendar.apply {
-            add(Calendar.DAY_OF_YEAR, -30) // Try 30 days instead of 7
-        }.timeInMillis
-        
-        val now = System.currentTimeMillis()
-        
-        Log.e(TAG, "ALTERNATIVE: Querying usage stats from ${Date(weekStart)} to ${Date(now)}")
-        
-        // Get the stats for various time intervals to maximize our chances
-        val dailyStats = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, todayStart, now)
-        val weeklyStats = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_WEEKLY, weekStart, now)
-        val monthlyStats = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_MONTHLY, weekStart, now)
-        val yearlyStats = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_YEARLY, weekStart, now)
-        
-        // Combine all unique apps from all time periods
-        val allStats = (dailyStats + weeklyStats + monthlyStats + yearlyStats).distinctBy { it.packageName }
-        
-        Log.e(TAG, "ALTERNATIVE: Found total stats entries: Daily=${dailyStats.size}, Weekly=${weeklyStats.size}, Monthly=${monthlyStats.size}, Yearly=${yearlyStats.size}, Combined unique=${allStats.size}")
-        
-        if (allStats.isEmpty()) {
-            Log.e(TAG, "ALTERNATIVE: No stats found in any time period")
-            return emptyList()
-        }
-        
-        // Create maps to store usage times - use the maximum value found in any time period
-        val dailyUsage = mutableMapOf<String, Long>()
-        val weeklyUsage = mutableMapOf<String, Long>()
-        
-        // Process all the stats and keep the highest values
-        allStats.forEach { stat ->
-            val packageName = stat.packageName
-            val totalTimeMs = stat.totalTimeInForeground
-            
-            // Include ANY app with any usage at all
-            if (totalTimeMs > 0) {
-                // For weekly, use the max of anything we find
-                val existing = weeklyUsage[packageName] ?: 0
-                if (totalTimeMs > existing) {
-                    weeklyUsage[packageName] = totalTimeMs
-                    
-                    // Approximate daily as 1/7 of weekly
-                    dailyUsage[packageName] = totalTimeMs / 7
-                }
-                
-                Log.e(TAG, "ALTERNATIVE: Found app with usage: $packageName = ${TimeUnit.MILLISECONDS.toMinutes(totalTimeMs)} minutes")
-            }
-        }
-        
-        Log.e(TAG, "ALTERNATIVE: Found ${weeklyUsage.size} apps with non-zero usage")
-        
-        // Convert to AppUsage objects, but don't filter out system apps yet
-        val allApps = mutableListOf<AppUsage>()
-        
-        weeklyUsage.keys.forEach { packageName ->
-            try {
-                // Get app info
-                val appInfo = packageManager.getApplicationInfo(packageName, 0)
-                val appName = packageManager.getApplicationLabel(appInfo).toString()
-                val isSystemApp = (appInfo.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0
-                
-                val daily = TimeUnit.MILLISECONDS.toMinutes(dailyUsage[packageName] ?: 0)
-                val weekly = TimeUnit.MILLISECONDS.toMinutes(weeklyUsage[packageName] ?: 0)
-                
-                // Accept any app with usage
-                if (weekly > 0) {
-                    val finalName = if (isSystemApp) "$appName (System)" else appName
-                    
-                    allApps.add(
-                        AppUsage(
-                            name = finalName,
-                            packageName = packageName,
-                            dailyMinutes = daily,
-                            weeklyMinutes = weekly
-                        )
-                    )
-                    
-                    Log.e(TAG, "ALTERNATIVE: Added app: $finalName (${if (isSystemApp) "System" else "User"}), Weekly: $weekly min")
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "ALTERNATIVE: Error processing $packageName: ${e.message}")
-            }
-        }
-        
-        // Only return non-system apps if we have enough, otherwise include system apps too
-        val userApps = allApps.filter { !it.name.contains("(System)") }
-        
-        val result = if (userApps.size >= 3) {
-            Log.e(TAG, "ALTERNATIVE: Returning ${userApps.size} user apps")
-            userApps
-        } else {
-            Log.e(TAG, "ALTERNATIVE: Not enough user apps (${userApps.size}), returning all ${allApps.size} apps including system apps")
-            allApps
-        }
-        
-        return result
-    } catch (e: Exception) {
-        Log.e(TAG, "ALTERNATIVE: Error getting app usage stats", e)
-        Log.e(TAG, "ALTERNATIVE: Exception details:", e)
-        return emptyList()
     }
 }
 
