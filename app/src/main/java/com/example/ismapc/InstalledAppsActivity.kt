@@ -240,7 +240,7 @@ fun InstalledAppsScreen(
                         .padding(horizontal = 16.dp)
                 ) {
                     Text(
-                        text = "Apps (${filteredApps.size})",
+                        text = "Apps (${filteredApps.count { !(it["isSystemApp"] as? Boolean ?: false) }})",
                         style = MaterialTheme.typography.titleLarge,
                         color = Color(0xFFE0852D),
                         fontWeight = FontWeight.Bold

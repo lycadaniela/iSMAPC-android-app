@@ -49,6 +49,8 @@ class AppLockService : Service() {
             usageStatsManager = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
             createNotificationChannel()
             acquireWakeLock()
+            startForeground()
+            startMonitoring()
         } catch (e: Exception) {
             Log.e(TAG, "Error in onCreate: ${e.message}")
         }
@@ -134,7 +136,7 @@ class AppLockService : Service() {
                 .setContentText("Monitoring app usage and location")
                 .setSmallIcon(R.drawable.ic_launcher_foreground)
                 .setContentIntent(pendingIntent)
-                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setOngoing(true)
                 .build()
 
@@ -171,6 +173,48 @@ class AppLockService : Service() {
         return emptyList()
     }
 
+    private fun getCurrentApp(): String? {
+        try {
+            val time = System.currentTimeMillis()
+            val usageEvents = usageStatsManager?.queryEvents(time - 1000, time)
+            if (usageEvents == null) {
+                Log.e(TAG, "UsageStatsManager is null")
+                return null
+            }
+
+            val event = UsageEvents.Event()
+            var lastMoveToForeground: UsageEvents.Event? = null
+
+            while (usageEvents.hasNextEvent()) {
+                usageEvents.getNextEvent(event)
+                if (event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND) {
+                    lastMoveToForeground = event
+                }
+            }
+
+            return lastMoveToForeground?.packageName
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting current app: ${e.message}")
+            return null
+        }
+    }
+
+    private fun showLockScreen() {
+        try {
+            val intent = Intent(this, AppLockScreenActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or 
+                       Intent.FLAG_ACTIVITY_CLEAR_TOP or 
+                       Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                       Intent.FLAG_ACTIVITY_NO_ANIMATION
+                addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION)
+            }
+            startActivity(intent)
+            Log.d(TAG, "Lock screen shown")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error showing lock screen: ${e.message}")
+        }
+    }
+
     private fun startMonitoring() {
         job = scope.launch {
             try {
@@ -190,7 +234,7 @@ class AppLockService : Service() {
                                 
                                 // Check current app
                                 val currentApp = getCurrentApp()
-                                if (currentApp != null) {
+                                if (currentApp != null && currentApp != lastLockedApp) {
                                     Log.d(TAG, "Current app: $currentApp, Locked apps: $lockedApps")
                                     if (lockedApps.contains(currentApp)) {
                                         // App is locked, show lock screen immediately
@@ -199,8 +243,6 @@ class AppLockService : Service() {
                                         withContext(Dispatchers.Main) {
                                             showLockScreen()
                                         }
-                                        // Add a small delay after showing lock screen
-                                        delay(100)
                                     } else {
                                         lastLockedApp = null
                                     }
@@ -214,7 +256,7 @@ class AppLockService : Service() {
                         }
                     }
                     
-                    delay(200) // Check more frequently
+                    delay(50) // Check every 50ms for faster response
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {
                 Log.d(TAG, "Monitoring coroutine cancelled")
@@ -223,57 +265,6 @@ class AppLockService : Service() {
                 Log.e(TAG, "Fatal error in monitoring: ${e.message}")
                 restartService()
             }
-        }
-    }
-
-    private fun getCurrentApp(): String? {
-        try {
-            val time = System.currentTimeMillis()
-            // Query a longer time window to catch all events
-            val usageEvents = usageStatsManager?.queryEvents(time - 2000, time)
-            if (usageEvents == null) {
-                Log.e(TAG, "UsageStatsManager is null")
-                return null
-            }
-
-            val event = UsageEvents.Event()
-            var lastEvent: UsageEvents.Event? = null
-            var lastMoveToForeground: UsageEvents.Event? = null
-
-            while (usageEvents.hasNextEvent()) {
-                usageEvents.getNextEvent(event)
-                when (event.eventType) {
-                    UsageEvents.Event.MOVE_TO_FOREGROUND -> {
-                        lastMoveToForeground = event
-                    }
-                    UsageEvents.Event.ACTIVITY_RESUMED -> {
-                        lastEvent = event
-                    }
-                }
-            }
-
-            // Prefer MOVE_TO_FOREGROUND events as they're more reliable
-            val packageName = lastMoveToForeground?.packageName ?: lastEvent?.packageName
-            Log.d(TAG, "Current app package name: $packageName")
-            return packageName
-        } catch (e: Exception) {
-            Log.e(TAG, "Error getting current app: ${e.message}")
-            return null
-        }
-    }
-
-    private fun showLockScreen() {
-        try {
-            val intent = Intent(this, AppLockScreenActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or 
-                       Intent.FLAG_ACTIVITY_CLEAR_TOP or 
-                       Intent.FLAG_ACTIVITY_SINGLE_TOP
-                addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION)
-            }
-            startActivity(intent)
-            Log.d(TAG, "Lock screen shown")
-        } catch (e: Exception) {
-            Log.e(TAG, "Error showing lock screen: ${e.message}")
         }
     }
 
