@@ -848,10 +848,10 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                     }
 
                     // Quick Actions Section
-                                        Text(
+                    Text(
                         text = "Quick Actions",
                         style = MaterialTheme.typography.titleMedium,
-                        color = Color(0xFFE0852D),
+                        color = Color(0xFF4A4A4A),
                         modifier = Modifier.padding(top = 8.dp)
                     )
 

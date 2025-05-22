@@ -159,6 +159,10 @@ class ChildSignUpActivity : ComponentActivity() {
                                         Toast.makeText(this, "Sign up failed: ${task.exception?.message}", Toast.LENGTH_LONG).show()
                                     }
                                 }
+                        },
+                        onGoogleSignUp = {
+                            val signInIntent = googleSignInClient.signInIntent
+                            startActivityForResult(signInIntent, RC_SIGN_IN)
                         }
                     )
                 }
@@ -316,7 +320,8 @@ fun ChildSignUpScreen(
     onImageSelect: () -> Unit,
     selectedImageUri: Uri?,
     profileBitmap: Bitmap?,
-    onSignUp: (String, String, String, String) -> Unit
+    onSignUp: (String, String, String, String) -> Unit,
+    onGoogleSignUp: () -> Unit
 ) {
     var fullName by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
@@ -381,17 +386,14 @@ fun ChildSignUpScreen(
                 }
             }
 
-            // Profile Picture Section
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
+            // Profile Photo Section
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp),
+                contentAlignment = Alignment.Center
             ) {
                 Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Box(
@@ -427,14 +429,16 @@ fun ChildSignUpScreen(
                     Text(
                         text = "Tap to add profile picture",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = Color(0xFF4A4A4A)
                     )
                 }
             }
 
-            // Form Fields Card
+            // Create Account Group
             Card(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surface
                 )
@@ -630,29 +634,32 @@ fun ChildSignUpScreen(
 
             // Google Sign Up Button
             OutlinedButton(
-                onClick = {
-                    // Handle Google sign up
-                },
+                onClick = onGoogleSignUp,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
-                shape = RoundedCornerShape(8.dp),
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
                 colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = MaterialTheme.colorScheme.onSurface
+                    contentColor = MaterialTheme.colorScheme.onBackground
                 )
             ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Image(
-                        painter = painterResource(id = R.drawable.ic_google),
-                        contentDescription = "Google",
-                        modifier = Modifier.size(24.dp)
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_google_logo),
+                        contentDescription = "Google logo",
+                        modifier = Modifier.size(24.dp),
+                        tint = Color.Unspecified
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Sign up with Google")
+                    Text(
+                        "Continue with Google",
+                        style = MaterialTheme.typography.titleMedium
+                    )
                 }
             }
         }

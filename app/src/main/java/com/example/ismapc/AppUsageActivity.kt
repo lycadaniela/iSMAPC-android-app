@@ -15,6 +15,8 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Refresh
@@ -22,8 +24,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.ismapc.ui.theme.ISMAPCTheme
 import com.google.firebase.auth.FirebaseAuth
@@ -162,42 +166,12 @@ fun AppUsageScreen(childId: String, childName: String, isChildDevice: Boolean) {
         // Register the snapshot listener
         val listener = docRef.addSnapshotListener { snapshot, error ->
             if (error != null) {
-                Log.e(TAG, "Error listening for app usage updates", error)
-                errorMessage = "Error getting real-time updates: ${error.message}"
+                Log.e(TAG, "Error listening to app usage updates", error)
+                errorMessage = "Error loading app usage data"
                 return@addSnapshotListener
             }
-            
+
             if (snapshot != null && snapshot.exists()) {
-                Log.e(TAG, "Real-time update received for app usage data")
-                
-                // Get last updated timestamp
-                lastUpdated = snapshot.getLong("lastUpdated")
-                
-                // Get data source to check if it's sample data
-                val dataSource = snapshot.getString("dataSource")
-                isSampleData = dataSource == "SAMPLE_DATA"
-                
-                // Get today's start timestamp (midnight)
-                val calendar = Calendar.getInstance()
-                calendar.set(Calendar.HOUR_OF_DAY, 0)
-                calendar.set(Calendar.MINUTE, 0)
-                calendar.set(Calendar.SECOND, 0)
-                calendar.set(Calendar.MILLISECOND, 0)
-                val todayStart = calendar.timeInMillis
-                
-                Log.e(TAG, "Today starts at: ${Date(todayStart)}")
-                
-                // Only use official total if it's from today, otherwise recalculate
-                val docLastUpdated = snapshot.getLong("lastUpdated") ?: 0
-                val useTotalFromDoc = docLastUpdated >= todayStart
-                
-                if (useTotalFromDoc) {
-                    // Get total app usage from document if it's recent
-                    totalAppUsage = snapshot.getLong("totalAppWeeklyUsage") ?: 0
-                } else {
-                    Log.e(TAG, "Document was last updated at ${Date(docLastUpdated)}, which is before today. Will recalculate totals.")
-                }
-                
                 try {
                     // Process apps data
                     @Suppress("UNCHECKED_CAST")
@@ -227,13 +201,11 @@ fun AppUsageScreen(childId: String, childName: String, isChildDevice: Boolean) {
                             )
                         }
                         
-                        // If we couldn't use the total from the document, calculate it from app list
-                        if (!useTotalFromDoc) {
-                            totalAppUsage = newAppUsageList.sumOf { it.weeklyMinutes }
-                        }
+                        // Calculate total usage
+                        totalAppUsage = newAppUsageList.sumOf { it.weeklyMinutes }
                         
                         // Update the app usage list
-                        appUsageList = newAppUsageList
+                        appUsageList = newAppUsageList.sortedByDescending { it.dailyMinutes }
                         Log.e(TAG, "Updated app usage list with ${newAppUsageList.size} apps")
                         
                         // Clear loading and error states
@@ -261,37 +233,11 @@ fun AppUsageScreen(childId: String, childName: String, isChildDevice: Boolean) {
             Log.e(TAG, "Removed app usage snapshot listener")
         }
     }
-    
-    // Handle initial loading for child devices
-    if (isChildDevice) {
-        LaunchedEffect(Unit) {
-            withContext(Dispatchers.IO) {
-                try {
-                    val localData = getAppUsageStats(context)
-                    
-                    if (localData.isNotEmpty()) {
-                        Log.e(TAG, "Initial load: Retrieved ${localData.size} app usage records from device")
-                        
-                        // Calculate total screen time
-                        totalAppUsage = localData.sumOf { it.weeklyMinutes }
-                        
-                        // Store the data to Firestore
-                        updateFirestoreWithUsageData(firestore, childId, localData, false)
-                    }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error getting initial app usage data", e)
-                } finally {
-                    // Snapshot listener will handle the rest
-                    isLoading = false
-                }
-            }
-        }
-    }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("$childName's App Usage") },
+                title = { },
                 navigationIcon = {
                     IconButton(onClick = { (context as? ComponentActivity)?.finish() }) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Back")
@@ -300,172 +246,138 @@ fun AppUsageScreen(childId: String, childName: String, isChildDevice: Boolean) {
             )
         }
     ) { paddingValues ->
-        if (isLoading) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    CircularProgressIndicator()
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text("Loading app usage data...", style = MaterialTheme.typography.bodyLarge)
-                }
-            }
-        } else if (appUsageList.isEmpty()) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.padding(16.dp)
-                ) {
-                    Text(
-                        "No app usage data available",
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                    
-                    if (errorMessage != null) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            errorMessage!!,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.error
-                        )
-                    }
-                }
-            }
-        } else {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
-            ) {
-                if (isSampleData) {
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.errorContainer
-                        )
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp)
-                        ) {
-                            Text(
-                                "⚠️ SHOWING SAMPLE DATA",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onErrorContainer
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                errorMessage ?: if (isChildDevice) {
-                                    "The app was unable to collect real usage data from this device. " +
-                                    "Please make sure usage stats permission is granted in device settings."
-                                } else {
-                                    "No real usage data available for this child. " +
-                                    "The child's device may need to be set up properly."
-                                },
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onErrorContainer
-                            )
-                        }
-                    }
-                } else {
-                    // Show weekly total screen time
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer
-                        )
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp)
-                        ) {
-                            Text(
-                                "📱 Weekly App Usage",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                formatUsageTime(totalAppUsage),
-                                style = MaterialTheme.typography.headlineMedium,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                            
-                            // Show last updated time if available
-                            lastUpdated?.let { timestamp ->
-                                Spacer(modifier = Modifier.height(8.dp))
-                                val date = Date(timestamp)
-                                val dateFormat = java.text.SimpleDateFormat("MMM d, yyyy h:mm a", Locale.getDefault())
-                                Text(
-                                    "Last updated: ${dateFormat.format(date)}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                                )
-                            }
-                        }
-                    }
-                }
-                
-                Text(
-                    "App Breakdown",
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(start = 16.dp, top = 8.dp)
-                )
-                
-        LazyColumn(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+                .padding(paddingValues)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
-                    items(appUsageList.sortedByDescending { it.dailyMinutes }) { appUsage ->
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+            // Header
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "$childName's App Usage",
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = Color(0xFFE0852D),
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "Track and manage app usage",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = Color(0xFFD6D7D3),
+                    textAlign = TextAlign.Center
+                )
+            }
+
+            // Total Usage Card
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                )
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(20.dp)
                 ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp)
-                    ) {
+                    Text(
+                        text = "Total Usage",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = Color(0xFFE0852D),
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = formatUsageTime(totalAppUsage),
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    if (lastUpdated != null) {
+                        Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = appUsage.name,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
+                            text = "Last updated: ${formatLastUpdated(lastUpdated!!)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
+                    }
+                }
+            }
+
+            // App Usage List
+            if (isLoading) {
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(
+                        color = Color(0xFFE0852D)
+                    )
+                }
+            } else if (errorMessage != null) {
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = errorMessage!!,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            } else {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                ) {
+                    Text(
+                        text = "App Breakdown",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = Color(0xFFE0852D),
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    appUsageList.forEach { appUsage ->
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surface
+                            )
                         ) {
-                            Column {
-                                Text(
-                                    text = "Today",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Text(
-                                    text = formatUsageTime(appUsage.dailyMinutes),
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                            }
-                            Column(horizontalAlignment = Alignment.End) {
-                                Text(
-                                    text = "This Week",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text(
+                                        text = appUsage.name,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = "Daily: ${formatUsageTime(appUsage.dailyMinutes)}",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                                 Text(
                                     text = formatUsageTime(appUsage.weeklyMinutes),
-                                    style = MaterialTheme.typography.bodyMedium
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = Color(0xFFE0852D)
                                 )
                             }
                         }
@@ -473,8 +385,18 @@ fun AppUsageScreen(childId: String, childName: String, isChildDevice: Boolean) {
                 }
             }
         }
-            }
-        }
+    }
+}
+
+private fun formatLastUpdated(timestamp: Long): String {
+    val now = System.currentTimeMillis()
+    val diff = now - timestamp
+    
+    return when {
+        diff < 60 * 1000 -> "Just now"
+        diff < 60 * 60 * 1000 -> "${diff / (60 * 1000)} minutes ago"
+        diff < 24 * 60 * 60 * 1000 -> "${diff / (60 * 60 * 1000)} hours ago"
+        else -> "${diff / (24 * 60 * 60 * 1000)} days ago"
     }
 }
 

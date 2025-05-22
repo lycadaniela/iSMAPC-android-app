@@ -116,10 +116,20 @@ fun ChildDetailsScreen(childId: String, childName: String) {
     var installedApps by remember { mutableStateOf<List<Map<String, Any>>>(emptyList()) }
     var currentLocation by remember { mutableStateOf<GeoPoint?>(null) }
     
-    // Calculate screen time percentage
+    // Calculate screen time percentage and format time
     val screenTimePercentage = remember(screenTime) {
         val totalDayMilliseconds = 24 * 60 * 60 * 1000L // 24 hours in milliseconds
         ((screenTime.toFloat() / totalDayMilliseconds) * 100).coerceIn(0f, 100f)
+    }
+
+    val screenTimeUsed = remember(screenTime) {
+        val hours = TimeUnit.MILLISECONDS.toHours(screenTime)
+        val minutes = TimeUnit.MILLISECONDS.toMinutes(screenTime) % 60
+        "$hours hours $minutes minutes"
+    }
+
+    val screenTimeLimit = remember {
+        "24 hours" // Default limit
     }
     
     // Fetch child photo, email and screen time
@@ -253,22 +263,14 @@ fun ChildDetailsScreen(childId: String, childName: String) {
                     // Profile Picture with Progress Bar
                     Box(
                         modifier = Modifier
-                            .size(120.dp)
+                            .size(140.dp)
                             .padding(4.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        // Progress Bar
-                        CircularProgressIndicator(
-                            progress = screenTimePercentage / 100f,
-                            modifier = Modifier.fillMaxSize(),
-                            color = Color(0xFFE0852D),
-                            strokeWidth = 4.dp
-                        )
-                        
                         // Profile Picture
                         Box(
                             modifier = Modifier
-                                .size(100.dp)
+                                .size(120.dp)
                                 .clip(CircleShape)
                                 .background(MaterialTheme.colorScheme.surface)
                                 .border(
@@ -314,11 +316,11 @@ fun ChildDetailsScreen(childId: String, childName: String) {
                 }
             }
 
-            // Screen Time Card
+            // Screen Time Group
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
+                    .padding(vertical = 8.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surface
                 )
@@ -326,24 +328,27 @@ fun ChildDetailsScreen(childId: String, childName: String) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                        .padding(16.dp)
                 ) {
                     Text(
-                        text = "Today's Usage",
+                        text = "Screen Time",
                         style = MaterialTheme.typography.titleMedium,
-                        color = Color(0xFFE0852D)
-                    )
-                    
-                    Spacer(modifier = Modifier.height(16.dp))
-                    
-                    val hours = TimeUnit.MILLISECONDS.toHours(screenTime)
-                    val minutes = TimeUnit.MILLISECONDS.toMinutes(screenTime) % 60
-                    
-                    Text(
-                        text = "$hours hours $minutes minutes",
-                        style = MaterialTheme.typography.headlineMedium,
                         color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    LinearProgressIndicator(
+                        progress = screenTimePercentage / 100f,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(8.dp),
+                        color = Color(0xFFE0852D),
+                        trackColor = Color(0xFFE0852D).copy(alpha = 0.2f)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "$screenTimeUsed of $screenTimeLimit",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }

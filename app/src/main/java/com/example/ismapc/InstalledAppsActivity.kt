@@ -13,9 +13,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -26,6 +30,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -103,6 +108,7 @@ fun InstalledAppsScreen(
     val firestore = FirebaseFirestore.getInstance()
     var lockedApps by remember { mutableStateOf<List<String>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
+    var searchQuery by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
 
     // Fetch locked apps
@@ -122,71 +128,152 @@ fun InstalledAppsScreen(
         }
     }
 
+    // Filter apps based on search query
+    val filteredApps = remember(installedApps, searchQuery) {
+        if (searchQuery.isEmpty()) {
+            installedApps
+        } else {
+            installedApps.filter { app ->
+                val appName = app["appName"] as? String ?: ""
+                appName.contains(searchQuery, ignoreCase = true)
+            }
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Installed Apps", fontWeight = FontWeight.Bold) },
+                title = { },
                 navigationIcon = {
                     IconButton(onClick = { (context as? ComponentActivity)?.finish() }) {
-                        Icon(
-                            imageVector = Icons.Default.ArrowBack,
-                            contentDescription = "Back"
-                        )
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary
-                )
+                }
             )
-        },
-        containerColor = MaterialTheme.colorScheme.background
+        }
     ) { paddingValues ->
-        Box(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
                 .padding(paddingValues)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
-            if (isLoading || !iconsLoaded) {
-                CircularProgressIndicator(
-                    modifier = Modifier.align(Alignment.Center),
-                    color = MaterialTheme.colorScheme.primary
+            // Header
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "Installed Apps",
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = Color(0xFFE0852D),
+                    fontWeight = FontWeight.Bold
                 )
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(0.dp)
+                Text(
+                    text = "Manage app access and restrictions",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = Color(0xFFD6D7D3),
+                    textAlign = TextAlign.Center
+                )
+            }
+
+            // Search Bar
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                placeholder = { Text("Search apps") },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = "Search"
+                    )
+                },
+                trailingIcon = {
+                    if (searchQuery.isNotEmpty()) {
+                        IconButton(onClick = { searchQuery = "" }) {
+                            Icon(
+                                imageVector = Icons.Default.Clear,
+                                contentDescription = "Clear search"
+                            )
+                        }
+                    }
+                },
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp),
+                colors = TextFieldDefaults.outlinedTextFieldColors(
+                    focusedBorderColor = Color(0xFFE0852D),
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                )
+            )
+
+            // Apps List
+            if (isLoading || !iconsLoaded) {
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center
                 ) {
-                    items(installedApps) { app ->
+                    CircularProgressIndicator(
+                        color = Color(0xFFE0852D)
+                    )
+                }
+            } else if (filteredApps.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = if (searchQuery.isEmpty()) "No apps found" else "No apps match your search",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                ) {
+                    Text(
+                        text = "Apps (${filteredApps.size})",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = Color(0xFFE0852D),
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    filteredApps.forEach { app ->
                         val appName = app["appName"] as? String ?: ""
                         val packageName = app["packageName"] as? String ?: ""
                         val isSystemApp = app["isSystemApp"] as? Boolean ?: false
+                        
                         if (!isSystemApp) {
                             val isLocked = lockedApps.contains(packageName)
                             var isUpdating by remember { mutableStateOf(false) }
-                            Box(
+                            
+                            Card(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(72.dp)
+                                    .padding(vertical = 4.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surface
+                                )
                             ) {
-                                Card(
+                                Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .fillMaxHeight(),
-                                    shape = RoundedCornerShape(12.dp),
-                                    elevation = CardDefaults.cardElevation(4.dp),
-                                    colors = CardDefaults.cardColors(
-                                        containerColor = MaterialTheme.colorScheme.surface
-                                    )
+                                        .padding(16.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .fillMaxHeight()
-                                            .padding(horizontal = 16.dp),
-                                        verticalAlignment = Alignment.CenterVertically
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(16.dp)
                                     ) {
                                         // App Icon or First Letter
                                         val icon = appIconMap[packageName]
@@ -215,64 +302,62 @@ fun InstalledAppsScreen(
                                                 )
                                             }
                                         }
-                                        Spacer(modifier = Modifier.width(16.dp))
                                         Text(
                                             text = appName,
                                             style = MaterialTheme.typography.titleMedium,
-                                            color = MaterialTheme.colorScheme.onSurface,
-                                            fontWeight = FontWeight.SemiBold,
-                                            modifier = Modifier.weight(1f)
+                                            color = MaterialTheme.colorScheme.onSurface
                                         )
-                                        Button(
-                                            onClick = {
-                                                if (!isUpdating) {
-                                                    isUpdating = true
-                                                    scope.launch {
-                                                        try {
-                                                            val newLockedApps = if (isLocked) {
-                                                                lockedApps - packageName
-                                                            } else {
-                                                                lockedApps + packageName
-                                                            }
-                                                            firestore.collection("lockedApps")
-                                                                .document(childId)
-                                                                .set(mapOf("lockedApps" to newLockedApps))
-                                                                .await()
-                                                            lockedApps = newLockedApps
-                                                        } catch (e: Exception) {
-                                                            Log.e("InstalledAppsScreen", "Error updating lock state", e)
-                                                        } finally {
-                                                            isUpdating = false
+                                    }
+                                    
+                                    Button(
+                                        onClick = {
+                                            if (!isUpdating) {
+                                                isUpdating = true
+                                                scope.launch {
+                                                    try {
+                                                        val newLockedApps = if (isLocked) {
+                                                            lockedApps - packageName
+                                                        } else {
+                                                            lockedApps + packageName
                                                         }
+                                                        firestore.collection("lockedApps")
+                                                            .document(childId)
+                                                            .set(mapOf("lockedApps" to newLockedApps))
+                                                            .await()
+                                                        lockedApps = newLockedApps
+                                                    } catch (e: Exception) {
+                                                        Log.e("InstalledAppsScreen", "Error updating lock state", e)
+                                                    } finally {
+                                                        isUpdating = false
                                                     }
                                                 }
-                                            },
-                                            colors = ButtonDefaults.buttonColors(
-                                                containerColor = if (isLocked) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-                                                contentColor = MaterialTheme.colorScheme.onPrimary
-                                            ),
-                                            shape = RoundedCornerShape(12.dp),
-                                            modifier = Modifier.height(36.dp)
-                                        ) {
-                                            if (isUpdating) {
-                                                CircularProgressIndicator(
-                                                    modifier = Modifier.size(20.dp),
-                                                    color = MaterialTheme.colorScheme.onPrimary
+                                            }
+                                        },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = if (isLocked) MaterialTheme.colorScheme.error else Color(0xFFE0852D),
+                                            contentColor = MaterialTheme.colorScheme.onPrimary
+                                        ),
+                                        shape = RoundedCornerShape(12.dp),
+                                        modifier = Modifier.height(36.dp)
+                                    ) {
+                                        if (isUpdating) {
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.size(20.dp),
+                                                color = MaterialTheme.colorScheme.onPrimary
+                                            )
+                                        } else {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = if (isLocked) Icons.Outlined.Lock else Icons.Default.Lock,
+                                                    contentDescription = if (isLocked) "Unlock App" else "Lock App"
                                                 )
-                                            } else {
-                                                Row(
-                                                    verticalAlignment = Alignment.CenterVertically,
-                                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                                ) {
-                                                    Icon(
-                                                        imageVector = if (isLocked) Icons.Outlined.Lock else Icons.Default.Lock,
-                                                        contentDescription = if (isLocked) "Unlock App" else "Lock App"
-                                                    )
-                                                    Text(
-                                                        text = if (isLocked) "Unlock" else "Lock",
-                                                        fontWeight = FontWeight.Bold
-                                                    )
-                                                }
+                                                Text(
+                                                    text = if (isLocked) "Unlock" else "Lock",
+                                                    fontWeight = FontWeight.Bold
+                                                )
                                             }
                                         }
                                     }

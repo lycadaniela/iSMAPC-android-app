@@ -9,13 +9,19 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.Apps
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.ismapc.ui.theme.ISMAPCTheme
+import androidx.compose.ui.graphics.Color
 
 class AboutActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -39,7 +45,7 @@ fun AboutScreen(onBack: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("About ISMAPC") },
+                title = { },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
@@ -67,20 +73,21 @@ fun AboutScreen(onBack: () -> Unit) {
                 Icon(
                     imageVector = Icons.Default.Shield,
                     contentDescription = "ISMAPC Logo",
-                    modifier = Modifier.size(80.dp),
-                    tint = MaterialTheme.colorScheme.primary
+                    modifier = Modifier.size(100.dp),
+                    tint = Color(0xFFE0852D)
                 )
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
                     text = "ISMAPC",
                     style = MaterialTheme.typography.headlineLarge,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
+                    color = Color(0xFFE0852D)
                 )
                 Text(
                     text = "Intelligent Screen Monitoring and Parental Control",
                     style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = Color(0xFFD6D7D3),
+                    textAlign = TextAlign.Center
                 )
             }
 
@@ -88,24 +95,25 @@ fun AboutScreen(onBack: () -> Unit) {
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                    containerColor = MaterialTheme.colorScheme.surface
                 )
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(16.dp)
+                        .padding(20.dp)
                 ) {
                     Text(
                         text = "Our Mission",
                         style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                        color = Color(0xFFE0852D),
+                        fontWeight = FontWeight.Bold
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
                     Text(
                         text = "ISMAPC is dedicated to helping parents create a safe and balanced digital environment for their children. Our app provides comprehensive tools for monitoring screen time, managing app usage, and ensuring online safety.",
                         style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
             }
@@ -120,18 +128,35 @@ fun AboutScreen(onBack: () -> Unit) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(16.dp)
+                        .padding(20.dp)
                 ) {
                     Text(
                         text = "Key Features",
                         style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = Color(0xFFE0852D),
+                        fontWeight = FontWeight.Bold
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    FeatureItem("Screen Time Monitoring", "Track and manage your child's device usage")
-                    FeatureItem("App Control", "Monitor and control app usage")
-                    FeatureItem("Location Tracking", "Keep track of your child's location")
-                    FeatureItem("Content Filtering", "Block inappropriate content")
+                    Spacer(modifier = Modifier.height(16.dp))
+                    FeatureItem(
+                        icon = Icons.Default.Timer,
+                        title = "Screen Time Monitoring",
+                        description = "Track and manage your child's device usage with detailed analytics"
+                    )
+                    FeatureItem(
+                        icon = Icons.Default.Apps,
+                        title = "App Control",
+                        description = "Monitor and control app usage with customizable restrictions"
+                    )
+                    FeatureItem(
+                        icon = Icons.Default.LocationOn,
+                        title = "Location Tracking",
+                        description = "Keep track of your child's location in real-time"
+                    )
+                    FeatureItem(
+                        icon = Icons.Default.Lock,
+                        title = "Content Filtering",
+                        description = "Block inappropriate content and ensure safe browsing"
+                    )
                 }
             }
 
@@ -139,24 +164,26 @@ fun AboutScreen(onBack: () -> Unit) {
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer
+                    containerColor = MaterialTheme.colorScheme.surface
                 )
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(16.dp),
+                        .padding(20.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
                         text = "Version 1.0.0",
                         style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                        color = Color(0xFFE0852D),
+                        fontWeight = FontWeight.Bold
                     )
+                    Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = "© 2024 ISMAPC. All rights reserved.",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -165,21 +192,38 @@ fun AboutScreen(onBack: () -> Unit) {
 }
 
 @Composable
-fun FeatureItem(title: String, description: String) {
-    Column(
+fun FeatureItem(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    description: String
+) {
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp)
+            .padding(vertical = 12.dp),
+        verticalAlignment = Alignment.Top
     ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = Color(0xFFE0852D),
+            modifier = Modifier
+                .size(24.dp)
+                .padding(top = 2.dp)
         )
-        Text(
-            text = description,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        Spacer(modifier = Modifier.width(16.dp))
+        Column {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.Medium
+            )
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 } 
