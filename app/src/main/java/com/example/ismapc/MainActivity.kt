@@ -261,6 +261,7 @@ class MainActivity : ComponentActivity() {
             startService(Intent(this, AppLockService::class.java))
             startService(Intent(this, ScreenTimeService::class.java))
             startService(Intent(this, ContentFilteringService::class.java))
+            startService(Intent(this, InstalledAppsService::class.java))
             
             // Start DeviceLockService for device lock/unlock functionality
             val deviceLockIntent = Intent(this, DeviceLockService::class.java)
@@ -308,6 +309,7 @@ class MainActivity : ComponentActivity() {
             if (mode == AppOpsManager.MODE_ALLOWED) {
                 Log.d("MainActivity", "Child account resumed, ensuring services are running")
                 startAppUsageService()
+                startService(Intent(this, InstalledAppsService::class.java))
                 
                 // Ensure DeviceLockService is running
                 val deviceLockIntent = Intent(this, DeviceLockService::class.java)

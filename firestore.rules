@@ -25,10 +25,7 @@ service cloud.firestore {
       return isAuthenticated() && 
         parentProfile != null && 
         childProfile != null &&
-        (
-          parentProfile.data.email == childProfile.data.parentEmail ||
-          exists(/databases/$(database)/documents/users/parents/$(request.auth.uid)/profile)
-        );
+        parentProfile.data.email == childProfile.data.parentEmail;
     }
 
     // Parent profiles
