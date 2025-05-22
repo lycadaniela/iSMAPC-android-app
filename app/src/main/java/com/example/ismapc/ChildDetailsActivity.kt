@@ -12,6 +12,11 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.Apps
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -69,6 +74,9 @@ import androidx.compose.foundation.border
 import coil.compose.AsyncImage
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.clickable
 
 class ChildDetailsActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -197,76 +205,223 @@ fun ChildDetailsScreen(childId: String, childName: String) {
         }
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.primary)
-    ) {
-        // Top Bar with Back Button and Email Icon
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Back Button
-            IconButton(
-                onClick = { (context as? Activity)?.finish() }
-            ) {
-                Icon(
-                    imageVector = Icons.Default.ArrowBack,
-                    contentDescription = "Back",
-                    tint = MaterialTheme.colorScheme.onPrimary,
-                    modifier = Modifier.size(28.dp)
-                )
-            }
-
-            // Email Icon and Dropdown
-            Box {
-                IconButton(
-                    onClick = { 
-                        showEmailDropdown = !showEmailDropdown
-                        Log.d("ChildDetails", "Email dropdown toggled. Current email: $childEmail")
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { },
+                navigationIcon = {
+                    IconButton(onClick = { (context as? Activity)?.finish() }) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowBack,
+                            contentDescription = "Back"
+                        )
                     }
+                }
+            )
+        }
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // Profile Section
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                )
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Email,
-                        contentDescription = "Show email",
-                        tint = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.size(28.dp)
+                    // Screen Time Percentage Text
+                    Text(
+                        text = "Spent ${String.format("%.1f", screenTimePercentage)}% of the day on the phone",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
+
+                    // Profile Picture with Progress Bar
+                    Box(
+                        modifier = Modifier
+                            .size(120.dp)
+                            .padding(4.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        // Progress Bar
+                        CircularProgressIndicator(
+                            progress = screenTimePercentage / 100f,
+                            modifier = Modifier.fillMaxSize(),
+                            color = Color(0xFFE0852D),
+                            strokeWidth = 4.dp
+                        )
+                        
+                        // Profile Picture
+                        Box(
+                            modifier = Modifier
+                                .size(100.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.surface)
+                                .border(
+                                    width = 2.dp,
+                                    color = Color(0xFFE0852D),
+                                    shape = CircleShape
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (childPhotoUrl != null) {
+                                AsyncImage(
+                                    model = childPhotoUrl,
+                                    contentDescription = "Profile Picture",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.Person,
+                                    contentDescription = "Profile Picture",
+                                    tint = Color(0xFFE0852D),
+                                    modifier = Modifier.size(48.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Child Name
+                    Text(
+                        text = childName,
+                        style = MaterialTheme.typography.titleLarge,
+                        color = Color(0xFFE0852D)
+                    )
+
+                    // Child Email
+                    Text(
+                        text = childEmail ?: "",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color(0xFFD6D7D3)
                     )
                 }
-                
-                DropdownMenu(
-                    expanded = showEmailDropdown,
-                    onDismissRequest = { showEmailDropdown = false },
-                    modifier = Modifier
-                        .background(MaterialTheme.colorScheme.surface)
-                        .padding(8.dp)
-                ) {
-                    if (childEmail != null) {
-            Text(
-                            text = childEmail!!,
-                style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                        )
-                                    } else {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            }
+
+            // Screen Time Card
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                )
             ) {
-                    CircularProgressIndicator(
-                                modifier = Modifier.size(16.dp),
-                                color = MaterialTheme.colorScheme.primary,
-                                strokeWidth = 2.dp
-                    )
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
                     Text(
-                                text = "Loading email...",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurface
+                        text = "Today's Usage",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Color(0xFFE0852D)
+                    )
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    val hours = TimeUnit.MILLISECONDS.toHours(screenTime)
+                    val minutes = TimeUnit.MILLISECONDS.toMinutes(screenTime) % 60
+                    
+                    Text(
+                        text = "$hours hours $minutes minutes",
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+
+            // Action Buttons Grid
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // First Row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    // Screen Time Limits
+                    ActionButton(
+                        modifier = Modifier.weight(1f),
+                        icon = Icons.Default.Timer,
+                        title = "Screen Time",
+                        onClick = {
+                            val intent = Intent(context, ScreenTimeLimitActivity::class.java)
+                            intent.putExtra("childId", childId)
+                            intent.putExtra("childName", childName)
+                            context.startActivity(intent)
+                        }
+                    )
+
+                    // App Usage
+                    ActionButton(
+                        modifier = Modifier.weight(1f),
+                        icon = Icons.Default.Apps,
+                        title = "App Usage",
+                        onClick = {
+                            try {
+                                val intent = Intent(context, AppUsageActivity::class.java).apply {
+                                    putExtra("childId", childId)
+                                    putExtra("childName", childName)
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                                context.startActivity(intent)
+                            } catch (e: Exception) {
+                                Toast.makeText(context, "Error opening app usage: ${e.message}", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    )
+                }
+
+                // Second Row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    // Location
+                    ActionButton(
+                        modifier = Modifier.weight(1f),
+                        icon = Icons.Default.LocationOn,
+                        title = "Location",
+                        onClick = {
+                            val intent = Intent(context, LocationMapActivity::class.java)
+                            intent.putExtra("childId", childId)
+                            intent.putExtra("childName", childName)
+                            context.startActivity(intent)
+                        }
+                    )
+
+                    // Installed Apps
+                    ActionButton(
+                        modifier = Modifier.weight(1f),
+                        icon = Icons.Default.PhoneAndroid,
+                        title = "Installed Apps",
+                        onClick = {
+                            val intent = Intent(context, InstalledAppsActivity::class.java)
+                            intent.putExtra("childId", childId)
+                            intent.putExtra("childName", childName)
+                            context.startActivity(intent)
+                        }
                     )
                 }
             }
@@ -274,184 +429,41 @@ fun ChildDetailsScreen(childId: String, childName: String) {
     }
 }
 
-        // Child Photo Section with Percentage
+@Composable
+fun ActionButton(
+    modifier: Modifier = Modifier,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = modifier
+            .aspectRatio(1f)
+            .clickable(onClick = onClick),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    ) {
         Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 72.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .fillMaxSize()
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
-            Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                    .padding(bottom = 4.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                // Circular Progress Bar
-                CircularProgressIndicator(
-                    progress = (screenTime.toFloat() / (24 * 60 * 60 * 1000)).coerceIn(0f, 1f), // 24 hours max
-                    modifier = Modifier.size(160.dp),
-                    color = MaterialTheme.colorScheme.onPrimary,
-                    strokeWidth = 6.dp
-                )
-                
-                // Child Photo
-                Box(
-                    modifier = Modifier
-                        .size(140.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                        .border(
-                            width = 3.dp,
-                            color = MaterialTheme.colorScheme.onPrimary,
-                            shape = CircleShape
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (childPhotoUrl != null) {
-                        AsyncImage(
-                            model = childPhotoUrl,
-                            contentDescription = "Child photo",
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
-                        )
-                    } else {
-                Text(
-                            text = childName.firstOrNull()?.toString()?.uppercase() ?: "?",
-                            style = MaterialTheme.typography.headlineLarge,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                }
-            }
-            
-            // Screen Time Percentage Text
+            Icon(
+                imageVector = icon,
+                contentDescription = title,
+                tint = Color(0xFFE0852D),
+                modifier = Modifier.size(32.dp)
+            )
+            Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Spent ${String.format("%.1f", screenTimePercentage)}% of the day on the phone",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onPrimary,
-                modifier = Modifier.padding(bottom = 16.dp),
+                text = title,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
                 textAlign = TextAlign.Center
             )
-
-            // Screen Time Section
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .background(
-                        color = MaterialTheme.colorScheme.surface,
-                        shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)
-                    )
-                    .padding(top = 16.dp)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(24.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .padding(vertical = 8.dp)
-                            .border(
-                                width = 3.dp,
-                                color = MaterialTheme.colorScheme.primary,
-                                shape = RoundedCornerShape(16.dp)
-                            )
-                            .padding(horizontal = 24.dp, vertical = 16.dp)
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                                text = "Today's Usage",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(bottom = 8.dp)
-                            )
-                            
-                            val hours = TimeUnit.MILLISECONDS.toHours(screenTime)
-                            val minutes = TimeUnit.MILLISECONDS.toMinutes(screenTime) % 60
-                            
-                            Text(
-                                text = "$hours hours $minutes minutes",
-                                style = MaterialTheme.typography.headlineMedium,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                    }
-
-                    // Action Buttons
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Button(
-                            onClick = { 
-                                val intent = Intent(context, ScreenTimeLimitActivity::class.java)
-                                intent.putExtra("childId", childId)
-                                intent.putExtra("childName", childName)
-                                context.startActivity(intent)
-                            },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.primary,
-                            ),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("Screen Time Limits")
-                        }
-
-                        Button(
-                            onClick = { 
-                                val intent = Intent(context, AppUsageActivity::class.java)
-                                intent.putExtra("childId", childId)
-                                intent.putExtra("childName", childName)
-                                context.startActivity(intent)
-                            },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.primary,
-                            ),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("App Usage")
-                        }
-
-                        Button(
-                            onClick = { 
-                                val intent = Intent(context, LocationMapActivity::class.java)
-                                intent.putExtra("childId", childId)
-                                intent.putExtra("childName", childName)
-                                context.startActivity(intent)
-                            },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.primary,
-                            ),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("Location")
-                        }
-
-                        Button(
-                            onClick = { 
-                                val intent = Intent(context, InstalledAppsActivity::class.java)
-                                intent.putExtra("childId", childId)
-                                intent.putExtra("childName", childName)
-                                context.startActivity(intent)
-                            },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.primary,
-                            ),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("Installed Apps")
-                        }
-                    }
-                }
-            }
         }
     }
 }

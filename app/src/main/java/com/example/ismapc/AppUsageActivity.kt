@@ -71,7 +71,6 @@ class AppUsageActivity : ComponentActivity() {
             val hasPermission = hasUsageStatsPermission()
             Log.e(TAG, "Usage stats permission check: ${if (hasPermission) "GRANTED" else "DENIED"}")
             
-            // FIX: Try to request usage stats permission directly rather than redirecting
             if (!hasPermission) {
                 Log.e(TAG, "Child device missing usage stats permission. Requesting now.")
                 Toast.makeText(this, "Usage stats permission required to track app usage", Toast.LENGTH_LONG).show()
@@ -82,8 +81,6 @@ class AppUsageActivity : ComponentActivity() {
                     intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     startActivity(intent)
                     Toast.makeText(this, "Please grant usage access for this app", Toast.LENGTH_LONG).show()
-                    
-                    // We'll continue with the activity, but show sample data until permission is granted
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to open usage access settings", e)
                     Toast.makeText(this, "Please enable usage access in Settings > Apps > Special access", Toast.LENGTH_LONG).show()

@@ -598,20 +598,20 @@ fun ParentMainScreen(onLogout: () -> Unit) {
             containerColor = Color.Transparent,
             topBar = {
                 TopAppBar(
-                    title = { Text("Parent Dashboard") },
+                    title = { },
                     actions = {
                         // Notifications Icon
-                        Box {
+                                        Box {
                             IconButton(onClick = { showNotificationsMenu = true }) {
-                                Icon(
-                                    imageVector = Icons.Default.Notifications,
+                                                Icon(
+                                                    imageVector = Icons.Default.Notifications,
                                     contentDescription = "Notifications"
-                                )
-                            }
-                            DropdownMenu(
-                                expanded = showNotificationsMenu,
-                                onDismissRequest = { showNotificationsMenu = false },
-                                modifier = Modifier
+                                                )
+                                            }
+                                            DropdownMenu(
+                                                expanded = showNotificationsMenu,
+                                                onDismissRequest = { showNotificationsMenu = false },
+                                                modifier = Modifier
                                     .background(MaterialTheme.colorScheme.surface)
                                     .border(
                                         width = 1.dp,
@@ -619,8 +619,8 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                         shape = MaterialTheme.shapes.medium
                                     )
                             ) {
-                                DropdownMenuItem(
-                                    text = { 
+                                                DropdownMenuItem(
+                                                    text = { 
                                         Row(
                                             verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -631,26 +631,26 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                                 tint = MaterialTheme.colorScheme.primary
                                             )
                                             Text("No new notifications")
-                                        }
-                                    },
-                                    onClick = {
-                                        showNotificationsMenu = false
+                                                        }
+                                                    },
+                                                    onClick = {
+                                                        showNotificationsMenu = false
                                     }
                                 )
                             }
                         }
                         // Settings Icon
-                        Box {
+                                        Box {
                             IconButton(onClick = { showSettingsMenu = true }) {
-                                Icon(
-                                    imageVector = Icons.Default.Settings,
+                                                Icon(
+                                                    imageVector = Icons.Default.Settings,
                                     contentDescription = "Settings"
-                                )
-                            }
-                            DropdownMenu(
-                                expanded = showSettingsMenu,
-                                onDismissRequest = { showSettingsMenu = false },
-                                modifier = Modifier
+                                                )
+                                            }
+                                            DropdownMenu(
+                                                expanded = showSettingsMenu,
+                                                onDismissRequest = { showSettingsMenu = false },
+                                                modifier = Modifier
                                     .background(MaterialTheme.colorScheme.surface)
                                     .border(
                                         width = 1.dp,
@@ -658,8 +658,8 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                         shape = MaterialTheme.shapes.medium
                                     )
                             ) {
-                                DropdownMenuItem(
-                                    text = { 
+                                                DropdownMenuItem(
+                                                    text = { 
                                         Row(
                                             verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -671,16 +671,16 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                             )
                                             Text("Change Password")
                                         }
-                                    },
-                                    onClick = {
-                                        showSettingsMenu = false
+                                                    },
+                                                    onClick = {
+                                                        showSettingsMenu = false
                                         val intent = Intent(context, ChangePasswordActivity::class.java)
                                         context.startActivity(intent)
                                     }
                                 )
                                 Divider()
-                                DropdownMenuItem(
-                                    text = { 
+                                                DropdownMenuItem(
+                                                    text = { 
                                         Row(
                                             verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -692,15 +692,15 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                             )
                                             Text("About")
                                         }
-                                    },
-                                    onClick = {
+                                                    },
+                                                    onClick = {
                                         context.startActivity(Intent(context, AboutActivity::class.java))
-                                        showSettingsMenu = false
+                                                        showSettingsMenu = false
                                     }
-                                )
+                                                )
                                 Divider()
-                                DropdownMenuItem(
-                                    text = { 
+                                                DropdownMenuItem(
+                                                    text = { 
                                         Row(
                                             verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -708,22 +708,22 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                             Icon(
                                                 imageVector = Icons.Default.Delete,
                                                 contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.error
+                                                tint = Color.Red
                                             )
-                                            Text(
-                                                "Delete Account",
-                                                color = MaterialTheme.colorScheme.error
-                                            )
+                                                        Text(
+                                                            "Delete Account",
+                                                color = Color.Red
+                                                        )
                                         }
-                                    },
-                                    onClick = {
-                                        showSettingsMenu = false
-                                        showDeleteAccountDialog = true
+                                                    },
+                                                    onClick = {
+                                                        showSettingsMenu = false
+                                                        showDeleteAccountDialog = true
                                     }
-                                )
+                                                )
                                 Divider()
-                                DropdownMenuItem(
-                                    text = { 
+                                                DropdownMenuItem(
+                                                    text = { 
                                         Row(
                                             verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -735,10 +735,10 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                             )
                                             Text("Logout")
                                         }
-                                    },
-                                    onClick = {
-                                        showSettingsMenu = false
-                                        onLogout()
+                                                    },
+                                                    onClick = {
+                                                        showSettingsMenu = false
+                                                        onLogout()
                                     }
                                 )
                             }
@@ -753,9 +753,9 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                     contentAlignment = Alignment.Center
                 ) {
                     CircularProgressIndicator()
-                }
+                                            }
             } else {
-                Column(
+                                Column(
                     modifier = Modifier
                         .fillMaxSize()
                         .verticalScroll(rememberScrollState())
@@ -771,40 +771,40 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                         )
                     ) {
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
+                                    modifier = Modifier
+                                        .fillMaxWidth()
                                 .padding(16.dp),
                             verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            // Profile Picture
-                            Box(
-                                modifier = Modifier
+                                ) {
+                                    // Profile Picture
+                                    Box(
+                                        modifier = Modifier
                                     .size(64.dp)
                                     .clip(CircleShape)
                                     .background(MaterialTheme.colorScheme.surface)
-                                    .border(
+                                            .border(
                                         width = 2.dp,
                                         color = Color(0xFFE0852D),
-                                        shape = CircleShape
+                                                shape = CircleShape
                                     ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                if (profileBitmap != null) {
-                                    Image(
-                                        bitmap = profileBitmap!!.asImageBitmap(),
-                                        contentDescription = "Profile Picture",
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentScale = ContentScale.Crop
-                                    )
-                                } else {
-                                    Icon(
-                                        imageVector = Icons.Default.Person,
-                                        contentDescription = "Profile Picture",
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (profileBitmap != null) {
+                                            Image(
+                                                bitmap = profileBitmap!!.asImageBitmap(),
+                                                contentDescription = "Profile Picture",
+                                                modifier = Modifier.fillMaxSize(),
+                                                contentScale = ContentScale.Crop
+                                            )
+                                        } else {
+                                            Icon(
+                                                imageVector = Icons.Default.Person,
+                                                contentDescription = "Profile Picture",
                                         tint = Color(0xFFE0852D),
                                         modifier = Modifier.size(32.dp)
-                                    )
-                                }
-                            }
+                                            )
+                                        }
+                                    }
 
                             Spacer(modifier = Modifier.width(16.dp))
 
@@ -813,17 +813,17 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                 Text(
                                     text = parentData?.get("fullName")?.toString() ?: "Parent",
                                     style = MaterialTheme.typography.titleLarge,
-                                    color = Color(0xFFE0852D)
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
                                     text = parentData?.get("email")?.toString() ?: "",
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurface
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 Text(
                                     text = parentData?.get("phoneNumber")?.toString() ?: "",
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurface
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
 
@@ -848,15 +848,15 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                     }
 
                     // Quick Actions Section
-                    Text(
+                                        Text(
                         text = "Quick Actions",
                         style = MaterialTheme.typography.titleMedium,
                         color = Color(0xFFE0852D),
                         modifier = Modifier.padding(top = 8.dp)
                     )
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         // Add Child Button
@@ -873,7 +873,7 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                             )
                         ) {
                             Column(
-                                modifier = Modifier
+                                            modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(16.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally
@@ -884,11 +884,11 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                     tint = MaterialTheme.colorScheme.onSecondaryContainer
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
-                                Text(
+                                            Text(
                                     text = "Add Child",
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSecondaryContainer
-                                )
+                                            )
                             }
                         }
 
@@ -904,18 +904,18 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                 containerColor = MaterialTheme.colorScheme.tertiaryContainer
                             )
                         ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
                                     .padding(16.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
+                        ) {
                                 Icon(
                                     imageVector = Icons.Default.Info,
                                     contentDescription = "FAQ",
                                     tint = MaterialTheme.colorScheme.onSurface
                                 )
-                                Spacer(modifier = Modifier.height(8.dp))
+                            Spacer(modifier = Modifier.height(8.dp))
                                 Text(
                                     text = "FAQ",
                                     style = MaterialTheme.typography.bodyMedium,
@@ -926,30 +926,30 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                     }
 
                     // Children Section
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
                             .padding(top = 8.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                         Text(
                             text = "Your Children",
                             style = MaterialTheme.typography.titleMedium,
-                            color = Color(0xFFE0852D)
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         
                         // Delete Mode Toggle
                         IconButton(
                             onClick = { isDeleteMode = !isDeleteMode }
-                        ) {
-                            Icon(
+                                    ) {
+                                        Icon(
                                 imageVector = Icons.Default.Delete,
                                 contentDescription = if (isDeleteMode) "Exit Delete Mode" else "Enter Delete Mode",
-                                tint = if (isDeleteMode) MaterialTheme.colorScheme.error else Color(0xFFE0852D)
-                            )
-                        }
-                    }
+                                tint = if (isDeleteMode) Color.Red else Color(0xFFE0852D)
+                                        )
+                                    }
+                                }
 
                     if (childrenData.isEmpty()) {
                         Card(
@@ -959,17 +959,17 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                             )
                         ) {
                             Column(
-                                modifier = Modifier
+                                    modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(24.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Icon(
+                                ) {
+                                    Icon(
                                     imageVector = Icons.Default.PersonOff,
                                     contentDescription = "No Children",
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(48.dp)
-                                )
+                                    )
                                 Spacer(modifier = Modifier.height(16.dp))
                                 Text(
                                     text = "No children added yet",
@@ -1003,7 +1003,7 @@ fun ParentMainScreen(onLogout: () -> Unit) {
 
                                             if (snapshot != null && snapshot.exists()) {
                                                 isLocked = snapshot.getBoolean("isLocked") ?: false
-                                            } else {
+                                                        } else {
                                                 isLocked = false
                                             }
                                         }
@@ -1018,9 +1018,9 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                             val intent = Intent(context, ChildDetailsActivity::class.java)
                                             intent.putExtra("childId", child["documentId"] as String)
                                             intent.putExtra("childName", child["fullName"] as String)
-                                            context.startActivity(intent)
-                                        }
-                                    },
+                                                    context.startActivity(intent)
+                                                }
+                                            },
                                 colors = CardDefaults.cardColors(
                                     containerColor = MaterialTheme.colorScheme.surface
                                 )
@@ -1052,7 +1052,8 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
                                             text = child["fullName"] as String,
-                                            style = MaterialTheme.typography.titleMedium
+                                            style = MaterialTheme.typography.titleMedium,
+                                            color = MaterialTheme.colorScheme.onSurface
                                         )
                                     }
 
@@ -1090,10 +1091,10 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                                         .addOnSuccessListener { docs ->
                                                             docs.forEach { doc ->
                                                                 batch.delete(doc.reference)
-                                                            }
                                                         }
-                                                    
-                                                    // Also delete documents where the document ID is the childId
+                                                }
+
+                                                // Also delete documents where the document ID is the childId
                                                     batch.delete(FirebaseFirestore.getInstance().collection(collectionName).document(childId))
                                                 }
 
@@ -1101,16 +1102,16 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                                 batch.commit()
                                                     .addOnSuccessListener {
                                                         Toast.makeText(context, "Child account deleted successfully", Toast.LENGTH_SHORT).show()
-                                                    }
-                                                    .addOnFailureListener { e ->
+                                                                        }
+                                                                        .addOnFailureListener { e ->
                                                         Toast.makeText(context, "Error deleting child account: ${e.message}", Toast.LENGTH_SHORT).show()
-                                                    }
+                                                                        }
                                             }
                                         ) {
                                             Icon(
                                                 imageVector = Icons.Default.Delete,
                                                 contentDescription = "Delete Child",
-                                                tint = MaterialTheme.colorScheme.error
+                                                tint = Color.Red
                                             )
                                         }
                                     } else {
@@ -1130,8 +1131,8 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                                         .set(updates)
                                                         .addOnSuccessListener {
                                                             isUpdating = false
-                                                        }
-                                                        .addOnFailureListener { e ->
+                                                    }
+                                                    .addOnFailureListener { e ->
                                                             Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
                                                             isUpdating = false
                                                         }
@@ -1148,10 +1149,10 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                                 Icon(
                                                     imageVector = if (isLocked) Icons.Default.Lock else Icons.Default.LockOpen,
                                                     contentDescription = if (isLocked) "Unlock Device" else "Lock Device",
-                                                    tint = if (isLocked) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                                                    tint = if (isLocked) Color.Red else MaterialTheme.colorScheme.primary
                                                 )
+                                                    }
                                             }
-                                        }
                                     }
                                 }
                             }
@@ -1165,9 +1166,9 @@ fun ParentMainScreen(onLogout: () -> Unit) {
     // Delete Account Dialog
     if (showDeleteAccountDialog) {
         AlertDialog(
-            onDismissRequest = {
+            onDismissRequest = { 
                 if (!isDeletingAccount) {
-                    showDeleteAccountDialog = false
+                    showDeleteAccountDialog = false 
                 }
             },
             title = {
@@ -1209,7 +1210,7 @@ fun ParentMainScreen(onLogout: () -> Unit) {
             confirmButton = {
                 TextButton(
                     onClick = {
-                        deleteParentAccount()
+                            deleteParentAccount()
                     },
                     enabled = !isDeletingAccount
                 ) {
@@ -1228,9 +1229,9 @@ fun ParentMainScreen(onLogout: () -> Unit) {
             },
             dismissButton = {
                 TextButton(
-                    onClick = {
+                    onClick = { 
                         if (!isDeletingAccount) {
-                            showDeleteAccountDialog = false
+                            showDeleteAccountDialog = false 
                         }
                     },
                     enabled = !isDeletingAccount
@@ -1419,7 +1420,7 @@ fun ChildProfileCard(
                             Icon(
                                 imageVector = if (isLocked) Icons.Default.Lock else Icons.Default.LockOpen,
                                 contentDescription = if (isLocked) "Unlock Device" else "Lock Device",
-                                tint = if (isLocked) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                                tint = if (isLocked) Color.Red else MaterialTheme.colorScheme.primary
                             )
                             Text(
                                 text = if (isLocked) "Unlock" else "Lock",

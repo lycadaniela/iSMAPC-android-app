@@ -20,6 +20,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.ismapc.ui.theme.ISMAPCTheme
+import androidx.compose.ui.graphics.Color
 
 class InfoActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -43,7 +44,7 @@ fun FAQScreen(onBack: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Frequently Asked Questions") },
+                title = { },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
@@ -55,19 +56,19 @@ fun FAQScreen(onBack: () -> Unit) {
             )
         }
     ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
                 .padding(paddingValues)
-                .verticalScroll(rememberScrollState())
+            .verticalScroll(rememberScrollState())
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
+    ) {
             // Header Card
             Card(
-                modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                    containerColor = MaterialTheme.colorScheme.surface
                 )
             ) {
                 Column(
@@ -76,22 +77,15 @@ fun FAQScreen(onBack: () -> Unit) {
                         .padding(16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Help,
-                        contentDescription = null,
-                        modifier = Modifier.size(48.dp),
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "How can we help you?",
+        Text(
+                        text = "Frequently Asked Questions",
                         style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                        color = Color(0xFFE0852D)
                     )
                     Text(
                         text = "Find answers to common questions about ISMAPC",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                        color = Color(0xFFD6D7D3)
                     )
                 }
             }
@@ -161,7 +155,7 @@ fun FAQScreen(onBack: () -> Unit) {
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer
+                    containerColor = MaterialTheme.colorScheme.surface
                 )
             ) {
                 Column(
@@ -173,19 +167,19 @@ fun FAQScreen(onBack: () -> Unit) {
                     Text(
                         text = "Need More Help?",
                         style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                        color = Color(0xFFE0852D)
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = "Contact our support team for assistance",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                        color = Color(0xFFD6D7D3)
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                     Button(
                         onClick = { /* TODO: Implement contact support */ },
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary
+                            containerColor = Color(0xFFE0852D)
                         )
                     ) {
                         Icon(
@@ -208,6 +202,8 @@ fun FAQCategory(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     faqs: List<FAQItem>
 ) {
+    val expandedItems = remember { mutableStateOf(mutableSetOf<Int>()) }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -215,82 +211,85 @@ fun FAQCategory(
         )
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
                 .padding(16.dp)
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(bottom = 8.dp)
+                modifier = Modifier.padding(bottom = 16.dp)
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary
+                    tint = Color(0xFFE0852D),
+                    modifier = Modifier.size(24.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = title,
                     style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = Color(0xFFE0852D)
                 )
             }
-            Spacer(modifier = Modifier.height(8.dp))
-            faqs.forEach { faq ->
-                FAQItem(faq)
-                if (faq != faqs.last()) {
-                    Divider(
-                        modifier = Modifier.padding(vertical = 8.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant
-                    )
+
+            faqs.forEachIndexed { index, faq ->
+                Column {
+                    Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                            .clickable {
+                                if (expandedItems.value.contains(index)) {
+                                    expandedItems.value.remove(index)
+                                } else {
+                                    expandedItems.value.add(index)
+                                }
+                            }
+                            .padding(vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                ) {
+                        Text(
+                            text = faq.question,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Icon(
+                            imageVector = if (expandedItems.value.contains(index)) {
+                                Icons.Default.ExpandLess
+                            } else {
+                                Icons.Default.ExpandMore
+                            },
+                            contentDescription = if (expandedItems.value.contains(index)) "Collapse" else "Expand",
+                            tint = Color(0xFFE0852D)
+                        )
+                    }
+
+                    if (expandedItems.value.contains(index)) {
+                    Text(
+                            text = faq.answer,
+                        style = MaterialTheme.typography.bodyMedium,
+                            color = Color(0xFFD6D7D3),
+                            modifier = Modifier.padding(
+                                start = 16.dp,
+                                end = 16.dp,
+                                bottom = 16.dp
+                            )
+                        )
+                    }
+
+                    if (index < faqs.size - 1) {
+                        Divider(
+                            color = MaterialTheme.colorScheme.outlineVariant,
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        )
+                    }
                 }
             }
         }
     }
-}
-
-@Composable
-fun FAQItem(faq: FAQItem) {
-    var expanded by remember { mutableStateOf(false) }
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .clickable { expanded = !expanded }
-            .padding(vertical = 8.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = faq.question,
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f)
-            )
-            Icon(
-                imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                contentDescription = if (expanded) "Collapse" else "Expand",
-                tint = MaterialTheme.colorScheme.primary
-            )
-        }
-        AnimatedVisibility(
-            visible = expanded,
-            enter = expandVertically() + fadeIn(),
-            exit = shrinkVertically() + fadeOut()
-        ) {
-            Text(
-                text = faq.answer,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 8.dp)
-            )
-        }
-    }
-}
+} 
 
 data class FAQItem(
     val question: String,

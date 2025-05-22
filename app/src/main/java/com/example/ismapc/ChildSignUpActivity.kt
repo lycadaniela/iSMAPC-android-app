@@ -1,6 +1,7 @@
 package com.example.ismapc
 
 import android.content.Intent
+import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Bundle
 import android.provider.MediaStore
@@ -29,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -36,6 +38,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import coil.compose.AsyncImage
@@ -59,6 +62,8 @@ class ChildSignUpActivity : ComponentActivity() {
     private var showParentEmailDialog by mutableStateOf(false)
     private var pendingGoogleToken: String? = null
     private var parentEmail: String? = null
+    private var selectedImageUri: Uri? = null
+    private var profileBitmap: Bitmap? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -96,8 +101,14 @@ class ChildSignUpActivity : ComponentActivity() {
                     }
                     
                     ChildSignUpScreen(
-                        parentEmail = parentEmail ?: "",
-                        onSignUp = { email, password, fullName, selectedImageUri ->
+                        onBack = { finish() },
+                        onImageSelect = {
+                            val intent = Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI)
+                            startActivityForResult(intent, 1)
+                        },
+                        selectedImageUri = selectedImageUri,
+                        profileBitmap = profileBitmap,
+                        onSignUp = { fullName, email, password, confirmPassword ->
                             auth.createUserWithEmailAndPassword(email, password)
                                 .addOnCompleteListener { task ->
                                     if (task.isSuccessful) {
@@ -148,26 +159,10 @@ class ChildSignUpActivity : ComponentActivity() {
                                         Toast.makeText(this, "Sign up failed: ${task.exception?.message}", Toast.LENGTH_LONG).show()
                                     }
                                 }
-                        },
-                        onGoogleSignUp = {
-                            val signInIntent = googleSignInClient.signInIntent
-                            startActivityForResult(signInIntent, RC_SIGN_IN)
                         }
                     )
                 }
             }
-        }
-    }
-
-    private fun startGoogleSignIn() {
-        // Sign out from Firebase
-        auth.signOut()
-        
-        // Sign out from Google
-        googleSignInClient.signOut().addOnCompleteListener(this) {
-            // After signing out, start the Google Sign-In flow
-            val signInIntent = googleSignInClient.signInIntent
-            startActivityForResult(signInIntent, RC_SIGN_IN)
         }
     }
 
@@ -183,11 +178,16 @@ class ChildSignUpActivity : ComponentActivity() {
                     firebaseAuthWithGoogle(account.idToken!!, parentEmail!!)
                 } else {
                     // Only show dialog if parent email is not provided
-                pendingGoogleToken = account.idToken
-                showParentEmailDialog = true
+                    pendingGoogleToken = account.idToken
+                    showParentEmailDialog = true
                 }
             } catch (e: ApiException) {
                 Toast.makeText(this, "Google sign in failed: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        } else if (requestCode == 1 && resultCode == RESULT_OK) {
+            data?.data?.let { uri ->
+                selectedImageUri = uri
+                profileBitmap = MediaStore.Images.Media.getBitmap(contentResolver, uri)
             }
         }
     }
@@ -312,35 +312,31 @@ fun ParentEmailDialog(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChildSignUpScreen(
-    parentEmail: String,
-    onSignUp: (email: String, password: String, fullName: String, selectedImageUri: Uri?) -> Unit,
-    onGoogleSignUp: () -> Unit
+    onBack: () -> Unit,
+    onImageSelect: () -> Unit,
+    selectedImageUri: Uri?,
+    profileBitmap: Bitmap?,
+    onSignUp: (String, String, String, String) -> Unit
 ) {
-    val context = LocalContext.current
     var fullName by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
-    var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
-
-    // Error states
+    var isLoading by remember { mutableStateOf(false) }
+    var showPassword by remember { mutableStateOf(false) }
+    var showConfirmPassword by remember { mutableStateOf(false) }
     var fullNameError by remember { mutableStateOf(false) }
     var emailError by remember { mutableStateOf(false) }
     var passwordError by remember { mutableStateOf(false) }
     var confirmPasswordError by remember { mutableStateOf(false) }
-
-    val imagePicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        selectedImageUri = uri
-    }
+    val context = LocalContext.current
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Child Sign Up") },
+                title = { },
                 navigationIcon = {
-                    IconButton(onClick = { (context as? ComponentActivity)?.finish() }) {
+                    IconButton(onClick = onBack) {
                         Icon(
                             imageVector = Icons.Default.ArrowBack,
                             contentDescription = "Back"
@@ -369,25 +365,18 @@ fun ChildSignUpScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(24.dp),
+                        .padding(16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Person,
-                        contentDescription = "Child Profile",
-                        modifier = Modifier.size(48.dp),
-                        tint = Color(0xFFE0852D)
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
                     Text(
                         text = "Create Child Account",
                         style = MaterialTheme.typography.titleLarge,
                         color = Color(0xFFE0852D)
                     )
                     Text(
-                        text = "Set up a new account for your child",
+                        text = "Set up your child's account",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = Color(0xFFD6D7D3)
                     )
                 }
             }
@@ -415,12 +404,12 @@ fun ChildSignUpScreen(
                                 color = Color(0xFFE0852D),
                                 shape = CircleShape
                             )
-                            .clickable { imagePicker.launch("image/*") },
+                            .clickable(onClick = onImageSelect),
                         contentAlignment = Alignment.Center
                     ) {
-                        if (selectedImageUri != null) {
-                            AsyncImage(
-                                model = selectedImageUri,
+                        if (profileBitmap != null) {
+                            Image(
+                                bitmap = profileBitmap.asImageBitmap(),
                                 contentDescription = "Profile Picture",
                                 modifier = Modifier.fillMaxSize(),
                                 contentScale = ContentScale.Crop
@@ -428,15 +417,15 @@ fun ChildSignUpScreen(
                         } else {
                             Icon(
                                 imageVector = Icons.Default.Person,
-                                contentDescription = "Add Profile Picture",
-                                modifier = Modifier.size(48.dp),
-                                tint = Color(0xFFE0852D)
+                                contentDescription = "Profile Picture",
+                                tint = Color(0xFFE0852D),
+                                modifier = Modifier.size(48.dp)
                             )
                         }
                     }
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "Add Profile Picture",
+                        text = "Tap to add profile picture",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurface
                     )
@@ -453,8 +442,8 @@ fun ChildSignUpScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                        .padding(12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     OutlinedTextField(
                         value = fullName,
@@ -463,15 +452,11 @@ fun ChildSignUpScreen(
                             fullNameError = false
                         },
                         label = { Text("Full Name") },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Default.Person,
-                                contentDescription = null,
-                                tint = Color(0xFFE0852D)
-                            )
-                        },
                         modifier = Modifier.fillMaxWidth(),
                         isError = fullNameError,
+                        keyboardOptions = KeyboardOptions(
+                            imeAction = ImeAction.Next
+                        ),
                         shape = RoundedCornerShape(12.dp)
                     )
 
@@ -491,21 +476,18 @@ fun ChildSignUpScreen(
                             emailError = false
                         },
                         label = { Text("Email") },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Default.Email,
-                                contentDescription = null,
-                                tint = Color(0xFFE0852D)
-                            )
-                        },
                         modifier = Modifier.fillMaxWidth(),
                         isError = emailError,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Email,
+                            imeAction = ImeAction.Next
+                        ),
                         shape = RoundedCornerShape(12.dp)
                     )
 
                     if (emailError) {
                         Text(
-                            text = "Please enter a valid email address",
+                            text = "Please enter a valid email",
                             color = MaterialTheme.colorScheme.error,
                             style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.padding(start = 16.dp)
@@ -518,20 +500,22 @@ fun ChildSignUpScreen(
                             password = it
                             passwordError = false
                             if (confirmPassword.isNotEmpty()) {
-                                confirmPasswordError = password != confirmPassword
+                                confirmPasswordError = it != confirmPassword
                             }
                         },
                         label = { Text("Password") },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Default.Lock,
-                                contentDescription = null,
-                                tint = Color(0xFFE0852D)
-                            )
+                        trailingIcon = {
+                            IconButton(onClick = { showPassword = !showPassword }) {
+                                Icon(
+                                    imageVector = if (showPassword) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                    contentDescription = if (showPassword) "Hide password" else "Show password",
+                                    tint = Color(0xFFE0852D)
+                                )
+                            }
                         },
                         modifier = Modifier.fillMaxWidth(),
                         isError = passwordError,
-                        visualTransformation = PasswordVisualTransformation(),
+                        visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Password,
                             imeAction = ImeAction.Next
@@ -552,19 +536,21 @@ fun ChildSignUpScreen(
                         value = confirmPassword,
                         onValueChange = { 
                             confirmPassword = it
-                            confirmPasswordError = password != it
+                            confirmPasswordError = it != password
                         },
                         label = { Text("Confirm Password") },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Default.Lock,
-                                contentDescription = null,
-                                tint = Color(0xFFE0852D)
-                            )
+                        trailingIcon = {
+                            IconButton(onClick = { showConfirmPassword = !showConfirmPassword }) {
+                                Icon(
+                                    imageVector = if (showConfirmPassword) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                    contentDescription = if (showConfirmPassword) "Hide password" else "Show password",
+                                    tint = Color(0xFFE0852D)
+                                )
+                            }
                         },
                         modifier = Modifier.fillMaxWidth(),
                         isError = confirmPasswordError,
-                        visualTransformation = PasswordVisualTransformation(),
+                        visualTransformation = if (showConfirmPassword) VisualTransformation.None else PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Password,
                             imeAction = ImeAction.Done
@@ -593,7 +579,8 @@ fun ChildSignUpScreen(
                     confirmPasswordError = password != confirmPassword
 
                     if (!fullNameError && !emailError && !passwordError && !confirmPasswordError) {
-                        onSignUp(email, password, fullName, selectedImageUri)
+                        isLoading = true
+                        onSignUp(fullName, email, password, confirmPassword)
                     }
                 },
                 modifier = Modifier
@@ -602,15 +589,23 @@ fun ChildSignUpScreen(
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color(0xFFE0852D)
-                )
+                ),
+                enabled = !isLoading
             ) {
-                Text(
-                    "Create Account",
-                    style = MaterialTheme.typography.titleMedium
-                )
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                } else {
+                    Text(
+                        "Create Account",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                }
             }
 
-            // Or divider
+            // OR Divider
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -635,32 +630,29 @@ fun ChildSignUpScreen(
 
             // Google Sign Up Button
             OutlinedButton(
-                onClick = onGoogleSignUp,
+                onClick = {
+                    // Handle Google sign up
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
-                shape = RoundedCornerShape(12.dp),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                shape = RoundedCornerShape(8.dp),
                 colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = MaterialTheme.colorScheme.onBackground
+                    contentColor = MaterialTheme.colorScheme.onSurface
                 )
             ) {
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.Center,
-                    modifier = Modifier.fillMaxWidth()
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
+                    Image(
                         painter = painterResource(id = R.drawable.ic_google),
                         contentDescription = "Google",
-                        modifier = Modifier.size(24.dp),
-                        tint = Color.Unspecified
+                        modifier = Modifier.size(24.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        "Sign up with Google",
-                        style = MaterialTheme.typography.titleMedium
-                    )
+                    Text("Sign up with Google")
                 }
             }
         }

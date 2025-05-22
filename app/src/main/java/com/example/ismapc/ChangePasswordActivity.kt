@@ -5,18 +5,19 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -33,7 +34,7 @@ class ChangePasswordActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    ChangePasswordScreen(onBack = { finish() })
+                    ChangePasswordScreen()
                 }
             }
         }
@@ -42,23 +43,25 @@ class ChangePasswordActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChangePasswordScreen(onBack: () -> Unit) {
+fun ChangePasswordScreen() {
     var currentPassword by remember { mutableStateOf("") }
     var newPassword by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
-    var isCurrentPasswordVisible by remember { mutableStateOf(false) }
-    var isNewPasswordVisible by remember { mutableStateOf(false) }
-    var isConfirmPasswordVisible by remember { mutableStateOf(false) }
-    var isChangingPassword by remember { mutableStateOf(false) }
+    var isLoading by remember { mutableStateOf(false) }
+    var showCurrentPassword by remember { mutableStateOf(false) }
+    var showNewPassword by remember { mutableStateOf(false) }
+    var showConfirmPassword by remember { mutableStateOf(false) }
+    var currentPasswordError by remember { mutableStateOf(false) }
+    var newPasswordError by remember { mutableStateOf(false) }
+    var confirmPasswordError by remember { mutableStateOf(false) }
     val context = LocalContext.current
-    val auth = FirebaseAuth.getInstance()
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Change Password") },
+                title = { },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = { (context as? ComponentActivity)?.finish() }) {
                         Icon(
                             imageVector = Icons.Default.ArrowBack,
                             contentDescription = "Back"
@@ -72,14 +75,16 @@ fun ChangePasswordScreen(onBack: () -> Unit) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(16.dp),
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
-            // Header
+            // Header Card
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                    containerColor = MaterialTheme.colorScheme.surface
                 )
             ) {
                 Column(
@@ -90,25 +95,25 @@ fun ChangePasswordScreen(onBack: () -> Unit) {
                 ) {
                     Icon(
                         imageVector = Icons.Default.Lock,
-                        contentDescription = "Password",
+                        contentDescription = "Change Password",
                         modifier = Modifier.size(48.dp),
-                        tint = MaterialTheme.colorScheme.onSurface
+                        tint = Color(0xFFE0852D)
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
-                        text = "Change Your Password",
+                        text = "Change Password",
                         style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = Color(0xFFE0852D)
                     )
                     Text(
-                        text = "Please enter your current password and choose a new one",
+                        text = "Update your account password",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = Color(0xFFD6D7D3)
                     )
                 }
             }
 
-            // Password Fields
+            // Form Fields Card
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
@@ -123,142 +128,188 @@ fun ChangePasswordScreen(onBack: () -> Unit) {
                 ) {
                     OutlinedTextField(
                         value = currentPassword,
-                        onValueChange = { currentPassword = it },
+                        onValueChange = { 
+                            currentPassword = it
+                            currentPasswordError = false
+                        },
                         label = { Text("Current Password") },
                         leadingIcon = {
                             Icon(
                                 imageVector = Icons.Default.Lock,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary
+                                tint = Color(0xFFD6D7D3)
                             )
                         },
                         trailingIcon = {
-                            IconButton(onClick = { isCurrentPasswordVisible = !isCurrentPasswordVisible }) {
+                            IconButton(onClick = { showCurrentPassword = !showCurrentPassword }) {
                                 Icon(
-                                    imageVector = if (isCurrentPasswordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                                    contentDescription = if (isCurrentPasswordVisible) "Hide password" else "Show password"
+                                    imageVector = if (showCurrentPassword) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                    contentDescription = if (showCurrentPassword) "Hide password" else "Show password",
+                                    tint = Color(0xFFE0852D)
                                 )
                             }
                         },
-                        visualTransformation = if (isCurrentPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                         modifier = Modifier.fillMaxWidth(),
-                        enabled = !isChangingPassword,
+                        isError = currentPasswordError,
+                        visualTransformation = if (showCurrentPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Password,
+                            imeAction = ImeAction.Next
+                        ),
                         shape = RoundedCornerShape(12.dp)
                     )
 
+                    if (currentPasswordError) {
+                        Text(
+                            text = "Please enter your current password",
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(start = 16.dp)
+                        )
+                    }
+
                     OutlinedTextField(
                         value = newPassword,
-                        onValueChange = { newPassword = it },
+                        onValueChange = { 
+                            newPassword = it
+                            newPasswordError = false
+                            if (confirmPassword.isNotEmpty()) {
+                                confirmPasswordError = it != confirmPassword
+                            }
+                        },
                         label = { Text("New Password") },
                         leadingIcon = {
                             Icon(
                                 imageVector = Icons.Default.Lock,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary
+                                tint = Color(0xFFD6D7D3)
                             )
                         },
                         trailingIcon = {
-                            IconButton(onClick = { isNewPasswordVisible = !isNewPasswordVisible }) {
+                            IconButton(onClick = { showNewPassword = !showNewPassword }) {
                                 Icon(
-                                    imageVector = if (isNewPasswordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                                    contentDescription = if (isNewPasswordVisible) "Hide password" else "Show password"
+                                    imageVector = if (showNewPassword) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                    contentDescription = if (showNewPassword) "Hide password" else "Show password",
+                                    tint = Color(0xFFE0852D)
                                 )
                             }
                         },
-                        visualTransformation = if (isNewPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                         modifier = Modifier.fillMaxWidth(),
-                        enabled = !isChangingPassword,
+                        isError = newPasswordError,
+                        visualTransformation = if (showNewPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Password,
+                            imeAction = ImeAction.Next
+                        ),
                         shape = RoundedCornerShape(12.dp)
                     )
 
+                    if (newPasswordError) {
+                        Text(
+                            text = "Password must be at least 6 characters",
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(start = 16.dp)
+                        )
+                    }
+
                     OutlinedTextField(
                         value = confirmPassword,
-                        onValueChange = { confirmPassword = it },
+                        onValueChange = { 
+                            confirmPassword = it
+                            confirmPasswordError = it != newPassword
+                        },
                         label = { Text("Confirm New Password") },
                         leadingIcon = {
                             Icon(
                                 imageVector = Icons.Default.Lock,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary
+                                tint = Color(0xFFD6D7D3)
                             )
                         },
                         trailingIcon = {
-                            IconButton(onClick = { isConfirmPasswordVisible = !isConfirmPasswordVisible }) {
+                            IconButton(onClick = { showConfirmPassword = !showConfirmPassword }) {
                                 Icon(
-                                    imageVector = if (isConfirmPasswordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                                    contentDescription = if (isConfirmPasswordVisible) "Hide password" else "Show password"
+                                    imageVector = if (showConfirmPassword) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                    contentDescription = if (showConfirmPassword) "Hide password" else "Show password",
+                                    tint = Color(0xFFE0852D)
                                 )
                             }
                         },
-                        visualTransformation = if (isConfirmPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                         modifier = Modifier.fillMaxWidth(),
-                        enabled = !isChangingPassword,
+                        isError = confirmPasswordError,
+                        visualTransformation = if (showConfirmPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Password,
+                            imeAction = ImeAction.Done
+                        ),
                         shape = RoundedCornerShape(12.dp)
                     )
+
+                    if (confirmPasswordError) {
+                        Text(
+                            text = "Passwords do not match",
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(start = 16.dp)
+                        )
+                    }
                 }
             }
 
             // Change Password Button
             Button(
                 onClick = {
-                    if (currentPassword.isBlank() || newPassword.isBlank() || confirmPassword.isBlank()) {
-                        Toast.makeText(context, "Please fill in all fields", Toast.LENGTH_SHORT).show()
-                        return@Button
-                    }
-                    if (newPassword != confirmPassword) {
-                        Toast.makeText(context, "New passwords do not match", Toast.LENGTH_SHORT).show()
-                        return@Button
-                    }
-                    if (newPassword.length < 6) {
-                        Toast.makeText(context, "Password must be at least 6 characters", Toast.LENGTH_SHORT).show()
-                        return@Button
-                    }
+                    // Validate all fields
+                    currentPasswordError = currentPassword.isBlank()
+                    newPasswordError = newPassword.length < 6
+                    confirmPasswordError = newPassword != confirmPassword
 
-                    isChangingPassword = true
-                    val user = auth.currentUser
-                    if (user != null && user.email != null) {
-                        // Reauthenticate user before changing password
+                    if (!currentPasswordError && !newPasswordError && !confirmPasswordError) {
+                        isLoading = true
+                        val user = FirebaseAuth.getInstance().currentUser
                         val credential = com.google.firebase.auth.EmailAuthProvider
-                            .getCredential(user.email!!, currentPassword)
+                            .getCredential(user?.email ?: "", currentPassword)
 
-                        user.reauthenticate(credential)
-                            .addOnCompleteListener { reauthTask ->
-                                if (reauthTask.isSuccessful) {
+                        user?.reauthenticate(credential)
+                            ?.addOnCompleteListener { task ->
+                                if (task.isSuccessful) {
                                     user.updatePassword(newPassword)
                                         .addOnCompleteListener { updateTask ->
-                                            isChangingPassword = false
+                                            isLoading = false
                                             if (updateTask.isSuccessful) {
                                                 Toast.makeText(context, "Password updated successfully", Toast.LENGTH_SHORT).show()
-                                                onBack()
+                                                (context as? ComponentActivity)?.finish()
                                             } else {
-                                                Toast.makeText(context, "Error updating password: ${updateTask.exception?.message}", Toast.LENGTH_SHORT).show()
+                                                Toast.makeText(context, "Failed to update password: ${updateTask.exception?.message}", Toast.LENGTH_SHORT).show()
                                             }
                                         }
                                 } else {
-                                    isChangingPassword = false
+                                    isLoading = false
                                     Toast.makeText(context, "Current password is incorrect", Toast.LENGTH_SHORT).show()
                                 }
                             }
-                    } else {
-                        isChangingPassword = false
-                        Toast.makeText(context, "User not found", Toast.LENGTH_SHORT).show()
                     }
                 },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
-                enabled = !isChangingPassword
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFFE0852D)
+                ),
+                enabled = !isLoading
             ) {
-                if (isChangingPassword) {
+                if (isLoading) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(24.dp),
                         color = MaterialTheme.colorScheme.onPrimary
                     )
                 } else {
-                    Text("Change Password")
+                    Text(
+                        "Change Password",
+                        style = MaterialTheme.typography.titleMedium
+                    )
                 }
             }
         }
