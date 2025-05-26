@@ -169,13 +169,6 @@ class MainActivity : ComponentActivity() {
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Location service status
-                Text(
-                    text = if (locationServiceStarted) "Location tracking: Active" else "Location tracking: Inactive",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = if (locationServiceStarted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
-                )
-
                 Spacer(modifier = Modifier.height(32.dp))
 
                 // Dashboard button
