@@ -767,7 +767,8 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                             IconButton(onClick = { showNotificationsMenu = true }) {
                                 Icon(
                                     imageVector = Icons.Default.Notifications,
-                                    contentDescription = "Notifications"
+                                    contentDescription = "Notifications",
+                                    tint = Color(0xFF4A4A4A)
                                 )
                             }
                             DropdownMenu(
@@ -806,7 +807,8 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                             IconButton(onClick = { showSettingsMenu = true }) {
                                 Icon(
                                     imageVector = Icons.Default.Settings,
-                                    contentDescription = "Settings"
+                                    contentDescription = "Settings",
+                                    tint = Color(0xFF4A4A4A)
                                 )
                             }
                             DropdownMenu(
@@ -980,12 +982,12 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                 Text(
                                     text = parentData?.get("email")?.toString() ?: "",
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = Color(0xFF4A4A4A)
                                 )
                                 Text(
                                     text = parentData?.get("phoneNumber")?.toString() ?: "",
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = Color(0xFF4A4A4A)
                                 )
                             }
 
@@ -1043,13 +1045,13 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                 Icon(
                                     imageVector = Icons.Default.PersonAdd,
                                     contentDescription = "Add Child",
-                                    tint = MaterialTheme.colorScheme.onSecondaryContainer
+                                    tint = Color(0xFF4A4A4A)
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text(
                                     text = "Add Child",
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                    color = Color(0xFF4A4A4A)
                                 )
                             }
                         }
@@ -1129,20 +1131,20 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                 Icon(
                                     imageVector = Icons.Default.PersonOff,
                                     contentDescription = "No Children",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    tint = Color(0xFF4A4A4A),
                                     modifier = Modifier.size(48.dp)
                                 )
                                 Spacer(modifier = Modifier.height(16.dp))
                                 Text(
                                     text = "No children added yet",
                                     style = MaterialTheme.typography.titleMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = Color(0xFF4A4A4A)
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text(
                                     text = "Add a child to start monitoring their device",
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                    color = Color(0xFF4A4A4A).copy(alpha = 0.7f)
                                 )
                             }
                         }
@@ -1204,7 +1206,7 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                         Text(
                                             text = (child["fullName"] as String).firstOrNull()?.toString()?.uppercase() ?: "?",
                                             style = MaterialTheme.typography.titleMedium,
-                                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                                            color = Color(0xFF4A4A4A)
                                         )
                                     }
 
