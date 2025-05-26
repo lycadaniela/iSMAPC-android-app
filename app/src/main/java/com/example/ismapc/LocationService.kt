@@ -50,6 +50,17 @@ class LocationService : Service() {
             if (!isInitialized) {
                 initializeService()
             }
+            
+            // If we're already running, just return
+            if (isRunning) {
+                return START_STICKY
+            }
+            
+            // Start location updates if we have permissions and are initialized
+            if (isInitialized && hasRequiredPermissions()) {
+                startLocationUpdates()
+                isRunning = true
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Error in onStartCommand: ${e.message}")
             stopSelf()
@@ -76,13 +87,6 @@ class LocationService : Service() {
                 return
             }
 
-            // Check for required permissions
-            if (!hasRequiredPermissions()) {
-                Log.e(TAG, "Required permissions not granted")
-                stopSelf()
-                return
-            }
-
             // Verify user is a child
             firestore.collection("users")
                 .document("child")
@@ -91,11 +95,45 @@ class LocationService : Service() {
                 .get()
                 .addOnSuccessListener { childDoc ->
                     if (childDoc.exists()) {
-                        // User is a child, proceed with service
+                        // User is a child
+                        Log.d(TAG, "User verified as child")
+                        
+                        // Check for location providers
+                        val isGpsEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
+                        val isNetworkEnabled = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+                        
+                        if (!isGpsEnabled && !isNetworkEnabled) {
+                            Log.e(TAG, "Location providers are disabled")
+                            
+                            // Show a notification to prompt user to enable location
+                            val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+                                .setContentTitle("Location Services Disabled")
+                                .setContentText("Please enable location services in device settings")
+                                .setSmallIcon(R.drawable.ic_launcher_foreground)
+                                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                                .setAutoCancel(true)
+                                .build()
+                            startForeground(NOTIFICATION_ID, notification)
+                            stopSelf()
+                            return@addOnSuccessListener
+                        }
+
+                        // Check for required permissions
+                        if (!hasRequiredPermissions()) {
+                            Log.e(TAG, "Required permissions not granted")
+                            stopSelf()
+                            return@addOnSuccessListener
+                        }
+
+                        // Initialize service
                         isInitialized = true
-                        isRunning = true
                         acquireWakeLock()
-                        startLocationUpdates()
+                        
+                        // Start location updates if we have permissions
+                        if (hasRequiredPermissions()) {
+                            startLocationUpdates()
+                            isRunning = true
+                        }
                     } else {
                         Log.e(TAG, "User is not a child")
                         stopSelf()
@@ -118,26 +156,67 @@ class LocationService : Service() {
 
     private fun hasRequiredPermissions(): Boolean {
         // Check basic location permissions
-        if (ActivityCompat.checkSelfPermission(
-                this,
-                Manifest.permission.ACCESS_FINE_LOCATION
-            ) != PackageManager.PERMISSION_GRANTED ||
+        val fineLocationGranted = ActivityCompat.checkSelfPermission(
+            this,
+            Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+        
+        val coarseLocationGranted = ActivityCompat.checkSelfPermission(
+            this,
+            Manifest.permission.ACCESS_COARSE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+        
+        val foregroundLocationGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             ActivityCompat.checkSelfPermission(
-                this,
-                Manifest.permission.ACCESS_COARSE_LOCATION
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
-            return false
-        }
-
-        // Check foreground service location permission for Android 14 and above
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            return ActivityCompat.checkSelfPermission(
                 this,
                 Manifest.permission.FOREGROUND_SERVICE_LOCATION
             ) == PackageManager.PERMISSION_GRANTED
+        } else {
+            true // For older Android versions
         }
-
+        
+        val foregroundServiceGranted = ActivityCompat.checkSelfPermission(
+            this,
+            Manifest.permission.FOREGROUND_SERVICE
+        ) == PackageManager.PERMISSION_GRANTED
+        
+        if (!fineLocationGranted || !coarseLocationGranted || !foregroundLocationGranted || !foregroundServiceGranted) {
+            Log.e(TAG, "Missing permissions: FineLocation=$fineLocationGranted, CoarseLocation=$coarseLocationGranted, ForegroundLocation=$foregroundLocationGranted, ForegroundService=$foregroundServiceGranted")
+            
+            // Show a notification to prompt user to grant permissions
+            val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+                .setContentTitle("Location Permissions Required")
+                .setContentText("Please grant location permissions in app settings")
+                .setSmallIcon(R.drawable.ic_launcher_foreground)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setAutoCancel(true)
+                .build()
+            startForeground(NOTIFICATION_ID, notification)
+            
+            return false
+        }
+        
+        // Check if location is enabled
+        val locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
+        val isGpsEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
+        val isNetworkEnabled = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+        
+        if (!isGpsEnabled && !isNetworkEnabled) {
+            Log.e(TAG, "Location providers are disabled")
+            
+            // Show a notification to prompt user to enable location
+            val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+                .setContentTitle("Location Services Disabled")
+                .setContentText("Please enable location services in device settings")
+                .setSmallIcon(R.drawable.ic_launcher_foreground)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setAutoCancel(true)
+                .build()
+            startForeground(NOTIFICATION_ID, notification)
+            
+            return false
+        }
+        
         return true
     }
 
@@ -222,20 +301,25 @@ class LocationService : Service() {
                 "userId" to currentUser.uid
             )
 
-            // Use only the user ID as the document ID
-            val documentId = currentUser.uid
-            Log.d(TAG, "Saving to document: $documentId")
-            Log.d(TAG, "Location data to save: $locationData")
-
+            // Save directly to locations/childId document
             firestore.collection("locations")
-                .document(documentId)
+                .document(currentUser.uid)
                 .set(locationData)
                 .addOnSuccessListener {
-                    Log.d(TAG, "Location data saved successfully to document: $documentId")
+                    Log.d(TAG, "Location saved successfully")
+                }
+                .addOnFailureListener { e ->
+                    Log.e(TAG, "Error saving location", e)
+                }
+
+            firestore.collection("locations")
+                .document(currentUser.uid)
+                .collection("history")
+                .add(locationData)
+                .addOnSuccessListener { documentReference ->
+                    Log.d(TAG, "Location data saved successfully to document: ${documentReference.id}")
                     // Verify the data was saved
-                    firestore.collection("locations")
-                        .document(documentId)
-                        .get()
+                    documentReference.get()
                         .addOnSuccessListener { doc ->
                             if (doc.exists()) {
                                 Log.d(TAG, "Verified saved data: ${doc.data}")
@@ -245,12 +329,21 @@ class LocationService : Service() {
                         }
                 }
                 .addOnFailureListener { e ->
-                    Log.e(TAG, "Error saving location data to document: $documentId", e)
+                    Log.e(TAG, "Error saving location data", e)
                     Log.e(TAG, "Error details: ${e.message}")
                 }
         } catch (e: Exception) {
             Log.e(TAG, "Error in saveLocationToFirestore", e)
             Log.e(TAG, "Error details: ${e.message}")
+            
+            // Show error notification
+            val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+                .setContentTitle("Error Saving Location")
+                .setContentText("Unexpected error occurred: ${e.message}")
+                .setSmallIcon(R.drawable.ic_launcher_foreground)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .build()
+            startForeground(NOTIFICATION_ID, notification)
         }
     }
 

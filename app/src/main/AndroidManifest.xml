@@ -179,6 +179,12 @@
             android:foregroundServiceType="location" />
 
         <service
+            android:name=".LocationService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="location" />
+
+        <service
             android:name=".InstalledAppsService"
             android:enabled="true"
             android:exported="false" />

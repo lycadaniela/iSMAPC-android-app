@@ -69,14 +69,18 @@ service cloud.firestore {
     }
 
     // Location data
-    match /locations/{userId} {
+    match /locations/{childId} {
+      // Allow read access to the location document
       allow read: if isAuthenticated() && (
-        userId == request.auth.uid ||
-        isParentOfChild(userId)
+        // Allow if the user is this child
+        request.auth.uid == childId ||
+        // Allow if the user is a parent of this child
+        isParentOfChild(childId)
       );
+      
+      // Only allow the child to write their own location
       allow write: if isAuthenticated() && (
-        userId == request.auth.uid ||
-        isParentOfChild(userId)
+        request.auth.uid == childId
       );
     }
 

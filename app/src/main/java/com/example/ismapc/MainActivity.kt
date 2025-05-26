@@ -35,10 +35,9 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonAdd
-import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.PersonOff
-import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -46,34 +45,155 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.draw.shadow
 import com.example.ismapc.ui.theme.ISMAPCTheme
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
-import androidx.compose.ui.graphics.Color
+import com.google.firebase.firestore.CollectionReference
+import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.WriteBatch
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
+import androidx.work.Constraints
+import androidx.work.NetworkType
+import java.util.concurrent.TimeUnit
 import android.app.AppOpsManager
 import android.content.Context
 import android.provider.Settings
 import android.app.usage.UsageStatsManager
 import android.app.Activity
 import android.os.Build
-import com.google.firebase.firestore.FieldValue
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
-import com.google.android.gms.auth.api.signin.GoogleSignIn
-import com.google.android.gms.auth.api.signin.GoogleSignInOptions
-import com.google.firebase.firestore.CollectionReference
-import com.google.firebase.firestore.WriteBatch
-import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.PeriodicWorkRequestBuilder
-import androidx.work.WorkManager
-import java.util.concurrent.TimeUnit
 
 class MainActivity : ComponentActivity() {
+    @OptIn(ExperimentalMaterial3Api::class)
+    @Composable
+    fun ChildMainScreen(onLogout: () -> Unit) {
+        val context = LocalContext.current
+        var hasUsagePermission by remember { mutableStateOf(false) }
+        var serviceStarted by remember { mutableStateOf(false) }
+        var locationServiceStarted by remember { mutableStateOf(false) }
+
+        // Check permissions when the screen is first loaded
+        LaunchedEffect(Unit) {
+            val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as android.app.AppOpsManager
+            val mode = appOps.checkOpNoThrow(
+                android.app.AppOpsManager.OPSTR_GET_USAGE_STATS,
+                android.os.Process.myUid(),
+                context.packageName
+            )
+            hasUsagePermission = mode == android.app.AppOpsManager.MODE_ALLOWED
+
+            if (!hasUsagePermission || !Settings.canDrawOverlays(context)) {
+                // Navigate to permission screen if permissions are not granted
+                (context as? Activity)?.let { activity ->
+                    activity.startActivity(Intent(context, ChildPermissionActivity::class.java))
+                }
+            } else {
+                // Start LocationService if not already started
+                if (!locationServiceStarted) {
+                    val locationIntent = Intent(context, LocationService::class.java)
+                    context.startService(locationIntent)
+                    locationServiceStarted = true
+                }
+            }
+        }
+
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = { },
+                    navigationIcon = {
+                        IconButton(
+                            onClick = {
+                                (context as? Activity)?.let { activity ->
+                                    activity.startActivity(Intent(context, ChildPermissionActivity::class.java))
+                                }
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Lock,
+                                contentDescription = "Check Permissions"
+                            )
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = onLogout) {
+                            Icon(
+                                imageVector = Icons.Filled.ExitToApp,
+                                contentDescription = "Logout"
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                        actionIconContentColor = MaterialTheme.colorScheme.onPrimary
+                    )
+                )
+            }
+        ) { innerPadding ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+                    .padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                // Success icon
+                Icon(
+                    imageVector = Icons.Filled.CheckCircle,
+                    contentDescription = "Success",
+                    modifier = Modifier
+                        .size(64.dp)
+                        .padding(bottom = 16.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+
+                // Connected successfully text
+                Text(
+                    text = "Connected Successfully",
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Location service status
+                Text(
+                    text = if (locationServiceStarted) "Location tracking: Active" else "Location tracking: Inactive",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (locationServiceStarted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                )
+
+                Spacer(modifier = Modifier.height(32.dp))
+
+                // Dashboard button
+                Button(
+                    onClick = {
+                        context.startActivity(Intent(context, ChildDashboardActivity::class.java))
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp)
+                        .padding(horizontal = 32.dp)
+                ) {
+                    Text("Open My Dashboard")
+                }
+            }
+        }
+    }
+
     companion object {
         const val USERS_COLLECTION = "users"
         const val PARENTS_COLLECTION = "parents"
@@ -90,7 +210,7 @@ class MainActivity : ComponentActivity() {
         auth = FirebaseAuth.getInstance()
         firestore = FirebaseFirestore.getInstance()
         enableEdgeToEdge()
-        
+
         try {
             // Check user type first before starting any services
             val currentUser = auth.currentUser
@@ -235,15 +355,15 @@ class MainActivity : ComponentActivity() {
     private fun stopChildServices() {
         try {
             Log.d("MainActivity", "Stopping child services")
-            
+
             // Stop AppUsageService
             stopService(Intent(this, AppUsageService::class.java))
-            
+
             // Stop other existing services...
             stopService(Intent(this, AppLockService::class.java))
             stopService(Intent(this, ScreenTimeService::class.java))
             stopService(Intent(this, ContentFilteringService::class.java))
-            
+
         } catch (e: Exception) {
             Log.e("MainActivity", "Error stopping child services", e)
         }
@@ -252,17 +372,17 @@ class MainActivity : ComponentActivity() {
     private fun startChildServices() {
         try {
             Log.d("MainActivity", "Starting child services")
-            
+
             // Start AppUsageService
             startAppUsageService()
-            
+
             // Start other existing services...
             // For example:
             startService(Intent(this, AppLockService::class.java))
             startService(Intent(this, ScreenTimeService::class.java))
             startService(Intent(this, ContentFilteringService::class.java))
             startService(Intent(this, InstalledAppsService::class.java))
-            
+
             // Start DeviceLockService for device lock/unlock functionality
             val deviceLockIntent = Intent(this, DeviceLockService::class.java)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -271,7 +391,7 @@ class MainActivity : ComponentActivity() {
                 startService(deviceLockIntent)
             }
             Log.d("MainActivity", "DeviceLockService started")
-            
+
         } catch (e: Exception) {
             Log.e("MainActivity", "Error starting child services", e)
         }
@@ -281,7 +401,7 @@ class MainActivity : ComponentActivity() {
         try {
             Log.d("MainActivity", "Starting AppUsageService")
             val serviceIntent = Intent(this, AppUsageService::class.java)
-            
+
             // Start as a foreground service to ensure it keeps running
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 startForegroundService(serviceIntent)
@@ -295,7 +415,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        
+
         // Check if user is a child and restart services if needed
         if (userType == "child") {
             val appOps = getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
@@ -304,13 +424,13 @@ class MainActivity : ComponentActivity() {
                 Process.myUid(),
                 packageName
             )
-            
+
             // Only start services if we have permissions
             if (mode == AppOpsManager.MODE_ALLOWED) {
                 Log.d("MainActivity", "Child account resumed, ensuring services are running")
                 startAppUsageService()
                 startService(Intent(this, InstalledAppsService::class.java))
-                
+
                 // Ensure DeviceLockService is running
                 val deviceLockIntent = Intent(this, DeviceLockService::class.java)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -366,19 +486,23 @@ class MainActivity : ComponentActivity() {
         try {
             Log.d("MainActivity", "Scheduling content suggestion worker")
             
-            // Create a periodic work request
-            val contentSuggestionWorkRequest = PeriodicWorkRequestBuilder<ContentSuggestionWorker>(
-                ContentSuggestionWorker.REFRESH_INTERVAL_HOURS,
-                TimeUnit.HOURS
-            ).build()
-            
-            // Schedule the work
-            WorkManager.getInstance(this).enqueueUniquePeriodicWork(
-                ContentSuggestionWorker.WORKER_TAG,
-                ExistingPeriodicWorkPolicy.KEEP, // Keep existing if already scheduled
-                contentSuggestionWorkRequest
+            val workManager = WorkManager.getInstance(applicationContext)
+            val workRequest = PeriodicWorkRequestBuilder<ContentSuggestionWorker>(
+                24, TimeUnit.HOURS,
+                1, TimeUnit.HOURS
             )
-            
+            .setConstraints(
+                Constraints.Builder()
+                    .setRequiredNetworkType(NetworkType.CONNECTED)
+                    .build()
+            )
+            .build()
+
+            workManager.enqueueUniquePeriodicWork(
+                "content_suggestion_worker",
+                ExistingPeriodicWorkPolicy.REPLACE,
+                workRequest
+            )
             Log.d("MainActivity", "Content suggestion worker scheduled")
         } catch (e: Exception) {
             Log.e("MainActivity", "Error scheduling content suggestion worker", e)
@@ -418,7 +542,7 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                 .get()
                 .addOnSuccessListener { childDocuments ->
                     val batch = firestore.batch()
-                    
+
                     // Create a deletion request document
                     val deletionRequest = hashMapOf(
                         "parentId" to currentUser.uid,
@@ -445,7 +569,7 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                             )
                         )
                     )
-                    
+
                     // Add the deletion request to a special collection
                     firestore.collection("deletionRequests")
                         .document(currentUser.uid)
@@ -453,25 +577,25 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                         .addOnSuccessListener {
                             Log.d("AccountDeletion", "Deletion request created successfully for parent: $parentEmail")
                             Log.d("AccountDeletion", "Associated child accounts: ${childDocuments.map { it.id }}")
-                            
+
                             // Delete all child accounts and their data
                             for (childDoc in childDocuments) {
                                 val childId = childDoc.id
-                                
+
                                 // Delete child's profile
                                 batch.delete(childDoc.reference)
-                                
+
                                 // Delete child's data from other collections
                                 val collectionsToDelete = listOf(
                                     "screenTime",
-                                    "locations",
                                     "installedApps",
                                     "lockedApps",
                                     "contentFiltering",
                                     "contentToFilter",
-                                    "deviceLocks"
+                                    "deviceLocks",
+                                    "locations"
                                 )
-                                
+
                                 collectionsToDelete.forEach { collectionName ->
                                     // Delete documents where childId matches
                                     firestore.collection(collectionName)
@@ -482,12 +606,12 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                                 batch.delete(doc.reference)
                                             }
                                         }
-                                    
+
                                     // Also delete documents where the document ID is the childId
                                     batch.delete(firestore.collection(collectionName).document(childId))
                                 }
                             }
-                            
+
                             // Delete parent's profile
                             batch.delete(
                                 firestore.collection(MainActivity.USERS_COLLECTION)
@@ -495,7 +619,7 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                     .collection(currentUser.uid)
                                     .document(MainActivity.PROFILE_DOCUMENT)
                             )
-                            
+
                             // Commit all deletions
                             batch.commit()
                                 .addOnSuccessListener {
@@ -528,11 +652,45 @@ fun ParentMainScreen(onLogout: () -> Unit) {
         }
     }
 
+    var childLocations by remember { mutableStateOf(mapOf<String, List<Map<String, Any>>>()) }
+
+    // Function to fetch location data for a child
+    fun fetchChildLocations(childId: String) {
+        val firestore = FirebaseFirestore.getInstance()
+
+        // Listen to location history for this child
+        firestore.collection("locations")
+            .document(childId)
+            .collection("history")
+            .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
+            .limit(100)  // Limit to last 100 locations
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.e("ParentMainScreen", "Error fetching locations for child $childId", error)
+                    return@addSnapshotListener
+                }
+
+                if (snapshot != null) {
+                    val locations = snapshot.documents.mapNotNull { doc ->
+                        doc.data?.toMutableMap()?.apply {
+                            put("documentId", doc.id)
+                        }
+                    }
+
+                    // Update the locations map
+                    childLocations = childLocations.toMutableMap().apply {
+                        put(childId, locations)
+                    }.toMap()
+                    Log.d("ParentMainScreen", "Fetched ${locations.size} locations for child $childId")
+                }
+            }
+    }
+
     // Fetch parent data and children data from Firestore using real-time listeners
     LaunchedEffect(currentUser?.uid) {
         currentUser?.uid?.let { uid ->
             Log.d("ParentMainScreen", "Starting data fetch for parent ID: $uid")
-            
+
             // Real-time listener for parent data
             val parentListener = FirebaseFirestore.getInstance()
                 .collection(MainActivity.USERS_COLLECTION)
@@ -553,7 +711,7 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                         val parentEmail = snapshot.getString("email")
                         if (parentEmail != null) {
                             Log.d("ParentMainScreen", "Setting up children listener for parent email: $parentEmail")
-                            
+
                             // Real-time listener for children data
                             val childrenListener = FirebaseFirestore.getInstance()
                                 .collectionGroup(MainActivity.PROFILE_DOCUMENT)
@@ -567,11 +725,20 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                     if (querySnapshot != null) {
                                         val filteredChildren = querySnapshot.documents.mapNotNull { doc ->
                                             doc.data?.toMutableMap()?.apply {
-                                                put("documentId", doc.id)  // Add the document ID to the data map
+                                                put("documentId", doc.id)
                                             }
                                         }
                                         childrenData = filteredChildren
                                         Log.d("ParentMainScreen", "Children data updated. Found ${filteredChildren.size} children")
+
+                                        // Start fetching locations for each child
+                                        filteredChildren.forEach { child ->
+                                            val childId = child["documentId"] as? String
+                                            if (childId != null) {
+                                                fetchChildLocations(childId)
+                                            }
+                                        }
+
                                         isLoading = false
                                     }
                                 }
@@ -603,17 +770,17 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                     title = { },
                     actions = {
                         // Notifications Icon
-                                        Box {
+                        Box {
                             IconButton(onClick = { showNotificationsMenu = true }) {
-                                                Icon(
-                                                    imageVector = Icons.Default.Notifications,
+                                Icon(
+                                    imageVector = Icons.Default.Notifications,
                                     contentDescription = "Notifications"
-                                                )
-                                            }
-                                            DropdownMenu(
-                                                expanded = showNotificationsMenu,
-                                                onDismissRequest = { showNotificationsMenu = false },
-                                                modifier = Modifier
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = showNotificationsMenu,
+                                onDismissRequest = { showNotificationsMenu = false },
+                                modifier = Modifier
                                     .background(MaterialTheme.colorScheme.surface)
                                     .border(
                                         width = 1.dp,
@@ -621,8 +788,8 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                         shape = MaterialTheme.shapes.medium
                                     )
                             ) {
-                                                DropdownMenuItem(
-                                                    text = { 
+                                DropdownMenuItem(
+                                    text = {
                                         Row(
                                             verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -633,26 +800,26 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                                 tint = MaterialTheme.colorScheme.primary
                                             )
                                             Text("No new notifications")
-                                                        }
-                                                    },
-                                                    onClick = {
-                                                        showNotificationsMenu = false
+                                        }
+                                    },
+                                    onClick = {
+                                        showNotificationsMenu = false
                                     }
                                 )
                             }
                         }
                         // Settings Icon
-                                        Box {
+                        Box {
                             IconButton(onClick = { showSettingsMenu = true }) {
-                                                Icon(
-                                                    imageVector = Icons.Default.Settings,
+                                Icon(
+                                    imageVector = Icons.Default.Settings,
                                     contentDescription = "Settings"
-                                                )
-                                            }
-                                            DropdownMenu(
-                                                expanded = showSettingsMenu,
-                                                onDismissRequest = { showSettingsMenu = false },
-                                                modifier = Modifier
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = showSettingsMenu,
+                                onDismissRequest = { showSettingsMenu = false },
+                                modifier = Modifier
                                     .background(MaterialTheme.colorScheme.surface)
                                     .border(
                                         width = 1.dp,
@@ -660,8 +827,8 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                         shape = MaterialTheme.shapes.medium
                                     )
                             ) {
-                                                DropdownMenuItem(
-                                                    text = { 
+                                DropdownMenuItem(
+                                    text = {
                                         Row(
                                             verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -673,16 +840,16 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                             )
                                             Text("Change Password")
                                         }
-                                                    },
-                                                    onClick = {
-                                                        showSettingsMenu = false
+                                    },
+                                    onClick = {
+                                        showSettingsMenu = false
                                         val intent = Intent(context, ChangePasswordActivity::class.java)
                                         context.startActivity(intent)
                                     }
                                 )
                                 Divider()
-                                                DropdownMenuItem(
-                                                    text = { 
+                                DropdownMenuItem(
+                                    text = {
                                         Row(
                                             verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -694,15 +861,15 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                             )
                                             Text("About")
                                         }
-                                                    },
-                                                    onClick = {
+                                    },
+                                    onClick = {
                                         context.startActivity(Intent(context, AboutActivity::class.java))
-                                                        showSettingsMenu = false
+                                        showSettingsMenu = false
                                     }
-                                                )
+                                )
                                 Divider()
-                                                DropdownMenuItem(
-                                                    text = { 
+                                DropdownMenuItem(
+                                    text = {
                                         Row(
                                             verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -712,20 +879,20 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                                 contentDescription = null,
                                                 tint = Color.Red
                                             )
-                                                        Text(
-                                                            "Delete Account",
+                                            Text(
+                                                "Delete Account",
                                                 color = Color.Red
-                                                        )
+                                            )
                                         }
-                                                    },
-                                                    onClick = {
-                                                        showSettingsMenu = false
-                                                        showDeleteAccountDialog = true
+                                    },
+                                    onClick = {
+                                        showSettingsMenu = false
+                                        showDeleteAccountDialog = true
                                     }
-                                                )
+                                )
                                 Divider()
-                                                DropdownMenuItem(
-                                                    text = { 
+                                DropdownMenuItem(
+                                    text = {
                                         Row(
                                             verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -737,10 +904,10 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                             )
                                             Text("Logout")
                                         }
-                                                    },
-                                                    onClick = {
-                                                        showSettingsMenu = false
-                                                        onLogout()
+                                    },
+                                    onClick = {
+                                        showSettingsMenu = false
+                                        onLogout()
                                     }
                                 )
                             }
@@ -755,9 +922,9 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                     contentAlignment = Alignment.Center
                 ) {
                     CircularProgressIndicator()
-                                            }
+                }
             } else {
-                                Column(
+                Column(
                     modifier = Modifier
                         .fillMaxSize()
                         .verticalScroll(rememberScrollState())
@@ -773,40 +940,40 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                         )
                     ) {
                         Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
+                            modifier = Modifier
+                                .fillMaxWidth()
                                 .padding(16.dp),
                             verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    // Profile Picture
-                                    Box(
-                                        modifier = Modifier
+                        ) {
+                            // Profile Picture
+                            Box(
+                                modifier = Modifier
                                     .size(64.dp)
                                     .clip(CircleShape)
                                     .background(MaterialTheme.colorScheme.surface)
-                                            .border(
+                                    .border(
                                         width = 2.dp,
                                         color = Color(0xFFE0852D),
-                                                shape = CircleShape
+                                        shape = CircleShape
                                     ),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        if (profileBitmap != null) {
-                                            Image(
-                                                bitmap = profileBitmap!!.asImageBitmap(),
-                                                contentDescription = "Profile Picture",
-                                                modifier = Modifier.fillMaxSize(),
-                                                contentScale = ContentScale.Crop
-                                            )
-                                        } else {
-                                            Icon(
-                                                imageVector = Icons.Default.Person,
-                                                contentDescription = "Profile Picture",
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (profileBitmap != null) {
+                                    Image(
+                                        bitmap = profileBitmap!!.asImageBitmap(),
+                                        contentDescription = "Profile Picture",
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Default.Person,
+                                        contentDescription = "Profile Picture",
                                         tint = Color(0xFFE0852D),
                                         modifier = Modifier.size(32.dp)
-                                            )
-                                        }
-                                    }
+                                    )
+                                }
+                            }
 
                             Spacer(modifier = Modifier.width(16.dp))
 
@@ -857,8 +1024,8 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                         modifier = Modifier.padding(top = 8.dp)
                     )
 
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         // Add Child Button
@@ -875,7 +1042,7 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                             )
                         ) {
                             Column(
-                                            modifier = Modifier
+                                modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(16.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally
@@ -886,11 +1053,11 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                     tint = MaterialTheme.colorScheme.onSecondaryContainer
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
-                                            Text(
+                                Text(
                                     text = "Add Child",
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSecondaryContainer
-                                            )
+                                )
                             }
                         }
 
@@ -906,18 +1073,18 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                 containerColor = MaterialTheme.colorScheme.tertiaryContainer
                             )
                         ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
                                     .padding(16.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
+                            ) {
                                 Icon(
                                     imageVector = Icons.Default.Info,
                                     contentDescription = "FAQ",
                                     tint = MaterialTheme.colorScheme.onSurface
                                 )
-                            Spacer(modifier = Modifier.height(8.dp))
+                                Spacer(modifier = Modifier.height(8.dp))
                                 Text(
                                     text = "FAQ",
                                     style = MaterialTheme.typography.bodyMedium,
@@ -928,30 +1095,30 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                     }
 
                     // Children Section
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
                             .padding(top = 8.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Text(
                             text = "Your Children",
                             style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.colorScheme.onSurface
                         )
-                        
+
                         // Delete Mode Toggle
                         IconButton(
                             onClick = { isDeleteMode = !isDeleteMode }
-                                    ) {
-                                        Icon(
+                        ) {
+                            Icon(
                                 imageVector = Icons.Default.Delete,
                                 contentDescription = if (isDeleteMode) "Exit Delete Mode" else "Enter Delete Mode",
                                 tint = if (isDeleteMode) Color.Red else Color(0xFFE0852D)
-                                        )
-                                    }
-                                }
+                            )
+                        }
+                    }
 
                     if (childrenData.isEmpty()) {
                         Card(
@@ -961,17 +1128,17 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                             )
                         ) {
                             Column(
-                                    modifier = Modifier
+                                modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(24.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    Icon(
+                            ) {
+                                Icon(
                                     imageVector = Icons.Default.PersonOff,
                                     contentDescription = "No Children",
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(48.dp)
-                                    )
+                                )
                                 Spacer(modifier = Modifier.height(16.dp))
                                 Text(
                                     text = "No children added yet",
@@ -990,7 +1157,7 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                         childrenData.forEach { child ->
                             var isLocked by remember { mutableStateOf(false) }
                             var isUpdating by remember { mutableStateOf(false) }
-                            
+
                             // Set up real-time listener for device lock state
                             LaunchedEffect(child["documentId"] as String) {
                                 val childId = child["documentId"] as String
@@ -1005,7 +1172,7 @@ fun ParentMainScreen(onLogout: () -> Unit) {
 
                                             if (snapshot != null && snapshot.exists()) {
                                                 isLocked = snapshot.getBoolean("isLocked") ?: false
-                                                        } else {
+                                            } else {
                                                 isLocked = false
                                             }
                                         }
@@ -1020,9 +1187,9 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                             val intent = Intent(context, ChildDetailsActivity::class.java)
                                             intent.putExtra("childId", child["documentId"] as String)
                                             intent.putExtra("childName", child["fullName"] as String)
-                                                    context.startActivity(intent)
-                                                }
-                                            },
+                                            context.startActivity(intent)
+                                        }
+                                    },
                                 colors = CardDefaults.cardColors(
                                     containerColor = MaterialTheme.colorScheme.surface
                                 )
@@ -1065,7 +1232,7 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                             onClick = {
                                                 val childId = child["documentId"] as String
                                                 val batch = FirebaseFirestore.getInstance().batch()
-                                                
+
                                                 // Delete child's profile
                                                 val profileRef = FirebaseFirestore.getInstance()
                                                     .collection(MainActivity.USERS_COLLECTION)
@@ -1093,10 +1260,10 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                                         .addOnSuccessListener { docs ->
                                                             docs.forEach { doc ->
                                                                 batch.delete(doc.reference)
+                                                            }
                                                         }
-                                                }
 
-                                                // Also delete documents where the document ID is the childId
+                                                    // Also delete documents where the document ID is the childId
                                                     batch.delete(FirebaseFirestore.getInstance().collection(collectionName).document(childId))
                                                 }
 
@@ -1104,10 +1271,10 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                                 batch.commit()
                                                     .addOnSuccessListener {
                                                         Toast.makeText(context, "Child account deleted successfully", Toast.LENGTH_SHORT).show()
-                                                                        }
-                                                                        .addOnFailureListener { e ->
+                                                    }
+                                                    .addOnFailureListener { e ->
                                                         Toast.makeText(context, "Error deleting child account: ${e.message}", Toast.LENGTH_SHORT).show()
-                                                                        }
+                                                    }
                                             }
                                         ) {
                                             Icon(
@@ -1133,8 +1300,8 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                                         .set(updates)
                                                         .addOnSuccessListener {
                                                             isUpdating = false
-                                                    }
-                                                    .addOnFailureListener { e ->
+                                                        }
+                                                        .addOnFailureListener { e ->
                                                             Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
                                                             isUpdating = false
                                                         }
@@ -1153,8 +1320,8 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                                     contentDescription = if (isLocked) "Unlock Device" else "Lock Device",
                                                     tint = if (isLocked) Color.Red else MaterialTheme.colorScheme.primary
                                                 )
-                                                    }
                                             }
+                                        }
                                     }
                                 }
                             }
@@ -1168,9 +1335,9 @@ fun ParentMainScreen(onLogout: () -> Unit) {
     // Delete Account Dialog
     if (showDeleteAccountDialog) {
         AlertDialog(
-            onDismissRequest = { 
+            onDismissRequest = {
                 if (!isDeletingAccount) {
-                    showDeleteAccountDialog = false 
+                    showDeleteAccountDialog = false
                 }
             },
             title = {
@@ -1212,7 +1379,7 @@ fun ParentMainScreen(onLogout: () -> Unit) {
             confirmButton = {
                 TextButton(
                     onClick = {
-                            deleteParentAccount()
+                        deleteParentAccount()
                     },
                     enabled = !isDeletingAccount
                 ) {
@@ -1231,9 +1398,9 @@ fun ParentMainScreen(onLogout: () -> Unit) {
             },
             dismissButton = {
                 TextButton(
-                    onClick = { 
+                    onClick = {
                         if (!isDeletingAccount) {
-                            showDeleteAccountDialog = false 
+                            showDeleteAccountDialog = false
                         }
                     },
                     enabled = !isDeletingAccount
@@ -1402,9 +1569,9 @@ fun ChildProfileCard(
                     },
                     enabled = !isUpdating,
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = if (isLocked) 
+                        containerColor = if (isLocked)
                             Color.Red
-                        else 
+                        else
                             Color.White
                     ),
                     modifier = Modifier.padding(start = 8.dp)
@@ -1434,14 +1601,13 @@ fun ChildProfileCard(
             }
         }
     }
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChildMainScreen(onLogout: () -> Unit) {
     val context = LocalContext.current
     var hasUsagePermission by remember { mutableStateOf(false) }
     var serviceStarted by remember { mutableStateOf(false) }
+    var locationServiceStarted by remember { mutableStateOf(false) }
 
     // Check permissions when the screen is first loaded
     LaunchedEffect(Unit) {
@@ -1457,6 +1623,13 @@ fun ChildMainScreen(onLogout: () -> Unit) {
             // Navigate to permission screen if permissions are not granted
             (context as? Activity)?.let { activity ->
                 activity.startActivity(Intent(context, ChildPermissionActivity::class.java))
+            }
+        } else {
+            // Start LocationService if not already started
+            if (!locationServiceStarted) {
+                val locationIntent = Intent(context, LocationService::class.java)
+                context.startService(locationIntent)
+                locationServiceStarted = true
             }
         }
     }
@@ -1512,16 +1685,25 @@ fun ChildMainScreen(onLogout: () -> Unit) {
                     .padding(bottom = 16.dp),
                 tint = MaterialTheme.colorScheme.primary
             )
-            
+
             // Connected successfully text
             Text(
                 text = "Connected Successfully",
                 style = MaterialTheme.typography.headlineMedium,
                 color = MaterialTheme.colorScheme.primary
             )
-            
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Location service status
+            Text(
+                text = if (locationServiceStarted) "Location tracking: Active" else "Location tracking: Inactive",
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (locationServiceStarted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+            )
+
             Spacer(modifier = Modifier.height(32.dp))
-            
+
             // Dashboard button
             Button(
                 onClick = {
@@ -1536,4 +1718,5 @@ fun ChildMainScreen(onLogout: () -> Unit) {
             }
         }
     }
+}
 }
