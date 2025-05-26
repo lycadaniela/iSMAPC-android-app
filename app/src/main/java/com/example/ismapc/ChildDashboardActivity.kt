@@ -40,6 +40,7 @@ import com.example.ismapc.ui.theme.ISMAPCTheme
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
@@ -48,7 +49,6 @@ import java.util.*
 class ChildDashboardActivity : ComponentActivity() {
     private val TAG = "ChildDashboardActivity"
     private val auth = FirebaseAuth.getInstance()
-    private val firestore = FirebaseFirestore.getInstance()
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -88,7 +88,7 @@ fun ChildDashboardScreen(childId: String) {
     var suggestions by remember { mutableStateOf<List<GeminiContentService.ContentSuggestion>>(emptyList()) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var childName by remember { mutableStateOf("") }
-    
+
     // Fetch content suggestions and child name when screen is first displayed
     LaunchedEffect(childId) {
         try {
@@ -104,84 +104,53 @@ fun ChildDashboardScreen(childId: String) {
             }
             
             if (profileDoc.exists()) {
-                childName = profileDoc.getString("fullName") ?: "Child"
-            }
-            
-            // Get content suggestions
-            val suggestionsDoc = withContext(Dispatchers.IO) {
-                FirebaseFirestore.getInstance()
-                    .collection("contentSuggestions")
-                    .document(childId)
-                    .get()
-                    .await()
-            }
-            
-            if (suggestionsDoc.exists()) {
-                val suggestionsMap = suggestionsDoc.get("suggestions") as? Map<String, Map<String, Any>>
-                
-                if (suggestionsMap != null) {
-                    val parsedSuggestions = mutableListOf<GeminiContentService.ContentSuggestion>()
-                    
-                    for ((_, suggestionData) in suggestionsMap) {
-                        val title = suggestionData["title"] as? String ?: continue
-                        val description = suggestionData["description"] as? String ?: ""
-                        val categoryStr = suggestionData["category"] as? String ?: "EDUCATIONAL"
-                        
-                        val category = try {
-                            SuggestionCategory.valueOf(categoryStr)
-                        } catch (e: Exception) {
-                            SuggestionCategory.EDUCATIONAL
-                        }
-                        
-                        parsedSuggestions.add(
-                            GeminiContentService.ContentSuggestion(
-                                title = title,
-                                description = description,
-                                category = category,
-                                ageAppropriate = suggestionData["ageAppropriate"] as? Boolean ?: true,
-                                imageUrl = suggestionData["imageUrl"] as? String,
-                                linkUrl = suggestionData["linkUrl"] as? String
-                            )
-                        )
-                    }
-                    
-                    suggestions = parsedSuggestions
-                    
-                    if (suggestions.isEmpty()) {
-                        // Generate fallback suggestions if none found
-                        Log.d(TAG, "No suggestions found, generating fallbacks")
-                        suggestions = generateFallbackSuggestions()
-                    }
-                } else {
-                    Log.e(TAG, "Invalid suggestions format in document")
-                    suggestions = generateFallbackSuggestions()
-                }
+                childName = profileDoc.getString("name") ?: ""
+                Log.d(TAG, "Loaded child name: $childName")
             } else {
-                Log.d(TAG, "No suggestions document found for child: $childId")
-                suggestions = generateFallbackSuggestions()
-                
-                // Trigger suggestion generation
-                coroutineScope.launch {
-                    try {
-                        val geminiService = GeminiContentService()
-                        val newSuggestions = geminiService.generateSuggestions(childId)
-                        if (newSuggestions.isNotEmpty()) {
-                            suggestions = newSuggestions
-                        }
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Error generating suggestions: ${e.message}", e)
-                    }
-                }
+                Log.w(TAG, "No profile document found for child: $childId")
+                childName = "Child"
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error loading suggestions: ${e.message}", e)
-            errorMessage = "Could not load suggestions: ${e.message}"
-            suggestions = generateFallbackSuggestions()
-        } finally {
+
+            // Generate suggestions directly
+            val geminiService = GeminiContentService()
+            suggestions = geminiService.generateSuggestions(childId)
+            
+            // Sort suggestions by category
+            suggestions = suggestions.sortedBy { it.category }
+
             isLoading = false
+            errorMessage = null
+        } catch (e: Exception) {
+            Log.e(TAG, "Error loading content suggestions: ${e.message}", e)
+            isLoading = false
+            errorMessage = "Error loading suggestions: ${e.message}"
         }
     }
+
+    // Refresh suggestions when pull-to-refresh is triggered
+    val refreshState = remember { mutableStateOf(false) }
     
+    LaunchedEffect(key1 = refreshState.value) {
+        if (refreshState.value) {
+            try {
+                // Generate new suggestions directly
+                val geminiService = GeminiContentService()
+                suggestions = geminiService.generateSuggestions(childId)
+                
+                // Sort suggestions by category
+                suggestions = suggestions.sortedBy { it.category }
+
+                isLoading = false
+                errorMessage = null
+            } catch (e: Exception) {
+                Log.e(TAG, "Error refreshing suggestions: ${e.message}", e)
+                isLoading = false
+                errorMessage = "Error refreshing suggestions: ${e.message}"
+            }
+            refreshState.value = false
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -194,85 +163,61 @@ fun ChildDashboardScreen(childId: String) {
             )
         }
     ) { paddingValues ->
-        Box(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
+            // Title with child's name
+            Text(
+                text = "Hi $childName! Here are your personalized suggestions:",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+
+            // Error message if any
+            if (errorMessage != null) {
+                Text(
+                    text = errorMessage!!,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+            }
+
+            // Loading indicator
             if (isLoading) {
                 CircularProgressIndicator(
-                    modifier = Modifier.align(Alignment.Center)
+                    modifier = Modifier
+                        .size(40.dp)
+                        .align(Alignment.CenterHorizontally)
                 )
-            } else if (errorMessage != null && suggestions.isEmpty()) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Text(
-                        text = "Something went wrong",
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = MaterialTheme.colorScheme.error
-                    )
-                    
-                    Spacer(modifier = Modifier.height(8.dp))
-                    
-                    Text(
-                        text = errorMessage ?: "Unknown error",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.error
-                    )
-                    
-                    Spacer(modifier = Modifier.height(16.dp))
-                    
-                    Button(
-                        onClick = {
-                            isLoading = true
-                            errorMessage = null
-                            
-                            // Force refresh
-                            coroutineScope.launch {
-                                try {
-                                    val geminiService = GeminiContentService()
-                                    val newSuggestions = geminiService.generateSuggestions(childId)
-                                    if (newSuggestions.isNotEmpty()) {
-                                        suggestions = newSuggestions
-                                    } else {
-                                        errorMessage = "Could not generate new suggestions"
-                                        suggestions = generateFallbackSuggestions()
-                                    }
-                                } catch (e: Exception) {
-                                    Log.e(TAG, "Error forcing suggestion refresh: ${e.message}", e)
-                                    errorMessage = "Error: ${e.message}"
-                                    suggestions = generateFallbackSuggestions()
-                                } finally {
-                                    isLoading = false
-                                }
-                            }
-                        }
-                    ) {
-                        Text("Try Again")
-                    }
-                }
-            } else {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
+                return@Column
+            }
+
+            // Content suggestions grouped by category
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp)
+            ) {
+                // Group suggestions by category
+                val groupedSuggestions = suggestions.groupBy { it.category }
+
+                // Display each category section
+                groupedSuggestions.entries.forEach { (category, categorySuggestions) ->
                     item {
+                        // Category header
                         Text(
-                            text = "Personalized For You",
-                            style = MaterialTheme.typography.headlineSmall,
+                            text = category.name.replace('_', ' ').lowercase().capitalize(),
+                            style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(bottom = 8.dp)
+                            modifier = Modifier.padding(vertical = 16.dp)
                         )
                     }
                     
-                    items(suggestions) { suggestion ->
+                    items(categorySuggestions) { suggestion ->
                         SuggestionCard(suggestion = suggestion)
                     }
                 }
