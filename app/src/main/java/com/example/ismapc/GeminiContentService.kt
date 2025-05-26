@@ -126,50 +126,16 @@ class GeminiContentService {
     /**
      * Get child's age from their profile.
      */
-    private suspend fun getChildAge(childId: String): Int {
-        return try {
-            val document = withContext(Dispatchers.IO) {
-                firestore.collection("users")
-                    .document("child")
-                    .collection("profile")
-                    .document(childId)
-                    .get()
-                    .await()
-            }
-            
-            if (document.exists()) {
-                Log.d(TAG, "Found child profile document for: $childId")
-                val birthDateTimestamp = document.get("birthDate") as? Timestamp
-                val birthDate = birthDateTimestamp?.toDate()
-                if (birthDate != null) {
-                    val calendar = Calendar.getInstance()
-                    val currentYear = calendar.get(Calendar.YEAR)
-                    calendar.time = birthDate
-                    val birthYear = calendar.get(Calendar.YEAR)
-                    val age = currentYear - birthYear
-                    Log.d(TAG, "Calculated age: $age for child: $childId")
-                    return age
-                }
-            } else {
-                Log.w(TAG, "No profile document found for child: $childId")
-            }
-            
-            // Default age if not found
-            val defaultAge = 10
-            Log.w(TAG, "Using default age ($defaultAge) for child: $childId")
-            defaultAge
-        } catch (e: Exception) {
-            Log.e(TAG, "Error getting child age: ${e.message}", e)
-            val fallbackAge = 10
-            Log.w(TAG, "Using fallback age ($fallbackAge) for child: $childId")
-            fallbackAge
-        }
+    private val TARGET_AGE_RANGE = "3-10 years old"
+
+    private suspend fun getChildAge(childId: String): String {
+        return TARGET_AGE_RANGE
     }
     
     /**
      * Create a structured prompt for Gemini based on the child's app usage and age.
      */
-    private fun createGeminiPrompt(appUsage: Map<String, Long>, childAge: Int): String {
+    private fun createGeminiPrompt(appUsage: Map<String, Long>, childAge: String): String {
         // Sort apps by usage time (descending)
         val sortedApps = appUsage.entries.sortedByDescending { it.value }
             .take(10)
@@ -205,7 +171,7 @@ class GeminiContentService {
         return """
             You are a helpful assistant providing content suggestions for a child.
             
-            Child's age: $childAge years old
+            Target age range: $TARGET_AGE_RANGE
             Usage Patterns: $usagePatterns
             
             The child frequently uses these apps (weekly usage time):
@@ -214,7 +180,7 @@ class GeminiContentService {
             Based on this information and usage patterns, suggest 5 age-appropriate content ideas, activities, or resources that:
             1. Align with the child's interests shown by their app usage
             2. Are educational but engaging
-            3. Are appropriate for a $childAge-year-old child
+            3. Are appropriate for children aged 3-10 years old
             4. Encourage healthy digital habits
             5. Include a mix of online and offline activities
             6. Consider the usage patterns (educational vs entertainment vs productivity)
@@ -227,7 +193,7 @@ class GeminiContentService {
             LinkURL: [Optional URL to a website, video, or resource]
             
             IMPORTANT: 
-            - Ensure all suggestions are age-appropriate, safe, and beneficial for a $childAge-year-old child.
+            - Ensure all suggestions are age-appropriate, safe, and beneficial for children aged 3-10 years old.
             - For online suggestions, include direct URLs to safe, child-appropriate resources.
             - For image suggestions, provide URLs to appropriate educational or informative images.
             - All URLs must be to reputable, safe, and age-appropriate websites.
