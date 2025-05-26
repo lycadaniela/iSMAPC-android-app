@@ -3,6 +3,11 @@ package com.example.ismapc
 import android.app.AppOpsManager
 import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
+import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.tasks.await
+import java.util.Calendar
+import java.util.Date
+import java.util.TimeZone
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -31,7 +36,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.ismapc.ui.theme.ISMAPCTheme
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
@@ -156,6 +160,19 @@ fun AppUsageScreen(childId: String, childName: String, isChildDevice: Boolean) {
     var totalAppUsage by remember { mutableStateOf<Long>(0) }
     var lastUpdated by remember { mutableStateOf<Long?>(null) }
     
+    LaunchedEffect(childId) {
+        try {
+            val usageData = getAppUsageStats(context, firestore, childId)
+            appUsageList = usageData
+            isLoading = false
+            errorMessage = null
+        } catch (e: Exception) {
+            Log.e(TAG, "Error fetching app usage stats", e)
+            errorMessage = "Error loading app usage data"
+            isLoading = false
+        }
+    }
+    
     // Set up a snapshot listener for real-time updates
     DisposableEffect(childId) {
         val docRef = firestore.collection("appUsage")
@@ -183,6 +200,11 @@ fun AppUsageScreen(childId: String, childName: String, isChildDevice: Boolean) {
                             val dailyMinutes = (appData["dailyMinutes"] as? Number)?.toLong() ?: 0L
                             val weeklyMinutes = (appData["weeklyMinutes"] as? Number)?.toLong() ?: 0L
                             val packageName = (appData["packageName"] as? String) ?: "unknown.package.$appName"
+                            
+                            // Skip apps with less than 10 minutes of weekly usage
+                            if (weeklyMinutes < 10) {
+                                continue
+                            }
                             
                             // Add a sample data indicator to the name if needed
                             val displayName = if (isSampleData && !appName.contains("[SAMPLE]")) {
@@ -261,7 +283,7 @@ fun AppUsageScreen(childId: String, childName: String, isChildDevice: Boolean) {
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "$childName's App Usage",
+                    text = "App Usage",
                     style = MaterialTheme.typography.headlineMedium,
                     color = Color(0xFFE0852D),
                     fontWeight = FontWeight.Bold
@@ -374,11 +396,18 @@ fun AppUsageScreen(childId: String, childName: String, isChildDevice: Boolean) {
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
-                                Text(
-                                    text = formatUsageTime(appUsage.weeklyMinutes),
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = Color(0xFFE0852D)
-                                )
+                                Column {
+                                    Text(
+                                        text = "Weekly",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = Color(0xFF4A4A4A)
+                                    )
+                                    Text(
+                                        text = formatUsageTime(appUsage.weeklyMinutes),
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = Color(0xFFE0852D)
+                                    )
+                                }
                             }
                         }
                     }
@@ -614,7 +643,7 @@ private fun getFallbackData(): List<AppUsage> {
     )
 }
 
-private fun getAppUsageStats(context: Context): List<AppUsage> {
+private suspend fun getAppUsageStats(context: Context, firestore: FirebaseFirestore, childId: String): List<AppUsage> {
     val TAG = "AppUsageStats"
     Log.e(TAG, "========== STARTING APP USAGE DATA COLLECTION ==========")
     Log.e(TAG, "Getting app usage stats from device")
@@ -632,14 +661,18 @@ private fun getAppUsageStats(context: Context): List<AppUsage> {
             set(Calendar.MILLISECOND, 0)
         }.timeInMillis
         
-        // Get week's start time - use a much longer period to ensure we catch data
+        // Get the start of the current week (Monday)
         val weekStart = calendar.apply {
-            add(Calendar.DAY_OF_YEAR, -30)  // Look back 30 days instead of just 7
+            add(Calendar.DAY_OF_WEEK, -calendar.get(Calendar.DAY_OF_WEEK) + Calendar.MONDAY)
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
         }.timeInMillis
         
         val now = System.currentTimeMillis()
         
-        Log.e(TAG, "Querying usage events from ${Date(weekStart)} to ${Date(now)}")
+        Log.e(TAG, "Querying usage events from ${Date(weekStart)} (Monday) to ${Date(now)}")
         
         // Make sure we have the right permission
         val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
@@ -649,11 +682,11 @@ private fun getAppUsageStats(context: Context): List<AppUsage> {
             context.packageName
         )
         if (mode != AppOpsManager.MODE_ALLOWED) {
-            Log.e(TAG, "❌ DO NOT HAVE USAGE STATS PERMISSION! This is likely why we're not getting real data.")
+            Log.e(TAG, " DO NOT HAVE USAGE STATS PERMISSION! This is likely why we're not getting real data.")
             Log.e(TAG, "Please ensure the user has granted usage stats permission in device settings.")
             return emptyList()
         } else {
-            Log.e(TAG, "✅ Have usage stats permission")
+            Log.e(TAG, " Have usage stats permission")
         }
         
         // Get some device info for debugging
@@ -662,40 +695,54 @@ private fun getAppUsageStats(context: Context): List<AppUsage> {
         val androidVersion = android.os.Build.VERSION.RELEASE
         Log.e(TAG, "Device info: $deviceManufacturer $deviceModel, Android $androidVersion")
         
-        // First get usage stats from direct query
-        val dailyStats = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, todayStart, now)
+        // Get only the current week's stats
         val weeklyStats = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_WEEKLY, weekStart, now)
-        val monthlyStats = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_MONTHLY, weekStart, now)
-        
-        // Combine all stats
-        val allStats = (dailyStats + weeklyStats + monthlyStats).distinctBy { it.packageName }
-        Log.e(TAG, "Found ${allStats.size} apps via direct stats query")
         
         // Process stats
         val dailyUsage = mutableMapOf<String, Long>()
         val weeklyUsage = mutableMapOf<String, Long>()
         
-        if (allStats.isNotEmpty()) {
-            for (stat in allStats) {
+        if (weeklyStats.isNotEmpty()) {
+            for (stat in weeklyStats) {
                 val packageName = stat.packageName
                 val totalTimeMs = stat.totalTimeInForeground
                 
                 if (totalTimeMs > 0) {
                     weeklyUsage[packageName] = totalTimeMs
                     
-                    // Estimate daily usage as 1/7 of weekly or use actual if available
-                    if (dailyStats.any { it.packageName == packageName }) {
-                        val dailyStat = dailyStats.first { it.packageName == packageName }
-                        dailyUsage[packageName] = dailyStat.totalTimeInForeground
-                    } else {
-                        dailyUsage[packageName] = totalTimeMs / 7
-                    }
+                    // Calculate daily usage as the average of the week's usage
+                    dailyUsage[packageName] = totalTimeMs / 7
                 }
             }
         }
         
         // Always use the event-based approach to catch recent activity
+        // Query from the start of the week to now
         val events = usageStatsManager.queryEvents(weekStart, now)
+        
+        // Check if we need to reset weekly usage data
+        val document = firestore.collection("appUsage")
+            .document(childId)
+            .collection("stats")
+            .document("daily")
+            .get()
+            .await()
+            
+        val lastUpdated = document.getLong("lastWeeklyReset") ?: 0L
+        val shouldReset = lastUpdated < weekStart
+        if (shouldReset) {
+            Log.e(TAG, "Resetting weekly usage data for new week")
+            // Reset all weekly usage data in Firestore
+            firestore.collection("appUsage")
+                .document(childId)
+                .collection("stats")
+                .document("daily")
+                .update(mapOf(
+                    "lastWeeklyReset" to weekStart,
+                    "apps" to mapOf<String, Any>()
+                ))
+                .await()
+        }
         
         if (events == null) {
             Log.e(TAG, "Failed to get usage events - null returned")
