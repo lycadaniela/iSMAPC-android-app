@@ -61,11 +61,25 @@ fun ChangePasswordScreen() {
             TopAppBar(
                 title = { },
                 navigationIcon = {
-                    IconButton(onClick = { (context as? ComponentActivity)?.finish() }) {
-                        Icon(
-                            imageVector = Icons.Default.ArrowBack,
-                            contentDescription = "Back"
+                    Card(
+                        modifier = Modifier
+                            .width(48.dp)
+                            .height(48.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primary
                         )
+                    ) {
+                        IconButton(
+                            onClick = { (context as? ComponentActivity)?.finish() },
+                            modifier = Modifier
+                                .size(48.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ArrowBack,
+                                contentDescription = "Back",
+                                tint = MaterialTheme.colorScheme.onPrimary
+                            )
+                        }
                     }
                 }
             )
@@ -108,7 +122,7 @@ fun ChangePasswordScreen() {
                     Text(
                         text = "Update your account password",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = Color(0xFFD6D7D3)
+                        color = Color(0xFF4A4A4A)
                     )
                 }
             }
@@ -137,7 +151,7 @@ fun ChangePasswordScreen() {
                             Icon(
                                 imageVector = Icons.Default.Lock,
                                 contentDescription = null,
-                                tint = Color(0xFFD6D7D3)
+                                tint = Color(0xFF4A4A4A)
                             )
                         },
                         trailingIcon = {
@@ -182,7 +196,7 @@ fun ChangePasswordScreen() {
                             Icon(
                                 imageVector = Icons.Default.Lock,
                                 contentDescription = null,
-                                tint = Color(0xFFD6D7D3)
+                                tint = Color(0xFF4A4A4A)
                             )
                         },
                         trailingIcon = {
@@ -224,7 +238,7 @@ fun ChangePasswordScreen() {
                             Icon(
                                 imageVector = Icons.Default.Lock,
                                 contentDescription = null,
-                                tint = Color(0xFFD6D7D3)
+                                tint = Color(0xFF4A4A4A)
                             )
                         },
                         trailingIcon = {

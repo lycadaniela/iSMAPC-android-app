@@ -1011,6 +1011,14 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                         }
                     }
 
+                    // Divider between sections
+                    Divider(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant
+                    )
+
                     // Quick Actions Section
                     Text(
                         text = "Quick Actions",
@@ -1033,7 +1041,7 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                     context.startActivity(intent)
                                 },
                             colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.secondaryContainer
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f)
                             )
                         ) {
                             Column(
@@ -1045,13 +1053,14 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                 Icon(
                                     imageVector = Icons.Default.PersonAdd,
                                     contentDescription = "Add Child",
-                                    tint = Color(0xFF4A4A4A)
+                                    tint = Color.White
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text(
                                     text = "Add Child",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = Color(0xFF4A4A4A)
+                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                        color = Color.White
+                                    )
                                 )
                             }
                         }
@@ -1186,7 +1195,7 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                         }
                                     },
                                 colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.surface
+                                    containerColor = Color(0xFFF5F5F5)
                                 )
                             ) {
                                 Row(

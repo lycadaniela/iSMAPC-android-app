@@ -220,11 +220,24 @@ fun ChildDetailsScreen(childId: String, childName: String) {
             TopAppBar(
                 title = { },
                 navigationIcon = {
-                    IconButton(onClick = { (context as? Activity)?.finish() }) {
-                        Icon(
-                            imageVector = Icons.Default.ArrowBack,
-                            contentDescription = "Back"
+                    Card(
+                        modifier = Modifier
+                            .width(48.dp)
+                            .height(48.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primary
                         )
+                    ) {
+                        IconButton(
+                            onClick = { (context as? Activity)?.finish() },
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ArrowBack,
+                                contentDescription = "Back",
+                                tint = MaterialTheme.colorScheme.onPrimary
+                            )
+                        }
                     }
                 }
             )
@@ -446,7 +459,8 @@ fun ActionButton(
             .aspectRatio(1f)
             .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+            contentColor = MaterialTheme.colorScheme.onSurface
         )
     ) {
         Column(
@@ -459,7 +473,7 @@ fun ActionButton(
             Icon(
                 imageVector = icon,
                 contentDescription = title,
-                tint = Color(0xFFE0852D),
+                tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(32.dp)
             )
             Spacer(modifier = Modifier.height(8.dp))

@@ -341,11 +341,24 @@ fun ChildSignUpScreen(
             TopAppBar(
                 title = { },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = Icons.Default.ArrowBack,
-                            contentDescription = "Back"
+                    Card(
+                        modifier = Modifier
+                            .width(48.dp)
+                            .height(48.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primary
                         )
+                    ) {
+                        IconButton(
+                            onClick = onBack,
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ArrowBack,
+                                contentDescription = "Back",
+                                tint = MaterialTheme.colorScheme.onPrimary
+                            )
+                        }
                     }
                 }
             )
@@ -379,9 +392,9 @@ fun ChildSignUpScreen(
                         color = Color(0xFFE0852D)
                     )
                     Text(
-                        text = "Set up your child's account",
+                        text = "Create your child account",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = Color(0xFFD6D7D3)
+                        color = Color(0xFF333333)
                     )
                 }
             }
@@ -429,7 +442,7 @@ fun ChildSignUpScreen(
                     Text(
                         text = "Tap to add profile picture",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = Color(0xFF4A4A4A)
+                        color = Color(0xFF333333)
                     )
                 }
             }
