@@ -151,29 +151,27 @@ fun ChildDashboardScreen(childId: String) {
         }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(text = "$childName's Dashboard") },
-                navigationIcon = {
-                    IconButton(onClick = { (context as? ComponentActivity)?.finish() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
-                    }
-                }
-            )
-        }
-    ) { paddingValues ->
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
+                .padding(16.dp)
         ) {
             // Title with child's name
             Text(
                 text = "Hi $childName! Here are your personalized suggestions:",
-                style = MaterialTheme.typography.headlineMedium,
+                style = MaterialTheme.typography.headlineMedium.copy(
+                    color = MaterialTheme.colorScheme.primary
+                ),
                 fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(bottom = 16.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp)
+                    .wrapContentSize(Alignment.Center)
             )
 
             // Error message if any
@@ -238,11 +236,11 @@ fun SuggestionCard(suggestion: GeminiContentService.ContentSuggestion) {
     }
     
     val categoryColor = when (suggestion.category) {
-        SuggestionCategory.EDUCATIONAL -> Color(0xFF1976D2) // Blue
-        SuggestionCategory.ENTERTAINMENT -> Color(0xFFE64A19) // Orange
-        SuggestionCategory.PRODUCTIVITY -> Color(0xFF388E3C) // Green
-        SuggestionCategory.HEALTH -> Color(0xFFC2185B) // Pink
-        SuggestionCategory.CREATIVE -> Color(0xFF7B1FA2) // Purple
+        SuggestionCategory.EDUCATIONAL -> Color(0xFF64B5F6) // Lighter Blue
+        SuggestionCategory.ENTERTAINMENT -> Color(0xFFFFAB91) // Lighter Orange
+        SuggestionCategory.PRODUCTIVITY -> Color(0xFF81C784) // Lighter Green
+        SuggestionCategory.HEALTH -> Color(0xFFF48FB1) // Lighter Pink
+        SuggestionCategory.CREATIVE -> Color(0xFFBA68C8) // Lighter Purple
     }
     
     val gradientColors = listOf(
@@ -263,6 +261,9 @@ fun SuggestionCard(suggestion: GeminiContentService.ContentSuggestion) {
                     }
                 }
             },
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
+        ),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
         shape = RoundedCornerShape(12.dp)
     ) {
@@ -336,7 +337,9 @@ fun SuggestionCard(suggestion: GeminiContentService.ContentSuggestion) {
                 
                 Text(
                     text = suggestion.title,
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f)
+                    ),
                     fontWeight = FontWeight.Bold
                 )
                 
@@ -344,7 +347,9 @@ fun SuggestionCard(suggestion: GeminiContentService.ContentSuggestion) {
                 
                 Text(
                     text = suggestion.description,
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                    ),
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis
                 )
