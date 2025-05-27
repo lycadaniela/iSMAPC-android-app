@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.Color
 import com.example.ismapc.ui.theme.ISMAPCTheme
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.*
@@ -40,6 +41,7 @@ import java.util.Locale
 import android.app.TimePickerDialog
 import android.app.TimePickerDialog.OnTimeSetListener
 import android.icu.util.Calendar
+import android.util.Log
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.toJavaDuration
 
@@ -183,26 +185,20 @@ fun ScreenTimeLimitScreen(childId: String, childName: String) {
     fun updateAppLimit(appName: String, limitMinutes: Long, packageName: String) {
         scope.launch {
             try {
-                // First check if the document exists
                 val docRef = firestore
                     .collection("screenTime")
                     .document(childId)
                 
-                val doc = docRef.get().await()
-                if (!doc.exists()) {
-                    // If document doesn't exist, create it with initial data
-                    docRef.set(mapOf(
-                        "apps" to mapOf(packageName to mapOf(
-                            "name" to appName,
-                            "limitMinutes" to limitMinutes
-                        ))
-                    ))
+                // Create or update the apps map
+                val appsUpdate = mapOf(
+                    "apps.$packageName" to mapOf(
+                        "name" to appName,
+                        "limitMinutes" to limitMinutes
+                    )
+                )
+                
+                docRef.set(appsUpdate, SetOptions.merge())
                     .await()
-                } else {
-                    // If document exists, update it
-                    docRef.update("apps.$packageName.limitMinutes", limitMinutes)
-                        .await()
-                }
                 
                 appLimits.value = appLimits.value.map { limit ->
                     if (limit.packageName == packageName) {
@@ -213,6 +209,7 @@ fun ScreenTimeLimitScreen(childId: String, childName: String) {
                 }
             } catch (e: Exception) {
                 error = e.message ?: "Failed to update app limit"
+                Log.e("ScreenTimeLimit", "Error updating app limit: ${e.message}")
             }
         }
     }
@@ -220,26 +217,16 @@ fun ScreenTimeLimitScreen(childId: String, childName: String) {
     fun updateLockTime(day: String, time: LocalTime) {
         scope.launch {
             try {
-                // First check if the document exists
                 val docRef = firestore
                     .collection("screenTime")
                     .document(childId)
                     .collection("lockTimes")
                     .document("schedule")
                 
-                val doc = docRef.get().await()
-                if (!doc.exists()) {
-                    // If document doesn't exist, create it with initial data
-                    docRef.set(mapOf(
-                        "weekdays" to time.toString(),
-                        "weekends" to time.toString()
-                    ))
+                // Create or update the lock time
+                val timeUpdate = mapOf(day.lowercase() to time.toString())
+                docRef.set(timeUpdate, SetOptions.merge())
                     .await()
-                } else {
-                    // If document exists, update it
-                    docRef.update(day.lowercase(), time.toString())
-                        .await()
-                }
                 
                 lockTimes.value = lockTimes.value.map { lockTime ->
                     if (lockTime.day == day) {
@@ -250,6 +237,7 @@ fun ScreenTimeLimitScreen(childId: String, childName: String) {
                 }
             } catch (e: Exception) {
                 error = e.message ?: "Failed to update lock time"
+                Log.e("ScreenTimeLimit", "Error updating lock time: ${e.message}")
             }
         }
     }
