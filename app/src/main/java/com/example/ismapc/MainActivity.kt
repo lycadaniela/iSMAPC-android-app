@@ -515,7 +515,6 @@ fun ParentMainScreen(onLogout: () -> Unit) {
     val profilePictureManager = remember { ProfilePictureManager(context) }
     var profileBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var showSettingsMenu by remember { mutableStateOf(false) }
-    var showNotificationsMenu by remember { mutableStateOf(false) }
     var showDeleteAccountDialog by remember { mutableStateOf(false) }
     var isDeletingAccount by remember { mutableStateOf(false) }
 
@@ -762,46 +761,6 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                 TopAppBar(
                     title = { },
                     actions = {
-                        // Notifications Icon
-                        Box {
-                            IconButton(onClick = { showNotificationsMenu = true }) {
-                                Icon(
-                                    imageVector = Icons.Default.Notifications,
-                                    contentDescription = "Notifications",
-                                    tint = Color(0xFF4A4A4A)
-                                )
-                            }
-                            DropdownMenu(
-                                expanded = showNotificationsMenu,
-                                onDismissRequest = { showNotificationsMenu = false },
-                                modifier = Modifier
-                                    .background(MaterialTheme.colorScheme.surface)
-                                    .border(
-                                        width = 1.dp,
-                                        color = MaterialTheme.colorScheme.outline,
-                                        shape = MaterialTheme.shapes.medium
-                                    )
-                            ) {
-                                DropdownMenuItem(
-                                    text = {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Notifications,
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.primary
-                                            )
-                                            Text("No new notifications")
-                                        }
-                                    },
-                                    onClick = {
-                                        showNotificationsMenu = false
-                                    }
-                                )
-                            }
-                        }
                         // Settings Icon
                         Box {
                             IconButton(onClick = { showSettingsMenu = true }) {
@@ -1128,7 +1087,7 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
                             )
                         ) {
                             Column(
@@ -1295,8 +1254,7 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                                     isUpdating = true
                                                     val childId = child["documentId"] as String
                                                     val updates = hashMapOf(
-                                                        "isLocked" to !isLocked,
-                                                        "lastUpdated" to FieldValue.serverTimestamp()
+                                                        "isLocked" to !isLocked
                                                     )
 
                                                     FirebaseFirestore.getInstance().collection("deviceLocks")

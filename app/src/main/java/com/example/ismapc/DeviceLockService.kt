@@ -81,6 +81,11 @@ class DeviceLockService : Service() {
 
                 if (snapshot != null && snapshot.exists()) {
                     val isLocked = snapshot.getBoolean("isLocked") ?: false
+                    
+                    Log.d(TAG, "DeviceLockService - Current state:")
+                    Log.d(TAG, "isLocked: $isLocked")
+                    Log.d(TAG, "isLockScreenActive: $isLockScreenActive")
+                    
                     if (isLocked && !isLockScreenActive) {
                         // Launch the lock screen activity
                         val intent = Intent(this, DeviceLockScreenActivity::class.java).apply {
