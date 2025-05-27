@@ -101,6 +101,11 @@
             android:theme="@style/Theme.ISMAPC" />
 
         <activity
+            android:name=".EditChildProfileActivity"
+            android:exported="false"
+            android:label="Edit Child Profile"
+            android:theme="@style/Theme.ISMAPC" />
+        <activity
             android:name=".PermissionActivity"
             android:exported="false"
             android:theme="@style/Theme.ISMAPC" />

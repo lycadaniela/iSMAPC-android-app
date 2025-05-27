@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.PhoneAndroid
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -77,6 +78,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.clickable
+import com.example.ismapc.EditChildProfileActivity
 
 class ChildDetailsActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -239,6 +241,35 @@ fun ChildDetailsScreen(childId: String, childName: String) {
                             )
                         }
                     }
+                },
+                actions = {
+                    Card(
+                        modifier = Modifier
+                            .width(48.dp)
+                            .height(48.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primary
+                        )
+                    ) {
+                        IconButton(
+                            onClick = {
+                                val intent = Intent().apply {
+                                    setClass(context, EditChildProfileActivity::class.java)
+                                    putExtra("childId", childId)
+                                    putExtra("childName", childName)
+                                }
+                                context.startActivity(intent)
+                            },
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = "Edit",
+                                modifier = Modifier.size(24.dp),
+                                tint = MaterialTheme.colorScheme.onPrimary
+                            )
+                        }
+                    }
                 }
             )
         }
@@ -324,7 +355,7 @@ fun ChildDetailsScreen(childId: String, childName: String) {
                     Text(
                         text = childEmail ?: "",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = Color(0xFFD6D7D3)
+                        color = Color.Black
                     )
                 }
             }
@@ -361,10 +392,19 @@ fun ChildDetailsScreen(childId: String, childName: String) {
                     Text(
                         text = "$screenTimeUsed of $screenTimeLimit",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = Color.Black
                     )
                 }
             }
+
+            // Add a divider
+            Divider(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                thickness = 1.dp,
+                color = MaterialTheme.colorScheme.outline
+            )
 
             // Action Buttons Grid
             Column(
