@@ -23,7 +23,25 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.Color
 import com.example.ismapc.ui.theme.ISMAPCTheme
-import java.util.concurrent.TimeUnit
+import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.update
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.LaunchedEffect
+import com.google.firebase.auth.FirebaseAuth
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
+import java.util.Locale
+import android.app.TimePickerDialog
+import android.app.TimePickerDialog.OnTimeSetListener
+import android.icu.util.Calendar
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.toJavaDuration
 
 class ScreenTimeLimitActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -49,29 +67,235 @@ class ScreenTimeLimitActivity : ComponentActivity() {
 @Composable
 fun ScreenTimeLimitScreen(childId: String, childName: String) {
     val context = LocalContext.current
+    val auth = FirebaseAuth.getInstance()
+    val firestore = FirebaseFirestore.getInstance()
+    val scope = rememberCoroutineScope()
     
-    // Temporary data for testing
-    val tempAppLimits = listOf(
-        "Facebook" to 60L, // 1 hour
-        "Instagram" to 45L,  // 45 minutes
-        "Twitter" to 30L,    // 30 minutes
-        "WhatsApp" to 120L,           // 2 hours
-        "YouTube" to 60L, // 1 hour
-        "Spotify" to 180L,      // 3 hours
-        "Snapchat" to 30L,   // 30 minutes
-        "TikTok" to 45L      // 45 minutes
+    // Data structures
+    data class AppLimit(
+        val appName: String,
+        val limitMinutes: Long,
+        val packageName: String? = null
     )
+    
+    data class LockTime(
+        val day: String,
+        val time: LocalTime
+    )
+    
+    // State variables
+    var isLoading by remember { mutableStateOf(true) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var selectedDay by remember { mutableStateOf<String?>(null) }
+    var selectedTime by remember { mutableStateOf<LocalTime?>(null) }
+    var selectedApp by remember { mutableStateOf<AppLimit?>(null) }
+    var selectedLimit by remember { mutableStateOf<Long?>(null) }
+    
+    // Data flows
+    val appLimits = remember { MutableStateFlow<List<AppLimit>>(emptyList()) }
+    val lockTimes = remember { MutableStateFlow<List<LockTime>>(emptyList()) }
+    
+    // Collect states
+    val appLimitsState = appLimits.collectAsState(initial = emptyList())
+    val lockTimesState = lockTimes.collectAsState(initial = listOf(
+        LockTime("Weekdays", LocalTime.of(22, 0)),
+        LockTime("Weekends", LocalTime.of(23, 0))
+    ))
 
-    // Temporary device lock times
-    val tempLockTimes = listOf(
-        "Weekdays" to "9:00 PM",
-        "Weekends" to "10:00 PM"
-    )
+    // Load data when the screen is created
+    LaunchedEffect(Unit) {
+        try {
+            // Load app limits
+            val appLimitsDoc = firestore
+                .collection("screenTime")
+                .document(childId)
+                .get()
+                .await()
+            
+            if (appLimitsDoc.exists()) {
+                val apps = appLimitsDoc.data?.get("apps") as? Map<String, Any> ?: emptyMap()
+                val limits = apps.map { (pkg, data) ->
+                    try {
+                        AppLimit(
+                            appName = (data as Map<String, Any>)["name"] as? String ?: "Unknown",
+                            limitMinutes = ((data as Map<String, Any>)["limitMinutes"] as? Number)?.toLong() ?: 0,
+                            packageName = pkg
+                        )
+                    } catch (e: Exception) {
+                        AppLimit(
+                            appName = "Unknown",
+                            limitMinutes = 0,
+                            packageName = pkg
+                        )
+                    }
+                }
+                appLimits.value = limits
+            }
+            
+            // Load lock times
+            val lockTimesDoc = firestore
+                .collection("screenTime")
+                .document(childId)
+                .collection("lockTimes")
+                .document("schedule")
+                .get()
+                .await()
+            
+            if (lockTimesDoc.exists()) {
+                val weekdays = lockTimesDoc.data?.get("weekdays") as? String ?: "22:00"
+                val weekends = lockTimesDoc.data?.get("weekends") as? String ?: "23:00"
+                
+                val formatter = DateTimeFormatter.ofPattern("HH:mm")
+                try {
+                    lockTimes.value = listOf(
+                        LockTime("Weekdays", LocalTime.parse(weekdays, formatter)),
+                        LockTime("Weekends", LocalTime.parse(weekends, formatter))
+                    )
+                } catch (e: Exception) {
+                    // If time parsing fails, use default times
+                    lockTimes.value = listOf(
+                        LockTime("Weekdays", LocalTime.of(22, 0)),
+                        LockTime("Weekends", LocalTime.of(23, 0))
+                    )
+                }
+            } else {
+                // If document doesn't exist, use default times
+                lockTimes.value = listOf(
+                    LockTime("Weekdays", LocalTime.of(22, 0)),
+                    LockTime("Weekends", LocalTime.of(23, 0))
+                )
+            }
+            
+            isLoading = false
+        } catch (e: Exception) {
+            error = e.message ?: "Failed to load screen time data"
+            isLoading = false
+            // If loading fails, use default values
+            appLimits.value = emptyList()
+            lockTimes.value = listOf(
+                LockTime("Weekdays", LocalTime.of(22, 0)),
+                LockTime("Weekends", LocalTime.of(23, 0))
+            )
+        }
+    }
+
+    // Functions to update data
+    fun updateAppLimit(appName: String, limitMinutes: Long, packageName: String) {
+        scope.launch {
+            try {
+                // First check if the document exists
+                val docRef = firestore
+                    .collection("screenTime")
+                    .document(childId)
+                
+                val doc = docRef.get().await()
+                if (!doc.exists()) {
+                    // If document doesn't exist, create it with initial data
+                    docRef.set(mapOf(
+                        "apps" to mapOf(packageName to mapOf(
+                            "name" to appName,
+                            "limitMinutes" to limitMinutes
+                        ))
+                    ))
+                    .await()
+                } else {
+                    // If document exists, update it
+                    docRef.update("apps.$packageName.limitMinutes", limitMinutes)
+                        .await()
+                }
+                
+                appLimits.value = appLimits.value.map { limit ->
+                    if (limit.packageName == packageName) {
+                        limit.copy(limitMinutes = limitMinutes)
+                    } else {
+                        limit
+                    }
+                }
+            } catch (e: Exception) {
+                error = e.message ?: "Failed to update app limit"
+            }
+        }
+    }
+    
+    fun updateLockTime(day: String, time: LocalTime) {
+        scope.launch {
+            try {
+                // First check if the document exists
+                val docRef = firestore
+                    .collection("screenTime")
+                    .document(childId)
+                    .collection("lockTimes")
+                    .document("schedule")
+                
+                val doc = docRef.get().await()
+                if (!doc.exists()) {
+                    // If document doesn't exist, create it with initial data
+                    docRef.set(mapOf(
+                        "weekdays" to time.toString(),
+                        "weekends" to time.toString()
+                    ))
+                    .await()
+                } else {
+                    // If document exists, update it
+                    docRef.update(day.lowercase(), time.toString())
+                        .await()
+                }
+                
+                lockTimes.value = lockTimes.value.map { lockTime ->
+                    if (lockTime.day == day) {
+                        lockTime.copy(time = time)
+                    } else {
+                        lockTime
+                    }
+                }
+            } catch (e: Exception) {
+                error = e.message ?: "Failed to update lock time"
+            }
+        }
+    }
+
+    // Convert minutes to hours and minutes
+    fun Long.toHours(): Int = this.toInt() / 60
+    fun Long.toMinutes(): Int = this.toInt() % 60
+
+    // Show time picker dialog
+    fun showTimePicker(
+        context: android.content.Context,
+        initialTime: LocalTime,
+        onTimeSelected: (LocalTime) -> Unit
+    ) {
+        try {
+            val calendar = Calendar.getInstance()
+            calendar.set(
+                Calendar.HOUR_OF_DAY,
+                initialTime.hour
+            )
+            calendar.set(
+                Calendar.MINUTE,
+                initialTime.minute
+            )
+
+            TimePickerDialog(
+                context,
+                { _, hourOfDay, minute ->
+                    val newTime = LocalTime.of(hourOfDay, minute)
+                    onTimeSelected(newTime)
+                },
+                calendar.get(Calendar.HOUR_OF_DAY),
+                calendar.get(Calendar.MINUTE),
+                true
+            ).show()
+        } catch (e: Exception) {
+            error = "Failed to show time picker: ${e.message}"
+        }
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { },
+                title = {
+                    Text(text = "$childName's Screen Time")
+                },
                 navigationIcon = {
                     IconButton(
                         onClick = { 
@@ -89,168 +313,233 @@ fun ScreenTimeLimitScreen(childId: String, childName: String) {
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                }
-            )
-        }
-    ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(16.dp)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(24.dp)
-        ) {
-            // Header
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = "$childName's Screen Time",
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = Color(0xFFE0852D),
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "Manage app usage and device lock times",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = Color(0xFF424242),
-                    textAlign = TextAlign.Center
-                )
-            }
-
-            // Device Lock Times Section
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(20.dp)
-                ) {
-                    Text(
-                        text = "Device Lock Times",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = Color(0xFFE0852D),
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    
-                    tempLockTimes.forEach { (day, time) ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 8.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = day,
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = time,
-                                style = MaterialTheme.typography.titleMedium,
-                                color = Color(0xFFE0852D)
-                            )
-                        }
-                        if (day != tempLockTimes.last().first) {
-                            Divider(
-                                modifier = Modifier.padding(vertical = 8.dp),
-                                color = MaterialTheme.colorScheme.outlineVariant
-                            )
-                        }
+                },
+                actions = {
+                    IconButton(onClick = {
+                        // TODO: Implement add app limit dialog
+                    }) {
+                        Icon(
+                            Icons.Default.Add,
+                            contentDescription = "Add app limit",
+                            tint = Color(0xFFE0852D)
+                        )
                     }
                 }
-            }
-
-            // App Time Limits Section
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
+            )
+        },
+        content = { paddingValues ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .padding(16.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(24.dp)
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(20.dp)
+                // Device Lock Times Section
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    )
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(20.dp)
                     ) {
                         Text(
-                            text = "App Time Limits",
+                            text = "Device Lock Times",
                             style = MaterialTheme.typography.titleLarge,
                             color = Color(0xFFE0852D),
                             fontWeight = FontWeight.Bold
                         )
-                        IconButton(onClick = { /* TODO: Add new app limit */ }) {
-                            Icon(
-                                imageVector = Icons.Default.Add,
-                                contentDescription = "Add App Limit",
-                                tint = Color(0xFFE0852D)
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(16.dp))
-                    
-                    tempAppLimits.forEach { (app, minutes) ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 8.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = app,
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                        Spacer(modifier = Modifier.height(16.dp))
+                        
+                        if (isLoading) {
+                            Box(
+                                modifier = Modifier.fillMaxWidth(),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Text(
-                                    text = "${minutes / 60}h ${minutes % 60}m",
-                                    style = MaterialTheme.typography.titleMedium,
+                                CircularProgressIndicator(
                                     color = Color(0xFFE0852D)
                                 )
-                                IconButton(onClick = { /* TODO: Edit app limit */ }) {
-                                    Icon(
-                                        imageVector = Icons.Default.Edit,
-                                        contentDescription = "Edit Limit",
-                                        tint = Color(0xFFE0852D)
-                                    )
+                            }
+                        } else if (error != null) {
+                            Text(
+                                text = error!!,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        } else {
+                            val times = lockTimesState.value
+                            if (times.isEmpty()) {
+                                Text(
+                                    text = "No lock times set",
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                            } else {
+                                times.forEach { time ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = time.day,
+                                            style = MaterialTheme.typography.bodyLarge
+                                        )
+                                        Text(
+                                            text = time.time.format(DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT).withLocale(Locale.getDefault())),
+                                            style = MaterialTheme.typography.bodyLarge
+                                        )
+                                        IconButton(
+                                            onClick = {
+                                                selectedDay = time.day
+                                                selectedTime = time.time
+                                                showTimePicker(
+                                                    context = context,
+                                                    initialTime = time.time,
+                                                    onTimeSelected = { newTime ->
+                                                        scope.launch {
+                                                            updateLockTime(time.day, newTime)
+                                                            selectedDay = null
+                                                            selectedTime = null
+                                                        }
+                                                    }
+                                                )
+                                            },
+                                            modifier = Modifier.size(24.dp)
+                                        ) {
+                                            Icon(
+                                                Icons.Default.Edit,
+                                                contentDescription = "Edit lock time",
+                                                tint = Color(0xFFE0852D)
+                                            )
+                                        }
+                                    }
+                                    if (time.day != times.last().day) {
+                                        Divider(
+                                            modifier = Modifier.padding(vertical = 8.dp),
+                                            color = MaterialTheme.colorScheme.outlineVariant
+                                        )
+                                    }
                                 }
                             }
                         }
-                        if (app != tempAppLimits.last().first) {
-                            Divider(
-                                modifier = Modifier.padding(vertical = 8.dp),
-                                color = MaterialTheme.colorScheme.outlineVariant
+                    }
+                }
+                
+                // App Limits Section
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(20.dp)
+                    ) {
+                        Text(
+                            text = "App Limits",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = Color(0xFFE0852D),
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        
+                        if (isLoading) {
+                            Box(
+                                modifier = Modifier.fillMaxWidth(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(
+                                    color = Color(0xFFE0852D)
+                                )
+                            }
+                        } else if (error != null) {
+                            Text(
+                                text = error!!,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.error
                             )
+                        } else {
+                            val limits = appLimitsState.value
+                            if (limits.isEmpty()) {
+                                Text(
+                                    text = "No app limits set",
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                            } else {
+                                LazyColumn(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    items(limits) { app ->
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = app.appName,
+                                                style = MaterialTheme.typography.bodyLarge
+                                            )
+                                            Text(
+                                                text = formatUsageTime(app.limitMinutes),
+                                                style = MaterialTheme.typography.bodyLarge
+                                            )
+                                            IconButton(
+                                                onClick = {
+                                                    selectedApp = app
+                                                    selectedLimit = app.limitMinutes
+                                                    showTimePicker(
+                                                        context = context,
+                                                        initialTime = LocalTime.of(
+                                                            app.limitMinutes.toInt() / 60,
+                                                            app.limitMinutes.toInt() % 60
+                                                        ),
+                                                        onTimeSelected = { newTime ->
+                                                            scope.launch {
+                                                                updateAppLimit(
+                                                                    app.appName,
+                                                                    (newTime.hour * 60 + newTime.minute).toLong(),
+                                                                    app.packageName ?: ""
+                                                                )
+                                                                selectedApp = null
+                                                                selectedLimit = null
+                                                            }
+                                                        }
+                                                    )
+                                                },
+                                                modifier = Modifier.size(24.dp)
+                                            ) {
+                                                Icon(
+                                                    Icons.Default.Edit,
+                                                    contentDescription = "Edit app limit",
+                                                    tint = Color(0xFFE0852D)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
             }
         }
-    }
+    )
 }
 
 private fun formatUsageTime(minutes: Long): String {
-    val hours = TimeUnit.MINUTES.toHours(minutes)
+    val hours = minutes / 60
     val remainingMinutes = minutes % 60
     return when {
+        hours >= 24 -> "${hours / 24} days ${hours % 24} hours"
         hours > 0 -> "$hours hours $remainingMinutes minutes"
         else -> "$remainingMinutes minutes"
     }
-} 
+}

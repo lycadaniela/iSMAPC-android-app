@@ -57,15 +57,50 @@ service cloud.firestore {
     }
 
     // Screen time data
-    match /screenTime/{userId} {
+    match /screenTime/{childId} {
+      // Allow read access to screen time data
       allow read: if isAuthenticated() && (
-        userId == request.auth.uid ||
-        isParentOfChild(userId)
+        // Allow if the user is this child
+        request.auth.uid == childId ||
+        // Allow if the user is a parent of this child
+        isParentOfChild(childId)
       );
+      
+      // Only allow parents to write screen time data
       allow write: if isAuthenticated() && (
-        userId == request.auth.uid ||
-        isParentOfChild(userId)
+        // Only parents can modify screen time settings
+        exists(/databases/$(database)/documents/users/parents/$(request.auth.uid)/profile)
       );
+
+      // Apps collection
+      match /apps/{appId} {
+        allow read: if isAuthenticated() && (
+          // Allow if the user is this child
+          request.auth.uid == childId ||
+          // Allow if the user is a parent of this child
+          isParentOfChild(childId)
+        );
+        
+        // Only allow parents to write app limits
+        allow write: if isAuthenticated() && (
+          exists(/databases/$(database)/documents/users/parents/$(request.auth.uid)/profile)
+        );
+      }
+
+      // Lock times collection
+      match /lockTimes/{docId} {
+        allow read: if isAuthenticated() && (
+          // Allow if the user is this child
+          request.auth.uid == childId ||
+          // Allow if the user is a parent of this child
+          isParentOfChild(childId)
+        );
+        
+        // Only allow parents to write lock times
+        allow write: if isAuthenticated() && (
+          exists(/databases/$(database)/documents/users/parents/$(request.auth.uid)/profile)
+        );
+      }
     }
 
     // Location data

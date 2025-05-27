@@ -424,10 +424,22 @@ fun ChildDetailsScreen(childId: String, childName: String) {
                         icon = Icons.Default.Timer,
                         title = "Screen Time",
                         onClick = {
-                            val intent = Intent(context, ScreenTimeLimitActivity::class.java)
-                            intent.putExtra("childId", childId)
-                            intent.putExtra("childName", childName)
-                            context.startActivity(intent)
+                            try {
+                                if (childId.isBlank()) {
+                                    Toast.makeText(context, "Invalid child ID", Toast.LENGTH_SHORT).show()
+                                    return@ActionButton
+                                }
+                                
+                                val intent = Intent(context, ScreenTimeLimitActivity::class.java).apply {
+                                    putExtra("childId", childId)
+                                    putExtra("childName", childName)
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                                context.startActivity(intent)
+                            } catch (e: Exception) {
+                                Toast.makeText(context, "Error opening screen time limits: ${e.message}", Toast.LENGTH_SHORT).show()
+                                Log.e("ChildDetails", "Error opening screen time limits", e)
+                            }
                         }
                     )
 
