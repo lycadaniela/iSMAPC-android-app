@@ -66,9 +66,11 @@ service cloud.firestore {
         isParentOfChild(childId)
       );
       
-      // Only allow parents to write screen time data
+      // Allow children to write their own screen time data
       allow write: if isAuthenticated() && (
-        // Only parents can modify screen time settings
+        // Allow if the user is this child (for writing their own screen time)
+        request.auth.uid == childId ||
+        // Or if the user is a parent (for modifying screen time settings)
         exists(/databases/$(database)/documents/users/parents/$(request.auth.uid)/profile)
       );
 

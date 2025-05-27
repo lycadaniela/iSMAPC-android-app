@@ -97,30 +97,34 @@ class ScreenTimeService : Service() {
 
             // Verify user is a child
             firestore.collection("users")
-                .document("child")
-                .collection("profile")
                 .document(currentUser.uid)
                 .get()
-                .addOnSuccessListener { childDoc ->
-                    if (childDoc.exists()) {
-                        // User is a child, proceed with service
-                        startTime = System.currentTimeMillis()
-                        lastUpdateTime = startTime
-                        
-                        // Register screen state receiver
-                        val filter = IntentFilter().apply {
-                            addAction(Intent.ACTION_SCREEN_ON)
-                            addAction(Intent.ACTION_SCREEN_OFF)
+                .addOnSuccessListener { userDoc ->
+                    if (userDoc.exists()) {
+                        val userType = userDoc.getString("type")
+                        if (userType == "child") {
+                            // User is a child, proceed with service
+                            startTime = System.currentTimeMillis()
+                            lastUpdateTime = startTime
+                            
+                            // Register screen state receiver
+                            val filter = IntentFilter().apply {
+                                addAction(Intent.ACTION_SCREEN_ON)
+                                addAction(Intent.ACTION_SCREEN_OFF)
+                            }
+                            registerReceiver(screenOnReceiver, filter)
+                            
+                            createNotificationChannel()
+                            startForeground(NOTIFICATION_ID, createNotification())
+                            
+                            setupNetworkCallback()
+                            startPeriodicUpdates()
+                        } else {
+                            Log.e(TAG, "User is not a child")
+                            stopSelf()
                         }
-                        registerReceiver(screenOnReceiver, filter)
-                        
-                        createNotificationChannel()
-                        startForeground(NOTIFICATION_ID, createNotification())
-                        
-                        setupNetworkCallback()
-                        startPeriodicUpdates()
                     } else {
-                        Log.e(TAG, "User is not a child")
+                        Log.e(TAG, "User document not found")
                         stopSelf()
                     }
                 }
@@ -276,22 +280,24 @@ class ScreenTimeService : Service() {
             calendar.set(Calendar.MILLISECOND, 0)
             val todayStart = calendar.timeInMillis
             
-            // Use only the user ID as the document ID
+            // Use the child's ID as the document ID
             val documentId = currentUser.uid
             
             val screenTimeData = hashMapOf(
                 "screenTime" to screenTime,
                 "lastUpdated" to System.currentTimeMillis(),
                 "userId" to currentUser.uid,
-                "dayTimestamp" to todayStart // Store the day this data represents
+                "dayTimestamp" to todayStart,
+                "screenTimeMinutes" to screenTime / (1000 * 60),
+                "dayDate" to SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(todayStart)),
+                "timestamp" to FieldValue.serverTimestamp()
             )
             
-            // Add values in minutes for easier debugging
-            screenTimeData["screenTimeMinutes"] = screenTime / (1000 * 60)
-            screenTimeData["dayDate"] = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(todayStart))
-            
             Log.d(TAG, "Screen time data to save: ${screenTime / (1000 * 60)} minutes for ${Date(todayStart)}")
+            Log.d(TAG, "Document ID: $documentId")
+            Log.d(TAG, "Screen time data: $screenTimeData")
 
+            // Save directly under screentime/childID
             firestore.collection("screenTime")
                 .document(documentId)
                 .set(screenTimeData)
@@ -305,7 +311,17 @@ class ScreenTimeService : Service() {
                             if (doc.exists()) {
                                 val savedScreenTime = doc.getLong("screenTime") ?: 0L
                                 val savedDayTimestamp = doc.getLong("dayTimestamp") ?: 0L
-                                Log.d(TAG, "✅ Verified saved data: ${savedScreenTime / (1000 * 60)} minutes for ${Date(savedDayTimestamp)}")
+                                val savedScreenTimeMinutes = doc.getLong("screenTimeMinutes") ?: 0L
+                                val savedTimestamp = doc.getTimestamp("timestamp")?.toDate()
+                                
+                                // Verify all critical fields match
+                                if (savedScreenTime == screenTime && savedDayTimestamp == todayStart && 
+                                    savedScreenTimeMinutes == screenTime / (1000 * 60)) {
+                                    Log.d(TAG, "✅ Verified saved data matches: ${savedScreenTimeMinutes} minutes for ${Date(savedDayTimestamp)}")
+                                    Log.d(TAG, "✅ Timestamp verified: ${savedTimestamp}")
+                                } else {
+                                    Log.e(TAG, "❌ Data verification failed: Saved data doesn't match original values")
+                                }
                             } else {
                                 Log.e(TAG, "❌ Document does not exist after saving!")
                             }
@@ -314,6 +330,8 @@ class ScreenTimeService : Service() {
                 .addOnFailureListener { e ->
                     Log.e(TAG, "❌ Error saving screen time to document: $documentId", e)
                     Log.e(TAG, "Error details: ${e.message}")
+                    Log.e(TAG, "Error cause: ${e.cause}")
+                    Log.e(TAG, "Error stack trace: ${e.stackTraceToString()}")
                 }
         } catch (e: Exception) {
             Log.e(TAG, "❌ Error in saveScreenTimeToFirestore", e)

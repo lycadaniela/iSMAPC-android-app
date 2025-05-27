@@ -407,93 +407,63 @@ fun ChildDetailsScreen(childId: String, childName: String) {
             )
 
             // Action Buttons Grid
-            Column(
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // First Row
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    // Screen Time Limits
-                    ActionButton(
-                        modifier = Modifier.weight(1f),
-                        icon = Icons.Default.Timer,
-                        title = "Screen Time",
-                        onClick = {
-                            try {
-                                if (childId.isBlank()) {
-                                    Toast.makeText(context, "Invalid child ID", Toast.LENGTH_SHORT).show()
-                                    return@ActionButton
-                                }
-                                
-                                val intent = Intent(context, ScreenTimeLimitActivity::class.java).apply {
-                                    putExtra("childId", childId)
-                                    putExtra("childName", childName)
-                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                }
-                                context.startActivity(intent)
-                            } catch (e: Exception) {
-                                Toast.makeText(context, "Error opening screen time limits: ${e.message}", Toast.LENGTH_SHORT).show()
-                                Log.e("ChildDetails", "Error opening screen time limits", e)
+                // App Usage
+                ActionButton(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(80.dp),
+                    icon = Icons.Default.Apps,
+                    title = "App Usage",
+                    onClick = {
+                        try {
+                            val intent = Intent(context, AppUsageActivity::class.java).apply {
+                                putExtra("childId", childId)
+                                putExtra("childName", childName)
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                             }
-                        }
-                    )
-
-                    // App Usage
-                    ActionButton(
-                        modifier = Modifier.weight(1f),
-                        icon = Icons.Default.Apps,
-                        title = "App Usage",
-                        onClick = {
-                            try {
-                                val intent = Intent(context, AppUsageActivity::class.java).apply {
-                                    putExtra("childId", childId)
-                                    putExtra("childName", childName)
-                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                }
-                                context.startActivity(intent)
-                            } catch (e: Exception) {
-                                Toast.makeText(context, "Error opening app usage: ${e.message}", Toast.LENGTH_SHORT).show()
-                            }
-                        }
-                    )
-                }
-
-                // Second Row
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    // Location
-                    ActionButton(
-                        modifier = Modifier.weight(1f),
-                        icon = Icons.Default.LocationOn,
-                        title = "Location",
-                        onClick = {
-                            val intent = Intent(context, LocationMapActivity::class.java)
-                            intent.putExtra("childId", childId)
-                            intent.putExtra("childName", childName)
                             context.startActivity(intent)
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "Error opening app usage: ${e.message}", Toast.LENGTH_SHORT).show()
                         }
-                    )
+                    }
+                )
 
-                    // Installed Apps
-                    ActionButton(
-                        modifier = Modifier.weight(1f),
-                        icon = Icons.Default.PhoneAndroid,
-                        title = "Installed Apps",
-                        onClick = {
-                            val intent = Intent(context, InstalledAppsActivity::class.java)
-                            intent.putExtra("childId", childId)
-                            intent.putExtra("childName", childName)
-                            context.startActivity(intent)
-                        }
-                    )
-                }
+                // Location
+                ActionButton(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(80.dp),
+                    icon = Icons.Default.LocationOn,
+                    title = "Location",
+                    onClick = {
+                        val intent = Intent(context, LocationMapActivity::class.java)
+                        intent.putExtra("childId", childId)
+                        intent.putExtra("childName", childName)
+                        context.startActivity(intent)
+                    }
+                )
+
+                // Installed Apps
+                ActionButton(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(80.dp),
+                    icon = Icons.Default.PhoneAndroid,
+                    title = "Installed Apps",
+                    onClick = {
+                        val intent = Intent(context, InstalledAppsActivity::class.java)
+                        intent.putExtra("childId", childId)
+                        intent.putExtra("childName", childName)
+                        context.startActivity(intent)
+                    }
+                )
             }
         }
     }
@@ -508,7 +478,6 @@ fun ActionButton(
 ) {
     Card(
         modifier = modifier
-            .aspectRatio(1f)
             .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
@@ -518,7 +487,7 @@ fun ActionButton(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp),
+                .padding(8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
@@ -526,12 +495,12 @@ fun ActionButton(
                 imageVector = icon,
                 contentDescription = title,
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(32.dp)
+                modifier = Modifier.size(24.dp)
             )
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = title,
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurface,
                 textAlign = TextAlign.Center
             )
