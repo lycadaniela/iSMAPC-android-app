@@ -139,16 +139,23 @@ fun LocationMapScreen(childId: String, childName: String) {
 
         // Back Button
         IconButton(
-            onClick = { (context as LocationMapActivity).finish() },
+            onClick = { 
+                (context as LocationMapActivity).finish()
+                Log.d("LocationMap", "Back button pressed")
+            },
             modifier = Modifier
                 .padding(16.dp)
                 .align(Alignment.TopStart)
+                .size(48.dp),
+            colors = IconButtonDefaults.iconButtonColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         ) {
             Icon(
                 imageVector = Icons.Default.ArrowBack,
-                contentDescription = "Back",
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(32.dp)
+                contentDescription = "Back to previous screen",
+                modifier = Modifier.size(24.dp)
             )
         }
 

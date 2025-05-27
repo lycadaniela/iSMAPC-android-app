@@ -261,8 +261,21 @@ fun AppUsageScreen(childId: String, childName: String, isChildDevice: Boolean) {
             TopAppBar(
                 title = { },
                 navigationIcon = {
-                    IconButton(onClick = { (context as? ComponentActivity)?.finish() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                    IconButton(
+                        onClick = { 
+                            (context as? ComponentActivity)?.finish()
+                            Log.d("AppUsage", "Back button pressed")
+                        },
+                        colors = IconButtonDefaults.iconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    ) {
+                        Icon(
+                            Icons.Default.ArrowBack,
+                            contentDescription = "Back to previous screen",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             )
@@ -291,7 +304,7 @@ fun AppUsageScreen(childId: String, childName: String, isChildDevice: Boolean) {
                 Text(
                     text = "Track and manage app usage",
                     style = MaterialTheme.typography.bodyLarge,
-                    color = Color(0xFFD6D7D3),
+                    color = Color(0xFF424242),
                     textAlign = TextAlign.Center
                 )
             }

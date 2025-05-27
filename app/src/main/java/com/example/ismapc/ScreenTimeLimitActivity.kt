@@ -73,8 +73,21 @@ fun ScreenTimeLimitScreen(childId: String, childName: String) {
             TopAppBar(
                 title = { },
                 navigationIcon = {
-                    IconButton(onClick = { (context as? ComponentActivity)?.finish() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                    IconButton(
+                        onClick = { 
+                            (context as? ComponentActivity)?.finish()
+                            android.util.Log.d("ScreenTime", "Back button pressed")
+                        },
+                        colors = IconButtonDefaults.iconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    ) {
+                        Icon(
+                            Icons.Default.ArrowBack,
+                            contentDescription = "Back to previous screen",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             )
@@ -102,7 +115,7 @@ fun ScreenTimeLimitScreen(childId: String, childName: String) {
                 Text(
                     text = "Manage app usage and device lock times",
                     style = MaterialTheme.typography.bodyLarge,
-                    color = Color(0xFFD6D7D3),
+                    color = Color(0xFF424242),
                     textAlign = TextAlign.Center
                 )
             }
