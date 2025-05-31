@@ -35,6 +35,10 @@ import android.provider.MediaStore
 import android.widget.Toast
 import java.io.ByteArrayOutputStream
 import java.util.*
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
 
 class EditChildProfileActivity : ComponentActivity() {
     private var selectedImageUri: Uri? = null
@@ -125,13 +129,26 @@ fun EditChildProfileScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Edit Profile") },
+                title = { },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = Icons.Default.ArrowBack,
-                            contentDescription = "Back"
+                    Card(
+                        modifier = Modifier
+                            .width(48.dp)
+                            .height(48.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primary
                         )
+                    ) {
+                        IconButton(
+                            onClick = onBack,
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ArrowBack,
+                                contentDescription = "Back",
+                                tint = MaterialTheme.colorScheme.onPrimary
+                            )
+                        }
                     }
                 }
             )
@@ -142,12 +159,39 @@ fun EditChildProfileScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
                 .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // Header Card
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                )
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "Edit Profile",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = Color(0xFFE0852D)
+                    )
+                    Text(
+                        text = "Update your account information",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color(0xFF4A4A4A)
+                    )
+                }
+            }
+
             // Profile Picture Section
             Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 16.dp),
+                modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surface
                 )
@@ -161,30 +205,28 @@ fun EditChildProfileScreen(
                     Box(
                         modifier = Modifier
                             .size(120.dp)
-                            .clickable(onClick = onImageSelect)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.surface)
                             .border(
                                 width = 2.dp,
                                 color = Color(0xFFE0852D),
                                 shape = CircleShape
-                            ),
+                            )
+                            .clickable(onClick = onImageSelect),
                         contentAlignment = Alignment.Center
                     ) {
                         if (profilePhotoUrl != null) {
                             AsyncImage(
                                 model = profilePhotoUrl,
                                 contentDescription = "Profile Picture",
-                                modifier = Modifier
-                                    .size(100.dp)
-                                    .clip(CircleShape),
+                                modifier = Modifier.fillMaxSize(),
                                 contentScale = ContentScale.Crop
                             )
                         } else if (selectedImageUri != null) {
                             AsyncImage(
                                 model = selectedImageUri,
                                 contentDescription = "Profile Picture",
-                                modifier = Modifier
-                                    .size(100.dp)
-                                    .clip(CircleShape),
+                                modifier = Modifier.fillMaxSize(),
                                 contentScale = ContentScale.Crop
                             )
                         } else {
@@ -200,23 +242,42 @@ fun EditChildProfileScreen(
                     Text(
                         text = "Tap to change profile picture",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center
+                        color = Color(0xFF4A4A4A)
                     )
                 }
             }
 
-            // Name field
-            OutlinedTextField(
-                value = fullName,
-                onValueChange = { fullName = it },
-                label = { Text("Full Name") },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp)
-            )
+            // Form Fields Card
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                )
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    OutlinedTextField(
+                        value = fullName,
+                        onValueChange = { fullName = it },
+                        label = { Text("Full Name") },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.Person,
+                                contentDescription = null,
+                                tint = Color(0xFFE0852D)
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                }
+            }
 
-            // Save button
+            // Save Button
             Button(
                 onClick = {
                     if (isSaving) return@Button
@@ -289,10 +350,21 @@ fun EditChildProfileScreen(
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 16.dp),
+                    .height(56.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFFE0852D)
+                ),
                 enabled = !isSaving
             ) {
-                Text("Save Changes")
+                if (isSaving) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                } else {
+                    Text("Save Changes")
+                }
             }
         }
     }
