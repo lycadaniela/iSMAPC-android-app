@@ -56,68 +56,54 @@ service cloud.firestore {
       );
     }
 
-    // Screen time data
-    match /screenTime/{childId} {
-      // Allow read access to screen time data
+    // App usage collection
+    match /appUsage/{childId} {
       allow read: if isAuthenticated() && (
-        // Allow if the user is this child
-        request.auth.uid == childId ||
-        // Allow if the user is a parent of this child
+        childId == request.auth.uid ||
+        isParentOfChild(childId)
+      );
+      allow write, delete: if isAuthenticated() && (
+        childId == request.auth.uid ||
         isParentOfChild(childId)
       );
       
-      // Allow children to write their own screen time data
-      allow write: if isAuthenticated() && (
-        // Allow if the user is this child (for writing their own screen time)
-        request.auth.uid == childId ||
-        // Or if the user is a parent (for modifying screen time settings)
-        exists(/databases/$(database)/documents/users/parents/$(request.auth.uid)/profile)
-      );
-
-      // Apps collection
-      match /apps/{appId} {
+      // Stats subcollection
+      match /stats/{documentId} {
         allow read: if isAuthenticated() && (
-          // Allow if the user is this child
-          request.auth.uid == childId ||
-          // Allow if the user is a parent of this child
+          childId == request.auth.uid ||
           isParentOfChild(childId)
         );
-        
-        // Only allow parents to write app limits
-        allow write: if isAuthenticated() && (
-          exists(/databases/$(database)/documents/users/parents/$(request.auth.uid)/profile)
-        );
-      }
-
-      // Lock times collection
-      match /lockTimes/{docId} {
-        allow read: if isAuthenticated() && (
-          // Allow if the user is this child
-          request.auth.uid == childId ||
-          // Allow if the user is a parent of this child
+        allow write, delete: if isAuthenticated() && (
+          childId == request.auth.uid ||
           isParentOfChild(childId)
-        );
-        
-        // Only allow parents to write lock times
-        allow write: if isAuthenticated() && (
-          exists(/databases/$(database)/documents/users/parents/$(request.auth.uid)/profile)
         );
       }
     }
 
-    // Location data
-    match /locations/{childId} {
-      // Allow read access to the location document
+    // Screen time data
+    match /screenTime/{childId} {
       allow read: if isAuthenticated() && (
-        // Allow if the user is this child
         request.auth.uid == childId ||
-        // Allow if the user is a parent of this child
         isParentOfChild(childId)
       );
-      
-      // Only allow the child to write their own location
+      allow write, delete: if isAuthenticated() && (
+        request.auth.uid == childId ||
+        isParentOfChild(childId)
+      );
+    }
+
+    // Location data
+    match /locations/{childId} {
+      allow read: if isAuthenticated() && (
+        request.auth.uid == childId ||
+        isParentOfChild(childId)
+      );
       allow write: if isAuthenticated() && (
         request.auth.uid == childId
+      );
+      allow delete: if isAuthenticated() && (
+        request.auth.uid == childId ||
+        isParentOfChild(childId)
       );
     }
 
@@ -127,7 +113,7 @@ service cloud.firestore {
         userId == request.auth.uid ||
         isParentOfChild(userId)
       );
-      allow write: if isAuthenticated() && (
+      allow write, delete: if isAuthenticated() && (
         userId == request.auth.uid ||
         isParentOfChild(userId)
       );
@@ -139,7 +125,7 @@ service cloud.firestore {
         userId == request.auth.uid ||
         isParentOfChild(userId)
       );
-      allow write: if isAuthenticated() && isParentOfChild(userId);
+      allow write, delete: if isAuthenticated() && isParentOfChild(userId);
     }
 
     // Content filtering data
@@ -148,43 +134,19 @@ service cloud.firestore {
         childId == request.auth.uid ||
         isParentOfChild(childId)
       );
-      allow write: if isAuthenticated() && isParentOfChild(childId);
+      allow write, delete: if isAuthenticated() && isParentOfChild(childId);
     }
 
-    // Content to filter collection and subcollections
+    // Content to filter collection
     match /contentToFilter/{userId} {
       allow read: if isAuthenticated() && (
         userId == request.auth.uid ||
         isParentOfChild(userId)
       );
-      allow write: if isAuthenticated() && (
+      allow write, delete: if isAuthenticated() && (
         userId == request.auth.uid ||
         isParentOfChild(userId)
       );
-      
-      // Content subcollection
-      match /content/{documentId} {
-        allow read: if isAuthenticated() && (
-          userId == request.auth.uid ||
-          isParentOfChild(userId)
-        );
-        allow write: if isAuthenticated() && (
-          userId == request.auth.uid ||
-          isParentOfChild(userId)
-        );
-      }
-      
-      // FilteredContent subcollection
-      match /filteredContent/{documentId} {
-        allow read: if isAuthenticated() && (
-          userId == request.auth.uid ||
-          isParentOfChild(userId)
-        );
-        allow write: if isAuthenticated() && (
-          userId == request.auth.uid ||
-          isParentOfChild(userId)
-        );
-      }
     }
 
     // Device locks collection
@@ -193,7 +155,7 @@ service cloud.firestore {
         request.auth.uid == childId ||
         exists(/databases/$(database)/documents/users/parents/$(request.auth.uid)/profile)
       );
-      allow write: if isAuthenticated() && (
+      allow write, delete: if isAuthenticated() && (
         // Allow if the user is a parent
         exists(/databases/$(database)/documents/users/parents/$(request.auth.uid)/profile) ||
         // Or if the user is the child
@@ -201,42 +163,14 @@ service cloud.firestore {
       );
     }
 
-    // App usage collection
-    match /appUsage/{childId} {
-      allow read: if isAuthenticated() && (
-        childId == request.auth.uid ||
-        isParentOfChild(childId)
-      );
-      allow write: if isAuthenticated() && (
-        childId == request.auth.uid ||
-        isParentOfChild(childId)
-      );
-      
-      // Stats subcollection
-      match /stats/{documentId} {
-        allow read: if isAuthenticated() && (
-          childId == request.auth.uid ||
-          isParentOfChild(childId)
-        );
-        allow write: if isAuthenticated() && (
-          childId == request.auth.uid ||
-          isParentOfChild(childId)
-        );
-      }
-    }
-
     // Deletion requests collection
     match /deletionRequests/{userId} {
       allow read: if isAuthenticated() && (
-        // Allow if the user is the owner of the request
         request.auth.uid == userId ||
-        // Or if the user is a parent
         exists(/databases/$(database)/documents/users/parents/$(request.auth.uid)/profile)
       );
       allow create: if isAuthenticated() && (
-        // Allow if the user is creating their own deletion request
         request.auth.uid == userId &&
-        // And they are a parent
         exists(/databases/$(database)/documents/users/parents/$(request.auth.uid)/profile)
       );
       allow update, delete: if false; // Only admins can update or delete requests
