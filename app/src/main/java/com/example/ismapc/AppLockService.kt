@@ -38,7 +38,9 @@ class AppLockService : Service() {
     private var usageStatsManager: UsageStatsManager? = null
     private var lockedAppsCache: List<String> = emptyList()
     private var lastCacheUpdate = 0L
-    private val CACHE_DURATION = 5000L // Cache locked apps for 5 seconds
+    private val CACHE_DURATION = 1000L // Reduce cache duration to 1 second for more frequent updates
+    private var lastAppCheck = 0L
+    private val APP_CHECK_INTERVAL = 20L // Reduce polling interval to 20ms for faster response
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -205,7 +207,8 @@ class AppLockService : Service() {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or 
                        Intent.FLAG_ACTIVITY_CLEAR_TOP or 
                        Intent.FLAG_ACTIVITY_SINGLE_TOP or
-                       Intent.FLAG_ACTIVITY_NO_ANIMATION
+                       Intent.FLAG_ACTIVITY_NO_ANIMATION or
+                       Intent.FLAG_ACTIVITY_NO_HISTORY
                 addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION)
             }
             startActivity(intent)
@@ -220,6 +223,7 @@ class AppLockService : Service() {
             try {
                 while (isRunning) {
                     try {
+                        val currentTime = System.currentTimeMillis()
                         val currentUser = auth.currentUser
                         if (currentUser != null) {
                             // Check if current user is a child
@@ -232,19 +236,22 @@ class AppLockService : Service() {
                                 // Get locked apps (using cache)
                                 val lockedApps = getLockedApps()
                                 
-                                // Check current app
-                                val currentApp = getCurrentApp()
-                                if (currentApp != null && currentApp != lastLockedApp) {
-                                    Log.d(TAG, "Current app: $currentApp, Locked apps: $lockedApps")
-                                    if (lockedApps.contains(currentApp)) {
-                                        // App is locked, show lock screen immediately
-                                        Log.d(TAG, "Showing lock screen for app: $currentApp")
-                                        lastLockedApp = currentApp
-                                        withContext(Dispatchers.Main) {
-                                            showLockScreen()
+                                // Check current app with rate limiting
+                                if (currentTime - lastAppCheck >= APP_CHECK_INTERVAL) {
+                                    lastAppCheck = currentTime
+                                    val currentApp = getCurrentApp()
+                                    if (currentApp != null && currentApp != lastLockedApp) {
+                                        Log.d(TAG, "Current app: $currentApp, Locked apps: $lockedApps")
+                                        if (lockedApps.contains(currentApp)) {
+                                            // App is locked, show lock screen immediately
+                                            Log.d(TAG, "Showing lock screen for app: $currentApp")
+                                            lastLockedApp = currentApp
+                                            withContext(Dispatchers.Main) {
+                                                showLockScreen()
+                                            }
+                                        } else {
+                                            lastLockedApp = null
                                         }
-                                    } else {
-                                        lastLockedApp = null
                                     }
                                 }
                             }
@@ -256,7 +263,7 @@ class AppLockService : Service() {
                         }
                     }
                     
-                    delay(50) // Check every 50ms for faster response
+                    delay(10) // Reduce base delay to 10ms for more frequent checks
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {
                 Log.d(TAG, "Monitoring coroutine cancelled")

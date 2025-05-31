@@ -128,9 +128,9 @@ fun InstalledAppsScreen(
         }
     }
 
-    // Filter apps based on search query
-    val filteredApps = remember(installedApps, searchQuery) {
-        if (searchQuery.isEmpty()) {
+    // Filter apps based on search query and sort locked apps to top
+    val filteredApps = remember(installedApps, searchQuery, lockedApps) {
+        val filtered = if (searchQuery.isEmpty()) {
             installedApps
         } else {
             installedApps.filter { app ->
@@ -138,6 +138,12 @@ fun InstalledAppsScreen(
                 appName.contains(searchQuery, ignoreCase = true)
             }
         }
+        
+        // Sort apps: locked apps first, then alphabetically
+        filtered.sortedWith(compareBy(
+            { !lockedApps.contains(it["packageName"] as? String) }, // Locked apps first
+            { (it["appName"] as? String)?.uppercase() ?: "" } // Then alphabetically
+        ))
     }
 
     Scaffold(
@@ -252,131 +258,196 @@ fun InstalledAppsScreen(
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp)
                 ) {
-                    Text(
-                        text = "Apps (${filteredApps.count { !(it["isSystemApp"] as? Boolean ?: false) }})",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = Color(0xFFE0852D),
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
+                    // Show locked apps count if there are any
+                    val lockedAppsCount = filteredApps.count { 
+                        !(it["isSystemApp"] as? Boolean ?: false) && 
+                        lockedApps.contains(it["packageName"] as? String)
+                    }
                     
-                    filteredApps.forEach { app ->
-                        val appName = app["appName"] as? String ?: ""
-                        val packageName = app["packageName"] as? String ?: ""
-                        val isSystemApp = app["isSystemApp"] as? Boolean ?: false
+                    if (lockedAppsCount > 0) {
+                        Text(
+                            text = "Locked Apps ($lockedAppsCount)",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = MaterialTheme.colorScheme.error,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
                         
-                        if (!isSystemApp) {
-                            val isLocked = lockedApps.contains(packageName)
-                            var isUpdating by remember { mutableStateOf(false) }
-                            
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 4.dp),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.surface
-                                )
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(16.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(16.dp)
-                                    ) {
-                                        // App Icon or First Letter
-                                        val icon = appIconMap[packageName]
-                                        if (icon != null) {
-                                            Image(
-                                                bitmap = icon,
-                                                contentDescription = appName,
-                                                modifier = Modifier
-                                                    .size(40.dp)
-                                                    .clip(CircleShape)
-                                                    .background(MaterialTheme.colorScheme.primaryContainer)
-                                            )
-                                        } else {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(40.dp)
-                                                    .clip(CircleShape)
-                                                    .background(MaterialTheme.colorScheme.primaryContainer),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                Text(
-                                                    text = appName.firstOrNull()?.uppercase() ?: "?",
-                                                    color = MaterialTheme.colorScheme.primary,
-                                                    fontWeight = FontWeight.Bold,
-                                                    fontSize = 20.sp
-                                                )
-                                            }
-                                        }
-                                        Text(
-                                            text = appName,
-                                            style = MaterialTheme.typography.titleMedium,
-                                            color = MaterialTheme.colorScheme.onSurface
-                                        )
-                                    }
-                                    
-                                    Button(
-                                        onClick = {
-                                            if (!isUpdating) {
-                                                isUpdating = true
-                                                scope.launch {
-                                                    try {
-                                                        val newLockedApps = if (isLocked) {
-                                                            lockedApps - packageName
-                                                        } else {
-                                                            lockedApps + packageName
-                                                        }
-                                                        firestore.collection("lockedApps")
-                                                            .document(childId)
-                                                            .set(mapOf("lockedApps" to newLockedApps))
-                                                            .await()
-                                                        lockedApps = newLockedApps
-                                                    } catch (e: Exception) {
-                                                        Log.e("InstalledAppsScreen", "Error updating lock state", e)
-                                                    } finally {
-                                                        isUpdating = false
-                                                    }
-                                                }
-                                            }
-                                        },
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = if (isLocked) MaterialTheme.colorScheme.error else Color(0xFFE0852D),
-                                            contentColor = MaterialTheme.colorScheme.onPrimary
-                                        ),
-                                        shape = RoundedCornerShape(12.dp),
-                                        modifier = Modifier.height(36.dp)
-                                    ) {
-                                        if (isUpdating) {
-                                            CircularProgressIndicator(
-                                                modifier = Modifier.size(20.dp),
-                                                color = MaterialTheme.colorScheme.onPrimary
-                                            )
-                                        } else {
-                                            Row(
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                            ) {
-                                                Icon(
-                                                    imageVector = if (isLocked) Icons.Outlined.Lock else Icons.Default.Lock,
-                                                    contentDescription = if (isLocked) "Unlock App" else "Lock App"
-                                                )
-                                                Text(
-                                                    text = if (isLocked) "Unlock" else "Lock",
-                                                    fontWeight = FontWeight.Bold
-                                                )
-                                            }
+                        // Display locked apps first
+                        filteredApps.filter { 
+                            !(it["isSystemApp"] as? Boolean ?: false) && 
+                            lockedApps.contains(it["packageName"] as? String)
+                        }.forEach { app ->
+                            AppCard(
+                                app = app,
+                                appIconMap = appIconMap,
+                                isLocked = true,
+                                onLockStateChanged = { packageName ->
+                                    scope.launch {
+                                        try {
+                                            val newLockedApps = lockedApps - packageName
+                                            firestore.collection("lockedApps")
+                                                .document(childId)
+                                                .set(mapOf("lockedApps" to newLockedApps))
+                                                .await()
+                                            lockedApps = newLockedApps
+                                        } catch (e: Exception) {
+                                            Log.e("InstalledAppsScreen", "Error updating lock state", e)
                                         }
                                     }
                                 }
-                            }
+                            )
                         }
+                        
+                        // Add divider after locked apps section
+                        Divider(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 16.dp),
+                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+                            thickness = 1.dp
+                        )
+                    }
+                    
+                    Text(
+                        text = "All Apps (${filteredApps.count { !(it["isSystemApp"] as? Boolean ?: false) }})",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = Color(0xFFE0852D),
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
+                    
+                    // Display remaining apps
+                    filteredApps.filter { 
+                        !(it["isSystemApp"] as? Boolean ?: false) && 
+                        !lockedApps.contains(it["packageName"] as? String)
+                    }.forEach { app ->
+                        AppCard(
+                            app = app,
+                            appIconMap = appIconMap,
+                            isLocked = false,
+                            onLockStateChanged = { packageName ->
+                                scope.launch {
+                                    try {
+                                        val newLockedApps = lockedApps + packageName
+                                        firestore.collection("lockedApps")
+                                            .document(childId)
+                                            .set(mapOf("lockedApps" to newLockedApps))
+                                            .await()
+                                        lockedApps = newLockedApps
+                                    } catch (e: Exception) {
+                                        Log.e("InstalledAppsScreen", "Error updating lock state", e)
+                                    }
+                                }
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AppCard(
+    app: Map<String, Any>,
+    appIconMap: Map<String, ImageBitmap?>,
+    isLocked: Boolean,
+    onLockStateChanged: (String) -> Unit
+) {
+    val appName = app["appName"] as? String ?: ""
+    val packageName = app["packageName"] as? String ?: ""
+    var isUpdating by remember { mutableStateOf(false) }
+    
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isLocked) 
+                MaterialTheme.colorScheme.errorContainer 
+            else 
+                MaterialTheme.colorScheme.surface
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // App Icon or First Letter
+                val icon = appIconMap[packageName]
+                if (icon != null) {
+                    Image(
+                        bitmap = icon,
+                        contentDescription = appName,
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primaryContainer)
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primaryContainer),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = appName.firstOrNull()?.uppercase() ?: "?",
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 20.sp
+                        )
+                    }
+                }
+                Text(
+                    text = appName,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+            
+            Button(
+                onClick = {
+                    if (!isUpdating) {
+                        isUpdating = true
+                        onLockStateChanged(packageName)
+                        isUpdating = false
+                    }
+                },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (isLocked) MaterialTheme.colorScheme.error else Color(0xFFE0852D),
+                    contentColor = MaterialTheme.colorScheme.onPrimary
+                ),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.height(36.dp)
+            ) {
+                if (isUpdating) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                } else {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isLocked) Icons.Outlined.Lock else Icons.Default.Lock,
+                            contentDescription = if (isLocked) "Unlock App" else "Lock App"
+                        )
+                        Text(
+                            text = if (isLocked) "Unlock" else "Lock",
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
             }

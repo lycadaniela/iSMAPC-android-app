@@ -47,6 +47,13 @@ class AppUsageService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
+
+        // Check for usage stats permission
+        if (!hasUsageStatsPermission()) {
+            Log.e(TAG, "Missing usage stats permission, stopping service")
+            stopSelf()
+            return START_NOT_STICKY
+        }
         
         // Show a persistent notification to keep the service running
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
@@ -68,59 +75,18 @@ class AppUsageService : Service() {
     }
     
     private fun startUsageDataCollection() {
-        // Cancel any existing job
-        uploadJob?.cancel()
-        
         uploadJob = serviceScope.launch {
-            try {
-                while (isActive) {
-                    try {
-                        Log.e(TAG, "Starting scheduled app usage data collection")
-                        
-                        val currentUser = auth.currentUser
-                        if (currentUser == null) {
-                            Log.e(TAG, "No user logged in, stopping collection")
-                            break
-                        }
-                        
-                        val childId = currentUser.uid
-                        
-                        // Check for usage stats permission
-                        if (!hasUsageStatsPermission()) {
-                            Log.e(TAG, "Missing usage stats permission, cannot collect data")
-                            delay(30 * 1000L) // Check again in 30 seconds during testing
-                            continue
-                        }
-                        
-                        // Collect usage data
-                        val appUsage = getAppUsageStats()
-                        
-                        if (appUsage.isEmpty()) {
-                            Log.e(TAG, "No app usage data collected")
-                        } else {
-                            Log.e(TAG, "Collected usage data for ${appUsage.size} apps")
-                            
-                            // Create a formatted list of all apps for the log
-                            val appsList = appUsage.joinToString("\n") { 
-                                "${it.name}: ${it.dailyMinutes} min today, ${it.weeklyMinutes} min this week"
-                            }
-                            Log.e(TAG, "Apps usage data:\n$appsList")
-                            
-                            // Upload to Firestore
-                            updateFirestoreWithUsageData(childId, appUsage)
-                        }
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Error in usage data collection cycle", e)
+            while (isRunning) {
+                try {
+                    val usageData = getAppUsageStats()
+                    if (usageData.isNotEmpty()) {
+                        updateFirestoreWithUsageData(usageData)
                     }
-                    
-                    // Wait for the next collection interval (30 seconds during testing)
-                    delay(30 * 1000L)
+                    delay(1000) // Reduced polling interval to 1 second
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error in usage data collection", e)
+                    delay(5000) // Wait longer on error
                 }
-            } catch (e: CancellationException) {
-                // Job was cancelled - normal behavior
-                Log.e(TAG, "Usage data collection job cancelled")
-            } catch (e: Exception) {
-                Log.e(TAG, "Error in usage data collection job", e)
             }
         }
     }
@@ -148,6 +114,10 @@ class AppUsageService : Service() {
             calendar.set(Calendar.MILLISECOND, 0)
             val todayStart = calendar.timeInMillis
             
+            // Get the start of the current week (Monday)
+            calendar.add(Calendar.DAY_OF_WEEK, -calendar.get(Calendar.DAY_OF_WEEK) + Calendar.MONDAY)
+            val weekStart = calendar.timeInMillis
+            
             val now = System.currentTimeMillis()
             
             Log.e(TAG, "⏰ Getting app usage from ${Date(todayStart)} to ${Date(now)}")
@@ -157,13 +127,14 @@ class AppUsageService : Service() {
             val weeklyUsage = mutableMapOf<String, Long>()
             
             // Process events for exact matching with device settings
-            val events = usageStatsManager.queryEvents(todayStart - 7 * 24 * 60 * 60 * 1000L, now) // Look back 7 days
+            val events = usageStatsManager.queryEvents(weekStart, now)
             
             if (events != null) {
                 var eventCount = 0
                 val event = UsageEvents.Event()
                 val lastEventTime = mutableMapOf<String, Long>()
                 val lastEventType = mutableMapOf<String, Int>()
+                val recentlyUsedApps = mutableSetOf<String>()
                 
                 while (events.hasNextEvent()) {
                     events.getNextEvent(event)
@@ -172,6 +143,11 @@ class AppUsageService : Service() {
                     val packageName = event.packageName
                     val eventTime = event.timeStamp
                     val eventType = event.eventType
+                    
+                    // Track any app that was brought to foreground recently
+                    if (eventType == UsageEvents.Event.MOVE_TO_FOREGROUND && eventTime > (now - 5 * 60 * 1000)) {
+                        recentlyUsedApps.add(packageName)
+                    }
                     
                     // Track foreground/background transitions
                     if (eventType == UsageEvents.Event.MOVE_TO_FOREGROUND || 
@@ -189,7 +165,6 @@ class AppUsageService : Service() {
                             // Add to daily usage only if the event was today
                             if (lastEventTime[packageName] ?: 0 >= todayStart) {
                                 dailyUsage[packageName] = (dailyUsage[packageName] ?: 0) + duration
-                                Log.e(TAG, "📱 Today's usage for ${packageName}: +${TimeUnit.MILLISECONDS.toMinutes(duration)}m")
                             }
                         }
                         
@@ -197,8 +172,6 @@ class AppUsageService : Service() {
                         lastEventType[packageName] = eventType
                     }
                 }
-                
-                Log.e(TAG, "✅ Processed $eventCount events")
                 
                 // Handle apps still in foreground
                 val currentlyInForeground = lastEventType.filter { it.value == UsageEvents.Event.MOVE_TO_FOREGROUND }
@@ -213,12 +186,16 @@ class AppUsageService : Service() {
                     if (foregroundStart >= todayStart) {
                         val dailyDuration = now - foregroundStart
                         dailyUsage[packageName] = (dailyUsage[packageName] ?: 0) + dailyDuration
-                        Log.e(TAG, "📱 Current foreground app ${packageName}: +${TimeUnit.MILLISECONDS.toMinutes(dailyDuration)}m")
                     }
                 }
-            } else {
-                Log.e(TAG, "⚠️ No usage events found")
-                return emptyList()
+                
+                // Add minimal usage for recently used apps
+                for (packageName in recentlyUsedApps) {
+                    if (!weeklyUsage.containsKey(packageName) || weeklyUsage[packageName] == 0L) {
+                        weeklyUsage[packageName] = 60 * 1000L // 1 minute
+                        dailyUsage[packageName] = 60 * 1000L // 1 minute
+                    }
+                }
             }
             
             // Convert to AppUsage objects
@@ -233,7 +210,7 @@ class AppUsageService : Service() {
                     val daily = TimeUnit.MILLISECONDS.toMinutes(dailyUsage[packageName] ?: 0)
                     val weekly = TimeUnit.MILLISECONDS.toMinutes(weeklyUsage[packageName] ?: 0)
                     
-                    // Include non-system apps with any usage
+                    // Only include non-system apps with any usage
                     if (!isSystemApp && (daily > 0 || weekly > 0)) {
                         result.add(
                             AppUsage(
@@ -243,15 +220,12 @@ class AppUsageService : Service() {
                                 weeklyMinutes = weekly
                             )
                         )
-                        
-                        Log.e(TAG, "📊 Final data: ${appName} - Daily: ${daily}m, Weekly: ${weekly}m")
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error processing app $packageName", e)
                 }
             }
             
-            Log.e(TAG, "🏁 Finished collecting ${result.size} app usage records")
             return result
         } catch (e: Exception) {
             Log.e(TAG, "❌ Error getting app usage stats", e)
@@ -259,20 +233,22 @@ class AppUsageService : Service() {
         }
     }
     
-    private fun updateFirestoreWithUsageData(childId: String, usageData: List<AppUsage>) {
-        Log.e(TAG, "🔄 Updating Firestore with app usage data for childId: $childId")
+    private fun updateFirestoreWithUsageData(usageData: List<AppUsage>) {
+        Log.e(TAG, "🔄 Updating Firestore with app usage data")
         
         // Don't continue if there's no data
         if (usageData.isEmpty()) {
             Log.e(TAG, "⚠️ No usage data to upload")
             return
         }
-        
-        // Check if we need to reset daily usage
-        val needsDailyReset = needsDailyReset(childId)
-        if (needsDailyReset) {
-            Log.e(TAG, "🔄 Daily reset needed - resetting daily usage counts")
+
+        // Get the current user's ID
+        val currentUser = auth.currentUser
+        if (currentUser == null) {
+            Log.e(TAG, "❌ No user logged in, cannot update Firestore")
+            return
         }
+        val childId = currentUser.uid
         
         // Log the data we're about to upload
         Log.e(TAG, "📊 Uploading data for ${usageData.size} apps:")
@@ -283,18 +259,9 @@ class AppUsageService : Service() {
         try {
             // Create a map of app usage data
             val appsData = usageData.associate { appUsage ->
-                val dailyMinutes = if (needsDailyReset) {
-                    // If we need a daily reset, only include usage from today
-                    appUsage.dailyMinutes
-                } else {
-                    // Otherwise keep daily minutes, but service will verify they're from today
-                    // The service will run frequently, so daily updates will be accurate
-                    appUsage.dailyMinutes
-                }
-                
                 appUsage.name to mapOf(
                     "packageName" to appUsage.packageName,
-                    "dailyMinutes" to dailyMinutes,
+                    "dailyMinutes" to appUsage.dailyMinutes,
                     "weeklyMinutes" to appUsage.weeklyMinutes,
                     "lastUpdated" to System.currentTimeMillis()
                 )
@@ -327,7 +294,7 @@ class AppUsageService : Service() {
                 "totalDailyMinutes" to totalDailyMinutes,
                 "totalAppWeeklyUsage" to totalWeeklyMinutes,
                 "lastUpdated" to System.currentTimeMillis(),
-                "lastDailyReset" to if (needsDailyReset) System.currentTimeMillis() else previousLastDailyReset,
+                "lastDailyReset" to previousLastDailyReset,
                 "appCount" to usageData.size,
                 "dataSource" to "REAL_DEVICE_DATA"
             )

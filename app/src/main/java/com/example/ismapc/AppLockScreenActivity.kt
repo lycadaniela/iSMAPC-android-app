@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.dp
 import com.example.ismapc.ui.theme.ISMAPCTheme
 import android.view.View
 import android.view.WindowManager
+import android.os.Build
 
 class AppLockScreenActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -27,7 +28,15 @@ class AppLockScreenActivity : ComponentActivity() {
             WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
             WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD or
             WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
-            WindowManager.LayoutParams.FLAG_ALLOW_LOCK_WHILE_SCREEN_ON
+            WindowManager.LayoutParams.FLAG_ALLOW_LOCK_WHILE_SCREEN_ON or
+            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+            WindowManager.LayoutParams.FLAG_SECURE or
+            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+            WindowManager.LayoutParams.FLAG_LAYOUT_INSET_DECOR or
+            WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM or
+            WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH
         )
 
         // Hide system UI elements
@@ -38,6 +47,33 @@ class AppLockScreenActivity : ComponentActivity() {
             or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
             or View.SYSTEM_UI_FLAG_FULLSCREEN
             or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+            or View.SYSTEM_UI_FLAG_LOW_PROFILE
+        )
+
+        // Set window type to TYPE_APPLICATION with normal priority
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            window.setType(WindowManager.LayoutParams.TYPE_APPLICATION)
+            window.attributes = window.attributes.apply {
+                flags = flags or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+                flags = flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                flags = flags or WindowManager.LayoutParams.FLAG_SECURE
+                flags = flags or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+                flags = flags or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
+                flags = flags or WindowManager.LayoutParams.FLAG_LAYOUT_INSET_DECOR
+                flags = flags or WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM
+                flags = flags or WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH
+                flags = flags or WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
+                flags = flags or WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
+                flags = flags or WindowManager.LayoutParams.FLAG_ALLOW_LOCK_WHILE_SCREEN_ON
+            }
+        } else {
+            window.setType(WindowManager.LayoutParams.TYPE_APPLICATION)
+        }
+
+        // Set window to fullscreen
+        window.setFlags(
+            WindowManager.LayoutParams.FLAG_FULLSCREEN,
+            WindowManager.LayoutParams.FLAG_FULLSCREEN
         )
 
         setContent {
