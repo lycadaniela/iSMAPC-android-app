@@ -30,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -48,6 +49,7 @@ import com.google.android.gms.auth.api.signin.GoogleSignInClient
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
 import com.google.firebase.auth.GoogleAuthProvider
+import android.graphics.Bitmap
 
 class ParentSignUpActivity : ComponentActivity() {
     private lateinit var auth: FirebaseAuth
@@ -110,17 +112,11 @@ class ParentSignUpActivity : ComponentActivity() {
                                                     finish()
                                                 }
                                                 .addOnFailureListener { e ->
-                                                    if (e.message?.contains("permission-denied") == true) {
-                                                        user.delete().addOnCompleteListener { deleteTask ->
-                                                            if (deleteTask.isSuccessful) {
-                                                                Toast.makeText(this, "Failed to create account: Permission denied. Please try again.", Toast.LENGTH_LONG).show()
-                                                            }
-                                                        }
-                                                    } else {
-                                                        Toast.makeText(this, "Failed to save user data: ${e.message}", Toast.LENGTH_LONG).show()
-                                                    }
+                                                    Toast.makeText(this, "Failed to save user data: ${e.message}", Toast.LENGTH_LONG).show()
                                                 }
                                         }
+                                    } else {
+                                        Toast.makeText(this, "Sign up failed: ${task.exception?.message}", Toast.LENGTH_LONG).show()
                                     }
                                 }
                         },
@@ -204,6 +200,7 @@ fun ParentSignUpScreen(
     var confirmPassword by remember { mutableStateOf("") }
     var phoneNumber by remember { mutableStateOf("") }
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
+    var profileBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
 
     // Error states
     var fullNameError by remember { mutableStateOf(false) }
@@ -218,6 +215,9 @@ fun ParentSignUpScreen(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         selectedImageUri = uri
+        uri?.let {
+            profileBitmap = MediaStore.Images.Media.getBitmap(context.contentResolver, it)
+        }
     }
 
     Box(
@@ -263,9 +263,9 @@ fun ParentSignUpScreen(
                     .clickable { imagePicker.launch("image/*") },
                 contentAlignment = Alignment.Center
             ) {
-                if (selectedImageUri != null) {
+                if (profileBitmap != null) {
                     Image(
-                        painter = painterResource(id = R.drawable.profile_placeholder),
+                        bitmap = profileBitmap!!.asImageBitmap(),
                         contentDescription = "Selected profile image",
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop
@@ -289,7 +289,7 @@ fun ParentSignUpScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Form fields with improved styling
+            // Form fields
             OutlinedTextField(
                 value = fullName,
                 onValueChange = { 
@@ -297,19 +297,9 @@ fun ParentSignUpScreen(
                     fullNameError = false
                 },
                 label = { Text("Full Name") },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = if (fullNameError) 4.dp else 16.dp),
-                singleLine = true,
                 isError = fullNameError,
-                shape = RoundedCornerShape(12.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                    unfocusedBorderColor = MaterialTheme.colorScheme.outline
-                ),
-                keyboardOptions = KeyboardOptions(
-                    imeAction = ImeAction.Next
-                )
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
             )
 
             if (fullNameError) {
@@ -317,11 +307,11 @@ fun ParentSignUpScreen(
                     text = "Please enter your full name",
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 16.dp, bottom = 16.dp)
+                    modifier = Modifier.padding(start = 16.dp, top = 4.dp)
                 )
             }
+
+            Spacer(modifier = Modifier.height(16.dp))
 
             OutlinedTextField(
                 value = email,
@@ -330,20 +320,9 @@ fun ParentSignUpScreen(
                     emailError = false
                 },
                 label = { Text("Email") },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = if (emailError) 4.dp else 16.dp),
-                singleLine = true,
                 isError = emailError,
-                shape = RoundedCornerShape(12.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                    unfocusedBorderColor = MaterialTheme.colorScheme.outline
-                ),
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Email,
-                    imeAction = ImeAction.Next
-                )
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
             )
 
             if (emailError) {
@@ -351,45 +330,11 @@ fun ParentSignUpScreen(
                     text = "Please enter a valid email address",
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 16.dp, bottom = 16.dp)
+                    modifier = Modifier.padding(start = 16.dp, top = 4.dp)
                 )
             }
 
-            OutlinedTextField(
-                value = phoneNumber,
-                onValueChange = { 
-                    phoneNumber = it
-                    phoneNumberError = false
-                },
-                label = { Text("Phone Number") },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = if (phoneNumberError) 4.dp else 16.dp),
-                singleLine = true,
-                isError = phoneNumberError,
-                shape = RoundedCornerShape(12.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                    unfocusedBorderColor = MaterialTheme.colorScheme.outline
-                ),
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Phone,
-                    imeAction = ImeAction.Next
-                )
-            )
-
-            if (phoneNumberError) {
-                Text(
-                    text = "Please enter a valid phone number",
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 16.dp, bottom = 16.dp)
-                )
-            }
+            Spacer(modifier = Modifier.height(16.dp))
 
             OutlinedTextField(
                 value = password,
@@ -398,21 +343,10 @@ fun ParentSignUpScreen(
                     passwordError = false
                 },
                 label = { Text("Password") },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = if (passwordError) 4.dp else 16.dp),
-                singleLine = true,
-                isError = passwordError,
-                shape = RoundedCornerShape(12.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                    unfocusedBorderColor = MaterialTheme.colorScheme.outline
-                ),
                 visualTransformation = PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Password,
-                    imeAction = ImeAction.Next
-                )
+                isError = passwordError,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
             )
 
             if (passwordError) {
@@ -420,11 +354,11 @@ fun ParentSignUpScreen(
                     text = "Password must be at least 6 characters",
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 16.dp, bottom = 16.dp)
+                    modifier = Modifier.padding(start = 16.dp, top = 4.dp)
                 )
             }
+
+            Spacer(modifier = Modifier.height(16.dp))
 
             OutlinedTextField(
                 value = confirmPassword,
@@ -433,21 +367,10 @@ fun ParentSignUpScreen(
                     confirmPasswordError = false
                 },
                 label = { Text("Confirm Password") },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = if (confirmPasswordError) 4.dp else 24.dp),
-                singleLine = true,
-                isError = confirmPasswordError,
-                shape = RoundedCornerShape(12.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                    unfocusedBorderColor = MaterialTheme.colorScheme.outline
-                ),
                 visualTransformation = PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Password,
-                    imeAction = ImeAction.Done
-                )
+                isError = confirmPasswordError,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
             )
 
             if (confirmPasswordError) {
@@ -455,24 +378,46 @@ fun ParentSignUpScreen(
                     text = "Passwords do not match",
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 16.dp, bottom = 16.dp)
+                    modifier = Modifier.padding(start = 16.dp, top = 4.dp)
                 )
             }
 
-            // Sign Up Button with improved styling
+            Spacer(modifier = Modifier.height(16.dp))
+
+            OutlinedTextField(
+                value = phoneNumber,
+                onValueChange = { 
+                    phoneNumber = it
+                    phoneNumberError = false
+                },
+                label = { Text("Phone Number") },
+                isError = phoneNumberError,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
+            )
+
+            if (phoneNumberError) {
+                Text(
+                    text = "Please enter a valid phone number",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(start = 16.dp, top = 4.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            // Sign Up Button
             Button(
                 onClick = {
-                    // Validate all fields
-                    fullNameError = fullName.isEmpty()
+                    // Reset error states
+                    fullNameError = fullName.isBlank()
                     emailError = !android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()
-                    phoneNumberError = phoneNumber.isEmpty()
                     passwordError = password.length < 6
                     confirmPasswordError = password != confirmPassword
+                    phoneNumberError = phoneNumber.isBlank()
 
-                    if (!fullNameError && !emailError && !phoneNumberError && 
-                        !passwordError && !confirmPasswordError) {
+                    if (!fullNameError && !emailError && !passwordError && !confirmPasswordError && !phoneNumberError) {
                         onSignUp(email, password, fullName, phoneNumber, selectedImageUri)
                     }
                 },
@@ -484,89 +429,21 @@ fun ParentSignUpScreen(
                     containerColor = MaterialTheme.colorScheme.primary
                 )
             ) {
-                Text(
-                    "Create Account",
-                    style = MaterialTheme.typography.titleMedium
-                )
+                Text("Sign Up")
             }
 
-            // Or divider with improved styling
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 24.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Divider(
-                    modifier = Modifier.weight(1f),
-                    color = MaterialTheme.colorScheme.outlineVariant
-                )
-                Text(
-                    "OR",
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Divider(
-                    modifier = Modifier.weight(1f),
-                    color = MaterialTheme.colorScheme.outlineVariant
-                )
-            }
+            Spacer(modifier = Modifier.height(16.dp))
 
-            // Google Sign-In Button with improved styling
+            // Google Sign Up Button
             OutlinedButton(
                 onClick = onGoogleSignUp,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
                 shape = RoundedCornerShape(12.dp),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = MaterialTheme.colorScheme.onBackground
-                )
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
             ) {
-                Row(
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.ic_google_logo),
-                        contentDescription = "Google logo",
-                        modifier = Modifier.size(24.dp),
-                        tint = Color.Unspecified
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        "Continue with Google",
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Sign In Link
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    "Already have an account?",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                TextButton(
-                    onClick = {
-                        (context as? ComponentActivity)?.finish()
-                    }
-                ) {
-                    Text(
-                        "Sign In",
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
+                Text("Sign Up with Google")
             }
         }
     }
