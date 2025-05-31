@@ -170,8 +170,10 @@ service cloud.firestore {
         exists(/databases/$(database)/documents/users/parents/$(request.auth.uid)/profile)
       );
       allow create: if isAuthenticated() && (
-        request.auth.uid == userId &&
-        exists(/databases/$(database)/documents/users/parents/$(request.auth.uid)/profile)
+        // Allow if the user is a parent
+        exists(/databases/$(database)/documents/users/parents/$(request.auth.uid)/profile) ||
+        // Or if the user is the child
+        request.auth.uid == userId
       );
       allow update, delete: if false; // Only admins can update or delete requests
     }

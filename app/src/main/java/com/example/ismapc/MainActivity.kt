@@ -1185,11 +1185,12 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                                 val childId = child["documentId"] as String
                                                 val batch = FirebaseFirestore.getInstance().batch()
                                                 val firestore = FirebaseFirestore.getInstance()
+                                                val auth = FirebaseAuth.getInstance()
 
                                                 // First verify that the current user is a parent
                                                 firestore.collection(MainActivity.USERS_COLLECTION)
                                                     .document(MainActivity.PARENTS_COLLECTION)
-                                                    .collection(FirebaseAuth.getInstance().currentUser?.uid ?: "")
+                                                    .collection(auth.currentUser?.uid ?: "")
                                                     .document(MainActivity.PROFILE_DOCUMENT)
                                                     .get()
                                                     .addOnSuccessListener { parentDoc ->
@@ -1198,83 +1199,118 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                                             return@addOnSuccessListener
                                                         }
 
-                                                        // Delete child's profile
-                                                        val profileRef = firestore
-                                                            .collection(MainActivity.USERS_COLLECTION)
-                                                            .document(MainActivity.CHILD_COLLECTION)
-                                                            .collection("profile")
-                                                            .document(childId)
-                                                        batch.delete(profileRef)
-
-                                                        // Delete child's data from other collections
-                                                        val collectionsToDelete = listOf(
-                                                            "screenTime",
-                                                            "locations",
-                                                            "installedApps",
-                                                            "lockedApps",
-                                                            "contentFiltering",
-                                                            "contentToFilter",
-                                                            "deviceLocks"
+                                                        // Create a deletion request document
+                                                        val deletionRequest = hashMapOf(
+                                                            "childId" to childId,
+                                                            "parentId" to auth.currentUser?.uid,
+                                                            "parentEmail" to auth.currentUser?.email,
+                                                            "childName" to (child["fullName"] as? String ?: "Unknown"),
+                                                            "childEmail" to (child["email"] as? String ?: "Unknown"),
+                                                            "requestedAt" to FieldValue.serverTimestamp(),
+                                                            "status" to "pending",
+                                                            "type" to "child_account_deletion",
+                                                            "verificationData" to hashMapOf(
+                                                                "parentName" to (parentDoc.getString("fullName") ?: "Unknown"),
+                                                                "parentPhone" to (parentDoc.getString("phoneNumber") ?: "Unknown"),
+                                                                "requestSource" to "parent_dashboard",
+                                                                "deviceInfo" to hashMapOf(
+                                                                    "model" to Build.MODEL,
+                                                                    "manufacturer" to Build.MANUFACTURER,
+                                                                    "androidVersion" to Build.VERSION.RELEASE
+                                                                )
+                                                            )
                                                         )
 
-                                                        // Create a list to track all async operations
-                                                        val deleteOperations = mutableListOf<Task<QuerySnapshot>>()
-
-                                                        collectionsToDelete.forEach { collectionName ->
-                                                            try {
-                                                                // Delete documents where childId matches
-                                                                val queryTask = firestore.collection(collectionName)
-                                                                    .whereEqualTo("childId", childId)
-                                                                    .get()
-                                                                    .addOnSuccessListener { docs ->
-                                                                        docs.forEach { doc ->
-                                                                            batch.delete(doc.reference)
-                                                                        }
-                                                                    }
-                                                                    .addOnFailureListener { e ->
-                                                                        Log.w("ChildDeletion", "Error querying collection $collectionName: ${e.message}")
-                                                                    }
-                                                                deleteOperations.add(queryTask)
-
-                                                                // Also delete documents where the document ID is the childId
-                                                                batch.delete(firestore.collection(collectionName).document(childId))
-                                                            } catch (e: Exception) {
-                                                                Log.w("ChildDeletion", "Error processing collection $collectionName: ${e.message}")
-                                                            }
-                                                        }
-
-                                                        // Wait for all queries to complete before committing the batch
-                                                        Tasks.whenAll(deleteOperations)
+                                                        // Add the deletion request to a special collection
+                                                        firestore.collection("deletionRequests")
+                                                            .document(childId)
+                                                            .set(deletionRequest)
                                                             .addOnSuccessListener {
-                                                                // Now commit the batch
-                                                                batch.commit()
+                                                                Log.d("ChildDeletion", "Deletion request created successfully for child: ${child["fullName"]}")
+                                                                
+                                                                // Delete child's profile
+                                                                val profileRef = firestore
+                                                                    .collection(MainActivity.USERS_COLLECTION)
+                                                                    .document(MainActivity.CHILD_COLLECTION)
+                                                                    .collection("profile")
+                                                                    .document(childId)
+                                                                batch.delete(profileRef)
+
+                                                                // Delete child's data from other collections
+                                                                val collectionsToDelete = listOf(
+                                                                    "screenTime",
+                                                                    "locations",
+                                                                    "installedApps",
+                                                                    "lockedApps",
+                                                                    "contentFiltering",
+                                                                    "contentToFilter",
+                                                                    "deviceLocks",
+                                                                    "appUsage"
+                                                                )
+
+                                                                // Create a list to track all async operations
+                                                                val deleteOperations = mutableListOf<Task<QuerySnapshot>>()
+
+                                                                collectionsToDelete.forEach { collectionName ->
+                                                                    try {
+                                                                        // Delete documents where childId matches
+                                                                        val queryTask = firestore.collection(collectionName)
+                                                                            .whereEqualTo("childId", childId)
+                                                                            .get()
+                                                                            .addOnSuccessListener { docs ->
+                                                                                docs.forEach { doc ->
+                                                                                    batch.delete(doc.reference)
+                                                                                }
+                                                                            }
+                                                                            .addOnFailureListener { e ->
+                                                                                Log.w("ChildDeletion", "Error querying collection $collectionName: ${e.message}")
+                                                                            }
+                                                                        deleteOperations.add(queryTask)
+
+                                                                        // Also delete documents where the document ID is the childId
+                                                                        batch.delete(firestore.collection(collectionName).document(childId))
+                                                                    } catch (e: Exception) {
+                                                                        Log.w("ChildDeletion", "Error processing collection $collectionName: ${e.message}")
+                                                                    }
+                                                                }
+
+                                                                // Wait for all queries to complete before committing the batch
+                                                                Tasks.whenAll(deleteOperations)
                                                                     .addOnSuccessListener {
-                                                                        Toast.makeText(context, "Child account deleted successfully", Toast.LENGTH_SHORT).show()
+                                                                        // Now commit the batch
+                                                                        batch.commit()
+                                                                            .addOnSuccessListener {
+                                                                                Toast.makeText(context, "Child account deletion request submitted. The account will be permanently deleted within 24 hours.", Toast.LENGTH_LONG).show()
+                                                                            }
+                                                                            .addOnFailureListener { e ->
+                                                                                Log.e("ChildDeletion", "Error committing batch: ${e.message}")
+                                                                                if (e.message?.contains("permission denied") == true) {
+                                                                                    Toast.makeText(context, "Error: You don't have permission to delete this account", Toast.LENGTH_SHORT).show()
+                                                                                } else {
+                                                                                    Toast.makeText(context, "Error deleting child account: ${e.message}", Toast.LENGTH_SHORT).show()
+                                                                                }
+                                                                            }
                                                                     }
                                                                     .addOnFailureListener { e ->
-                                                                        Log.e("ChildDeletion", "Error committing batch: ${e.message}")
-                                                                        if (e.message?.contains("permission denied") == true) {
-                                                                            Toast.makeText(context, "Error: You don't have permission to delete this account", Toast.LENGTH_SHORT).show()
-                                                                        } else {
-                                                                            Toast.makeText(context, "Error deleting child account: ${e.message}", Toast.LENGTH_SHORT).show()
-                                                                        }
+                                                                        Log.e("ChildDeletion", "Error preparing deletion: ${e.message}")
+                                                                        // Even if some queries failed, try to commit the batch anyway
+                                                                        batch.commit()
+                                                                            .addOnSuccessListener {
+                                                                                Toast.makeText(context, "Child account deletion request submitted with some warnings", Toast.LENGTH_LONG).show()
+                                                                            }
+                                                                            .addOnFailureListener { commitError ->
+                                                                                Log.e("ChildDeletion", "Error committing batch after query failures: ${commitError.message}")
+                                                                                if (commitError.message?.contains("permission denied") == true) {
+                                                                                    Toast.makeText(context, "Error: You don't have permission to delete this account", Toast.LENGTH_SHORT).show()
+                                                                                } else {
+                                                                                    Toast.makeText(context, "Error deleting child account: ${commitError.message}", Toast.LENGTH_SHORT).show()
+                                                                                }
+                                                                            }
                                                                     }
                                                             }
                                                             .addOnFailureListener { e ->
-                                                                Log.e("ChildDeletion", "Error preparing deletion: ${e.message}")
-                                                                // Even if some queries failed, try to commit the batch anyway
-                                                                batch.commit()
-                                                                    .addOnSuccessListener {
-                                                                        Toast.makeText(context, "Child account deleted with some warnings", Toast.LENGTH_SHORT).show()
-                                                                    }
-                                                                    .addOnFailureListener { commitError ->
-                                                                        Log.e("ChildDeletion", "Error committing batch after query failures: ${commitError.message}")
-                                                                        if (commitError.message?.contains("permission denied") == true) {
-                                                                            Toast.makeText(context, "Error: You don't have permission to delete this account", Toast.LENGTH_SHORT).show()
-                                                                        } else {
-                                                                            Toast.makeText(context, "Error deleting child account: ${commitError.message}", Toast.LENGTH_SHORT).show()
-                                                                        }
-                                                                    }
+                                                                Log.e("ChildDeletion", "Error creating deletion request: ${e.message}")
+                                                                Toast.makeText(context, "Error submitting deletion request: ${e.message}", Toast.LENGTH_SHORT).show()
                                                             }
                                                     }
                                                     .addOnFailureListener { e ->
