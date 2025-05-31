@@ -44,20 +44,54 @@ import java.util.*
 class ParentEditProfileActivity : ComponentActivity() {
     private var selectedImageUri: Uri? = null
     private var profileBitmap: Bitmap? = null
-    private lateinit var firebaseStorage: FirebaseStorage
+    private lateinit var profilePictureManager: ProfilePictureManager
 
     private val getContent = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == RESULT_OK) {
             result.data?.data?.let { uri ->
                 selectedImageUri = uri
-                profileBitmap = MediaStore.Images.Media.getBitmap(contentResolver, uri)
+                try {
+                    profileBitmap = MediaStore.Images.Media.getBitmap(contentResolver, uri)
+                    // Force recomposition of the UI
+                    setContent {
+                        ISMAPCTheme {
+                            Surface(
+                                modifier = Modifier.fillMaxSize(),
+                                color = MaterialTheme.colorScheme.background
+                            ) {
+                                EditProfileScreen(
+                                    parentId = intent.getStringExtra("parentId") ?: "",
+                                    parentName = intent.getStringExtra("parentName") ?: "",
+                                    parentEmail = intent.getStringExtra("parentEmail") ?: "",
+                                    parentPhone = intent.getStringExtra("parentPhone") ?: "",
+                                    onImageSelect = { openImagePicker() },
+                                    selectedImageUri = selectedImageUri,
+                                    profileBitmap = profileBitmap,
+                                    onBack = { finish() }
+                                )
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    Toast.makeText(this, "Failed to load image: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
             }
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        firebaseStorage = FirebaseStorage.getInstance()
+        profilePictureManager = ProfilePictureManager(this)
+        
+        // Get intent extras
+        val parentId = intent.getStringExtra("parentId") ?: ""
+        val parentName = intent.getStringExtra("parentName") ?: ""
+        val parentEmail = intent.getStringExtra("parentEmail") ?: ""
+        val parentPhone = intent.getStringExtra("parentPhone") ?: ""
+        
+        // Load existing profile picture if available
+        profileBitmap = profilePictureManager.getProfilePictureBitmap(parentId)
+        
         setContent {
             ISMAPCTheme {
                 Surface(
@@ -65,10 +99,10 @@ class ParentEditProfileActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     EditProfileScreen(
-                        parentId = intent.getStringExtra("parentId") ?: "",
-                        parentName = intent.getStringExtra("parentName") ?: "",
-                        parentEmail = intent.getStringExtra("parentEmail") ?: "",
-                        parentPhone = intent.getStringExtra("parentPhone") ?: "",
+                        parentId = parentId,
+                        parentName = parentName,
+                        parentEmail = parentEmail,
+                        parentPhone = parentPhone,
                         onImageSelect = { openImagePicker() },
                         selectedImageUri = selectedImageUri,
                         profileBitmap = profileBitmap,
@@ -80,7 +114,8 @@ class ParentEditProfileActivity : ComponentActivity() {
     }
 
     private fun openImagePicker() {
-        val intent = Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI)
+        val intent = Intent(Intent.ACTION_PICK)
+        intent.type = "image/*"
         getContent.launch(intent)
     }
 }
@@ -97,12 +132,14 @@ fun EditProfileScreen(
     profileBitmap: Bitmap?,
     onBack: () -> Unit
 ) {
+    val context = LocalContext.current
+    val firestore = FirebaseFirestore.getInstance()
+    
+    // State variables
     var fullName by remember { mutableStateOf(parentName) }
     var email by remember { mutableStateOf(parentEmail) }
     var phoneNumber by remember { mutableStateOf(parentPhone) }
     var isSaving by remember { mutableStateOf(false) }
-    val context = LocalContext.current
-    val firebaseStorage = FirebaseStorage.getInstance()
 
     Scaffold(
         topBar = {
@@ -195,7 +232,7 @@ fun EditProfileScreen(
                     ) {
                         if (profileBitmap != null) {
                             Image(
-                                bitmap = profileBitmap!!.asImageBitmap(),
+                                bitmap = profileBitmap.asImageBitmap(),
                                 contentDescription = "Profile Picture",
                                 modifier = Modifier.fillMaxSize(),
                                 contentScale = ContentScale.Crop
@@ -292,57 +329,61 @@ fun EditProfileScreen(
             // Save Button
             Button(
                 onClick = {
-                    if (fullName.isBlank() || email.isBlank() || phoneNumber.isBlank()) {
-                        Toast.makeText(context, "Please fill in all fields", Toast.LENGTH_SHORT).show()
-                        return@Button
-                    }
-
+                    if (isSaving) return@Button
+                    
                     isSaving = true
-                    val updates = mapOf(
-                        "fullName" to fullName,
-                        "email" to email,
-                        "phoneNumber" to phoneNumber
-                    )
-
-                    // Update Firestore
-                    FirebaseFirestore.getInstance()
-                        .collection("users")
-                        .document("parents")
-                        .collection(parentId)
-                        .document("profile")
-                        .update(updates)
-                        .addOnSuccessListener {
-                            // Update profile picture if selected
-                            if (selectedImageUri != null) {
-                                val storageRef = firebaseStorage.reference
-                                    .child("profile_pictures")
-                                    .child("parents")
-                                    .child("$parentId.jpg")
-
-                                val baos = ByteArrayOutputStream()
-                                profileBitmap?.compress(Bitmap.CompressFormat.JPEG, 100, baos)
-                                val data = baos.toByteArray()
-
-                                storageRef.putBytes(data)
-                                    .addOnSuccessListener {
-                                        Toast.makeText(context, "Profile updated successfully", Toast.LENGTH_SHORT).show()
-                                        isSaving = false
-                                        onBack()
-                                    }
-                                    .addOnFailureListener { e ->
-                                        Toast.makeText(context, "Error uploading image: ${e.message}", Toast.LENGTH_SHORT).show()
-                                        isSaving = false
-                                    }
-                            } else {
+                    
+                    // Save profile picture if changed
+                    profileBitmap?.let { bitmap ->
+                        val profilePicturePath = ProfilePictureManager(context).saveProfilePicture(bitmap, parentId)
+                        
+                        // Update Firestore
+                        firestore.collection("users")
+                            .document("parents")
+                            .collection(parentId)
+                            .document("profile")
+                            .update(
+                                mapOf(
+                                    "fullName" to fullName,
+                                    "email" to email,
+                                    "phoneNumber" to phoneNumber,
+                                    "profilePicturePath" to profilePicturePath
+                                )
+                            )
+                            .addOnSuccessListener {
                                 Toast.makeText(context, "Profile updated successfully", Toast.LENGTH_SHORT).show()
-                                isSaving = false
                                 onBack()
                             }
-                        }
-                        .addOnFailureListener { e ->
-                            Toast.makeText(context, "Error updating profile: ${e.message}", Toast.LENGTH_SHORT).show()
-                            isSaving = false
-                        }
+                            .addOnFailureListener { e ->
+                                Toast.makeText(context, "Error updating profile: ${e.message}", Toast.LENGTH_SHORT).show()
+                            }
+                            .addOnCompleteListener {
+                                isSaving = false
+                            }
+                    } ?: run {
+                        // Update Firestore without image
+                        firestore.collection("users")
+                            .document("parents")
+                            .collection(parentId)
+                            .document("profile")
+                            .update(
+                                mapOf(
+                                    "fullName" to fullName,
+                                    "email" to email,
+                                    "phoneNumber" to phoneNumber
+                                )
+                            )
+                            .addOnSuccessListener {
+                                Toast.makeText(context, "Profile updated successfully", Toast.LENGTH_SHORT).show()
+                                onBack()
+                            }
+                            .addOnFailureListener { e ->
+                                Toast.makeText(context, "Error updating profile: ${e.message}", Toast.LENGTH_SHORT).show()
+                            }
+                            .addOnCompleteListener {
+                                isSaving = false
+                            }
+                    }
                 },
                 modifier = Modifier
                     .fillMaxWidth()
