@@ -39,31 +39,61 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.asImageBitmap
 
 class EditChildProfileActivity : ComponentActivity() {
     private var selectedImageUri: Uri? = null
     private var profileBitmap: Bitmap? = null
-    private lateinit var firebaseStorage: FirebaseStorage
+    private lateinit var profilePictureManager: ProfilePictureManager
+    private var childId: String? = null
+    private var childName: String? = null
+    private var childEmail: String? = null
+
     private val getContent = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == RESULT_OK) {
             result.data?.data?.let { uri ->
                 selectedImageUri = uri
-                profileBitmap = MediaStore.Images.Media.getBitmap(contentResolver, uri)
+                try {
+                    profileBitmap = MediaStore.Images.Media.getBitmap(contentResolver, uri)
+                    // Force recomposition of the UI
+                    setContent {
+                        ISMAPCTheme {
+                            Surface(
+                                modifier = Modifier.fillMaxSize(),
+                                color = MaterialTheme.colorScheme.background
+                            ) {
+                                EditChildProfileScreen(
+                                    childId = childId ?: "",
+                                    childName = childName ?: "",
+                                    onImageSelect = { openImagePicker() },
+                                    selectedImageUri = selectedImageUri,
+                                    profileBitmap = profileBitmap,
+                                    onBack = { finish() }
+                                )
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    Toast.makeText(this, "Failed to load image: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
             }
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        firebaseStorage = FirebaseStorage.getInstance()
+        profilePictureManager = ProfilePictureManager(this)
         
         // Get intent extras
-        val childId = intent.getStringExtra("childId") ?: ""
-        val childName = intent.getStringExtra("childName") ?: ""
+        childId = intent.getStringExtra("childId")
+        childName = intent.getStringExtra("childName")
+        childEmail = intent.getStringExtra("childEmail")
         
-        // Initialize Firebase
-        FirebaseStorage.getInstance()
-        FirebaseFirestore.getInstance()
+        // Load existing profile picture if available
+        childId?.let { id ->
+            profileBitmap = profilePictureManager.getProfilePictureBitmap(id)
+        }
         
         setContent {
             ISMAPCTheme {
@@ -72,8 +102,8 @@ class EditChildProfileActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     EditChildProfileScreen(
-                        childId = childId,
-                        childName = childName,
+                        childId = childId ?: "",
+                        childName = childName ?: "",
                         onImageSelect = { openImagePicker() },
                         selectedImageUri = selectedImageUri,
                         profileBitmap = profileBitmap,
@@ -107,25 +137,7 @@ fun EditChildProfileScreen(
     // State variables
     var fullName by remember { mutableStateOf(childName) }
     var isSaving by remember { mutableStateOf(false) }
-    var profilePhotoUrl by remember { mutableStateOf<String?>(null) }
     
-    // Fetch profile data when screen loads
-    LaunchedEffect(childId) {
-        if (childId.isNotBlank()) {
-            firestore.collection("users")
-                .document("child")
-                .collection("profile")
-                .document(childId)
-                .get()
-                .addOnSuccessListener { document ->
-                    if (document.exists()) {
-                        fullName = document.getString("fullName") ?: childName
-                        profilePhotoUrl = document.getString("photoUrl")
-                    }
-                }
-        }
-    }
-
     Scaffold(
         topBar = {
             TopAppBar(
@@ -158,10 +170,8 @@ fun EditChildProfileScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(16.dp)
                 .verticalScroll(rememberScrollState()),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             // Header Card
             Card(
@@ -184,7 +194,7 @@ fun EditChildProfileScreen(
                     Text(
                         text = "Update your account information",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = Color(0xFF4A4A4A)
+                        color = Color(0xFF333333)
                     )
                 }
             }
@@ -215,16 +225,9 @@ fun EditChildProfileScreen(
                             .clickable(onClick = onImageSelect),
                         contentAlignment = Alignment.Center
                     ) {
-                        if (profilePhotoUrl != null) {
-                            AsyncImage(
-                                model = profilePhotoUrl,
-                                contentDescription = "Profile Picture",
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
-                            )
-                        } else if (selectedImageUri != null) {
-                            AsyncImage(
-                                model = selectedImageUri,
+                        if (profileBitmap != null) {
+                            Image(
+                                bitmap = profileBitmap.asImageBitmap(),
                                 contentDescription = "Profile Picture",
                                 modifier = Modifier.fillMaxSize(),
                                 contentScale = ContentScale.Crop
@@ -286,48 +289,29 @@ fun EditChildProfileScreen(
                     
                     // Save profile picture if changed
                     profileBitmap?.let { bitmap ->
-                        val storageRef = FirebaseStorage.getInstance().reference
-                        val imagesRef = storageRef.child("profile_images/${childId}_${System.currentTimeMillis()}.jpg")
+                        val profilePicturePath = ProfilePictureManager(context).saveProfilePicture(bitmap, childId)
                         
-                        val baos = ByteArrayOutputStream()
-                        bitmap.compress(Bitmap.CompressFormat.JPEG, 90, baos)
-                        val data = baos.toByteArray()
-
-                        val uploadTask = imagesRef.putBytes(data)
-                        uploadTask.continueWithTask { task ->
-                            if (!task.isSuccessful) {
-                                task.exception?.let {
-                                    throw it
-                                }
+                        // Update Firestore
+                        firestore.collection("users")
+                            .document("child")
+                            .collection("profile")
+                            .document(childId)
+                            .update(
+                                mapOf(
+                                    "fullName" to fullName,
+                                    "profilePicturePath" to profilePicturePath
+                                )
+                            )
+                            .addOnSuccessListener {
+                                Toast.makeText(context, "Profile updated successfully", Toast.LENGTH_SHORT).show()
+                                onBack()
                             }
-                            imagesRef.downloadUrl
-                        }.addOnCompleteListener { task ->
-                            if (task.isSuccessful) {
-                                val downloadUrl = task.result.toString()
-                                
-                                // Update Firestore
-                                firestore.collection("users")
-                                    .document("child")
-                                    .collection("profile")
-                                    .document(childId)
-                                    .update(
-                                        mapOf(
-                                            "fullName" to fullName,
-                                            "photoUrl" to downloadUrl
-                                        )
-                                    )
-                                    .addOnSuccessListener {
-                                        Toast.makeText(context, "Profile updated successfully", Toast.LENGTH_SHORT).show()
-                                        onBack()
-                                    }
-                                    .addOnFailureListener { e ->
-                                        Toast.makeText(context, "Error updating profile: ${e.message}", Toast.LENGTH_SHORT).show()
-                                    }
-                            } else {
-                                Toast.makeText(context, "Error uploading image: ${task.exception?.message}", Toast.LENGTH_SHORT).show()
+                            .addOnFailureListener { e ->
+                                Toast.makeText(context, "Error updating profile: ${e.message}", Toast.LENGTH_SHORT).show()
                             }
-                            isSaving = false
-                        }
+                            .addOnCompleteListener {
+                                isSaving = false
+                            }
                     } ?: run {
                         // Update Firestore without image
                         firestore.collection("users")
@@ -346,12 +330,14 @@ fun EditChildProfileScreen(
                             .addOnFailureListener { e ->
                                 Toast.makeText(context, "Error updating profile: ${e.message}", Toast.LENGTH_SHORT).show()
                             }
+                            .addOnCompleteListener {
+                                isSaving = false
+                            }
                     }
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(56.dp),
-                shape = RoundedCornerShape(12.dp),
+                    .padding(16.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color(0xFFE0852D)
                 ),
