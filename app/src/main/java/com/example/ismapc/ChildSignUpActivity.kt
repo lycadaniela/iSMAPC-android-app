@@ -65,6 +65,90 @@ class ChildSignUpActivity : ComponentActivity() {
     private var selectedImageUri: Uri? = null
     private var profileBitmap: Bitmap? = null
 
+    private val getContent = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == RESULT_OK) {
+            result.data?.data?.let { uri ->
+                selectedImageUri = uri
+                try {
+                    profileBitmap = MediaStore.Images.Media.getBitmap(contentResolver, uri)
+                    // Force recomposition of the UI
+                    setContent {
+                        ISMAPCTheme {
+                            Surface(
+                                modifier = Modifier.fillMaxSize(),
+                                color = MaterialTheme.colorScheme.background
+                            ) {
+                                ChildSignUpScreen(
+                                    onBack = { finish() },
+                                    onImageSelect = { openImagePicker() },
+                                    selectedImageUri = selectedImageUri,
+                                    profileBitmap = profileBitmap,
+                                    onSignUp = { fullName, email, password, confirmPassword ->
+                                        auth.createUserWithEmailAndPassword(email, password)
+                                            .addOnCompleteListener { task ->
+                                                if (task.isSuccessful) {
+                                                    val user = auth.currentUser
+                                                    if (user != null) {
+                                                        // Save profile picture if selected
+                                                        var profilePicturePath: String? = null
+                                                        if (profileBitmap != null) {
+                                                            profilePicturePath = profilePictureManager.saveProfilePicture(profileBitmap!!, user.uid)
+                                                        }
+
+                                                        val userData = hashMapOf(
+                                                            "fullName" to fullName,
+                                                            "email" to email,
+                                                            "userType" to "child",
+                                                            "createdAt" to Timestamp(Date()),
+                                                            "profilePicturePath" to profilePicturePath,
+                                                            "parentEmail" to parentEmail
+                                                        )
+                                                        
+                                                        firestore.collection("users")
+                                                            .document("child")
+                                                            .collection("profile")
+                                                            .document(user.uid)
+                                                            .set(userData)
+                                                            .addOnSuccessListener {
+                                                                Log.d("ChildSignUp", "Child profile created successfully")
+                                                                // Sign out the child account
+                                                                auth.signOut()
+                                                                // Return to parent dashboard
+                                                                finish()
+                                                            }
+                                                            .addOnFailureListener { e ->
+                                                                Log.e("ChildSignUp", "Error creating child profile", e)
+                                                                Toast.makeText(this, "Error creating profile: ${e.message}", Toast.LENGTH_LONG).show()
+                                                                // Delete the Firebase Auth account if Firestore save fails
+                                                                user.delete().addOnCompleteListener { deleteTask ->
+                                                                    if (deleteTask.isSuccessful) {
+                                                                        Log.d("ChildSignUp", "Deleted Firebase Auth account after Firestore save failed")
+                                                                    } else {
+                                                                        Log.e("ChildSignUp", "Failed to delete account after Firestore save failed", deleteTask.exception)
+                                                                    }
+                                                                }
+                                                            }
+                                                    }
+                                                } else {
+                                                    Toast.makeText(this, "Sign up failed: ${task.exception?.message}", Toast.LENGTH_LONG).show()
+                                                }
+                                            }
+                                    },
+                                    onGoogleSignUp = {
+                                        val signInIntent = googleSignInClient.signInIntent
+                                        startActivityForResult(signInIntent, RC_SIGN_IN)
+                                    }
+                                )
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    Toast.makeText(this, "Failed to load image: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         auth = FirebaseAuth.getInstance()
@@ -102,10 +186,7 @@ class ChildSignUpActivity : ComponentActivity() {
                     
                     ChildSignUpScreen(
                         onBack = { finish() },
-                        onImageSelect = {
-                            val intent = Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI)
-                            startActivityForResult(intent, 1)
-                        },
+                        onImageSelect = { openImagePicker() },
                         selectedImageUri = selectedImageUri,
                         profileBitmap = profileBitmap,
                         onSignUp = { fullName, email, password, confirmPassword ->
@@ -116,9 +197,8 @@ class ChildSignUpActivity : ComponentActivity() {
                                         if (user != null) {
                                             // Save profile picture if selected
                                             var profilePicturePath: String? = null
-                                            if (selectedImageUri != null) {
-                                                val bitmap = MediaStore.Images.Media.getBitmap(contentResolver, selectedImageUri)
-                                                profilePicturePath = profilePictureManager.saveProfilePicture(bitmap, user.uid)
+                                            if (profileBitmap != null) {
+                                                profilePicturePath = profilePictureManager.saveProfilePicture(profileBitmap!!, user.uid)
                                             }
 
                                             val userData = hashMapOf(
@@ -170,6 +250,12 @@ class ChildSignUpActivity : ComponentActivity() {
         }
     }
 
+    private fun openImagePicker() {
+        val intent = Intent(Intent.ACTION_PICK)
+        intent.type = "image/*"
+        getContent.launch(intent)
+    }
+
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
 
@@ -187,11 +273,6 @@ class ChildSignUpActivity : ComponentActivity() {
                 }
             } catch (e: ApiException) {
                 Toast.makeText(this, "Google sign in failed: ${e.message}", Toast.LENGTH_SHORT).show()
-            }
-        } else if (requestCode == 1 && resultCode == RESULT_OK) {
-            data?.data?.let { uri ->
-                selectedImageUri = uri
-                profileBitmap = MediaStore.Images.Media.getBitmap(contentResolver, uri)
             }
         }
     }

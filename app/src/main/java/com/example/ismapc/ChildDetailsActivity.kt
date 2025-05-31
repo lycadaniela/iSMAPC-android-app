@@ -79,15 +79,40 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.clickable
 import com.example.ismapc.EditChildProfileActivity
+import com.example.ismapc.ProfilePictureManager
 
 class ChildDetailsActivity : ComponentActivity() {
+    private lateinit var auth: FirebaseAuth
+    private lateinit var firestore: FirebaseFirestore
+    private lateinit var profilePictureManager: ProfilePictureManager
+    private var childId: String? = null
+    private var childName: String? = null
+    private var childEmail: String? = null
+    private var childProfilePicturePath: String? = null
+    private var profileBitmap: Bitmap? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        auth = FirebaseAuth.getInstance()
+        firestore = FirebaseFirestore.getInstance()
+        profilePictureManager = ProfilePictureManager(this)
         
-        // Get the child ID from the intent
-        val childId = intent.getStringExtra("childId")
-        val childName = intent.getStringExtra("childName")
-        
+        // Get child ID from intent
+        childId = intent.getStringExtra("childId")
+        childName = intent.getStringExtra("childName")
+        childEmail = intent.getStringExtra("childEmail")
+        childProfilePicturePath = intent.getStringExtra("childProfilePicturePath")
+
+        // Load profile picture using child ID
+        childId?.let { id ->
+            try {
+                profileBitmap = profilePictureManager.getProfilePictureBitmap(id)
+                Log.d("ChildDetails", "Loaded profile picture for child ID: $id")
+            } catch (e: Exception) {
+                Log.e("ChildDetails", "Error loading profile picture", e)
+            }
+        }
+
         setContent {
             ISMAPCTheme {
                 Surface(
@@ -95,8 +120,20 @@ class ChildDetailsActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     ChildDetailsScreen(
+                        onBack = { finish() },
                         childId = childId ?: "",
-                        childName = childName ?: "Child Details"
+                        childName = childName ?: "",
+                        childEmail = childEmail ?: "",
+                        profileBitmap = profileBitmap,
+                        onEditProfile = {
+                            val intent = Intent(this, EditChildProfileActivity::class.java).apply {
+                                putExtra("childId", childId)
+                                putExtra("childName", childName)
+                                putExtra("childEmail", childEmail)
+                                putExtra("childProfilePicturePath", childProfilePicturePath)
+                            }
+                            startActivity(intent)
+                        }
                     )
                 }
             }
@@ -106,12 +143,17 @@ class ChildDetailsActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChildDetailsScreen(childId: String, childName: String) {
+fun ChildDetailsScreen(
+    onBack: () -> Unit,
+    childId: String,
+    childName: String,
+    childEmail: String,
+    profileBitmap: Bitmap?,
+    onEditProfile: () -> Unit
+) {
     val context = LocalContext.current
     val firestore = FirebaseFirestore.getInstance()
-    var childPhotoUrl by remember { mutableStateOf<String?>(null) }
     var screenTime by remember { mutableStateOf<Long>(0) }
-    var childEmail by remember { mutableStateOf<String?>(null) }
     var showEmailDropdown by remember { mutableStateOf(false) }
     var showAppsList by remember { mutableStateOf(false) }
     var showLocationMap by remember { mutableStateOf(false) }
@@ -134,59 +176,32 @@ fun ChildDetailsScreen(childId: String, childName: String) {
         "24 hours" // Default limit
     }
     
-    // Fetch child photo, email and screen time
-    LaunchedEffect(childId) {
+    // Fetch screen time
+    LaunchedEffect(Unit) {
         if (childId.isBlank()) {
             Log.e("ChildDetails", "Child ID is blank")
             return@LaunchedEffect
         }
 
-        Log.d("ChildDetails", "Fetching data for child ID: $childId")
-        
-        // Fetch child photo and email
-        firestore.collection("users")
-            .document("child")
-            .collection("profile")
+        firestore.collection("screenTime")
             .document(childId)
             .get()
             .addOnSuccessListener { document ->
                 if (document.exists()) {
-                    childPhotoUrl = document.getString("photoUrl")
-                    childEmail = document.getString("email")
-                    Log.d("ChildDetails", "Successfully fetched data - Email: $childEmail, Photo URL: $childPhotoUrl")
+                    screenTime = document.getLong("screenTime") ?: 0L
+                    Log.d("ChildDetails", "Screen time updated: $screenTime")
                 } else {
                     Log.e("ChildDetails", "No document found for child ID: $childId")
                 }
             }
             .addOnFailureListener { e ->
-                Log.e("ChildDetails", "Error fetching child data", e)
+                Log.e("ChildDetails", "Error fetching screen time", e)
             }
-    }
-
-    // Set up real-time listener for screen time updates
-    DisposableEffect(childId) {
-        val screenTimeListener = firestore.collection("screenTime")
-            .document(childId)
-            .addSnapshotListener { snapshot, error ->
-                if (error != null) {
-                    Log.e("ChildDetails", "Error listening to screen time updates", error)
-                    return@addSnapshotListener
-                }
-
-                if (snapshot != null && snapshot.exists()) {
-                    screenTime = snapshot.getLong("screenTime") ?: 0L
-                    Log.d("ChildDetails", "Screen time updated: $screenTime")
-                }
-            }
-
-        onDispose {
-            screenTimeListener.remove()
-        }
     }
 
     // Fetch installed apps when Apps button is clicked
     LaunchedEffect(showAppsList) {
-        if (showAppsList) {
+        if (showAppsList && childId.isNotBlank()) {
             firestore.collection("installedApps")
                 .document(childId)
                 .get()
@@ -194,14 +209,14 @@ fun ChildDetailsScreen(childId: String, childName: String) {
                     if (document.exists()) {
                         @Suppress("UNCHECKED_CAST")
                         installedApps = document.get("apps") as? List<Map<String, Any>> ?: emptyList()
-                        }
-                }
                     }
                 }
+        }
+    }
 
     // Fetch location when Location button is clicked
     LaunchedEffect(showLocationMap) {
-        if (showLocationMap) {
+        if (showLocationMap && childId.isNotBlank()) {
             firestore.collection("locations")
                 .document(childId)
                 .get()
@@ -211,8 +226,8 @@ fun ChildDetailsScreen(childId: String, childName: String) {
                         val longitude = document.getDouble("longitude")
                         if (latitude != null && longitude != null) {
                             currentLocation = GeoPoint(latitude, longitude)
-        }
-    }
+                        }
+                    }
                 }
         }
     }
@@ -231,7 +246,7 @@ fun ChildDetailsScreen(childId: String, childName: String) {
                         )
                     ) {
                         IconButton(
-                            onClick = { (context as? Activity)?.finish() },
+                            onClick = onBack,
                             modifier = Modifier.size(48.dp)
                         ) {
                             Icon(
@@ -252,14 +267,7 @@ fun ChildDetailsScreen(childId: String, childName: String) {
                         )
                     ) {
                         IconButton(
-                            onClick = {
-                                val intent = Intent().apply {
-                                    setClass(context, EditChildProfileActivity::class.java)
-                                    putExtra("childId", childId)
-                                    putExtra("childName", childName)
-                                }
-                                context.startActivity(intent)
-                            },
+                            onClick = onEditProfile,
                             modifier = Modifier.size(48.dp)
                         ) {
                             Icon(
@@ -281,6 +289,73 @@ fun ChildDetailsScreen(childId: String, childName: String) {
                 .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            // Header Card
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                )
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "Child Details",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = Color(0xFFE0852D)
+                    )
+                    Text(
+                        text = "View and manage child information",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color(0xFF333333)
+                    )
+                }
+            }
+
+            // Profile Photo Section
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(120.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.surface)
+                            .border(
+                                width = 2.dp,
+                                color = Color(0xFFE0852D),
+                                shape = CircleShape
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (profileBitmap != null) {
+                            Image(
+                                bitmap = profileBitmap.asImageBitmap(),
+                                contentDescription = "Profile Picture",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.Person,
+                                contentDescription = "Profile Picture",
+                                tint = Color(0xFFE0852D),
+                                modifier = Modifier.size(48.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
             // Profile Section
             Card(
                 modifier = Modifier
@@ -304,46 +379,6 @@ fun ChildDetailsScreen(childId: String, childName: String) {
                         modifier = Modifier.padding(bottom = 16.dp)
                     )
 
-                    // Profile Picture with Progress Bar
-                    Box(
-                        modifier = Modifier
-                            .size(140.dp)
-                            .padding(4.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        // Profile Picture
-                        Box(
-                            modifier = Modifier
-                                .size(120.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.surface)
-                                .border(
-                                    width = 2.dp,
-                                    color = Color(0xFFE0852D),
-                                    shape = CircleShape
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (childPhotoUrl != null) {
-                                AsyncImage(
-                                    model = childPhotoUrl,
-                                    contentDescription = "Profile Picture",
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop
-                                )
-                            } else {
-                                Icon(
-                                    imageVector = Icons.Default.Person,
-                                    contentDescription = "Profile Picture",
-                                    tint = Color(0xFFE0852D),
-                                    modifier = Modifier.size(48.dp)
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
                     // Child Name
                     Text(
                         text = childName,
@@ -353,7 +388,7 @@ fun ChildDetailsScreen(childId: String, childName: String) {
 
                     // Child Email
                     Text(
-                        text = childEmail ?: "",
+                        text = childEmail,
                         style = MaterialTheme.typography.bodyMedium,
                         color = Color.Black
                     )
