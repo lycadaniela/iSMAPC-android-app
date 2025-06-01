@@ -78,14 +78,23 @@ class AppUsageService : Service() {
         uploadJob = serviceScope.launch {
             while (isRunning) {
                 try {
+                    Log.e(TAG, "🔄 Starting app usage data collection cycle")
                     val usageData = getAppUsageStats()
+                    Log.e(TAG, "📊 Collected ${usageData.size} apps with usage data")
+                    
                     if (usageData.isNotEmpty()) {
+                        Log.e(TAG, "📱 Apps with usage data:")
+                        usageData.forEach { app ->
+                            Log.e(TAG, "  - ${app.name}: daily=${app.dailyMinutes}m, weekly=${app.weeklyMinutes}m")
+                        }
                         updateFirestoreWithUsageData(usageData)
+                    } else {
+                        Log.e(TAG, "⚠️ No app usage data collected in this cycle")
                     }
-                    delay(1000) // Reduced polling interval to 1 second
+                    delay(5000) // Poll every 5 seconds
                 } catch (e: Exception) {
-                    Log.e(TAG, "Error in usage data collection", e)
-                    delay(5000) // Wait longer on error
+                    Log.e(TAG, "❌ Error in usage data collection", e)
+                    delay(10000) // Wait longer on error
                 }
             }
         }
@@ -98,7 +107,9 @@ class AppUsageService : Service() {
             Process.myUid(),
             packageName
         )
-        return mode == AppOpsManager.MODE_ALLOWED
+        val hasPermission = mode == AppOpsManager.MODE_ALLOWED
+        Log.e(TAG, "🔑 Usage stats permission check: $hasPermission (mode=$mode)")
+        return hasPermission
     }
     
     private fun getAppUsageStats(): List<AppUsage> {
@@ -122,86 +133,49 @@ class AppUsageService : Service() {
             
             Log.e(TAG, "⏰ Getting app usage from ${Date(todayStart)} to ${Date(now)}")
             
+            // First try to get usage stats directly
+            val dailyStats = usageStatsManager.queryUsageStats(
+                UsageStatsManager.INTERVAL_DAILY,
+                todayStart,
+                now
+            )
+            
+            val weeklyStats = usageStatsManager.queryUsageStats(
+                UsageStatsManager.INTERVAL_WEEKLY,
+                weekStart,
+                now
+            )
+            
+            Log.e(TAG, "📊 Found ${dailyStats?.size ?: 0} apps with daily stats")
+            Log.e(TAG, "📊 Found ${weeklyStats?.size ?: 0} apps with weekly stats")
+            
             // Initialize maps for storing usage data
             val dailyUsage = mutableMapOf<String, Long>()
             val weeklyUsage = mutableMapOf<String, Long>()
             
-            // Process events for exact matching with device settings
-            val events = usageStatsManager.queryEvents(weekStart, now)
+            // Process daily stats
+            dailyStats?.forEach { stat ->
+                if (stat.totalTimeInForeground > 0) {
+                    dailyUsage[stat.packageName] = stat.totalTimeInForeground
+                    Log.e(TAG, "📱 Daily usage for ${stat.packageName}: ${stat.totalTimeInForeground/1000}s")
+                }
+            }
             
-            if (events != null) {
-                var eventCount = 0
-                val event = UsageEvents.Event()
-                val lastEventTime = mutableMapOf<String, Long>()
-                val lastEventType = mutableMapOf<String, Int>()
-                val recentlyUsedApps = mutableSetOf<String>()
-                
-                while (events.hasNextEvent()) {
-                    events.getNextEvent(event)
-                    eventCount++
-                    
-                    val packageName = event.packageName
-                    val eventTime = event.timeStamp
-                    val eventType = event.eventType
-                    
-                    // Track any app that was brought to foreground recently
-                    if (eventType == UsageEvents.Event.MOVE_TO_FOREGROUND && eventTime > (now - 5 * 60 * 1000)) {
-                        recentlyUsedApps.add(packageName)
-                    }
-                    
-                    // Track foreground/background transitions
-                    if (eventType == UsageEvents.Event.MOVE_TO_FOREGROUND || 
-                        eventType == UsageEvents.Event.MOVE_TO_BACKGROUND) {
-                        
-                        // Calculate duration when app moves to background after being in foreground
-                        if (lastEventType[packageName] == UsageEvents.Event.MOVE_TO_FOREGROUND && 
-                            eventType == UsageEvents.Event.MOVE_TO_BACKGROUND) {
-                            
-                            val duration = eventTime - (lastEventTime[packageName] ?: eventTime)
-                            
-                            // Add to weekly usage
-                            weeklyUsage[packageName] = (weeklyUsage[packageName] ?: 0) + duration
-                            
-                            // Add to daily usage only if the event was today
-                            if (lastEventTime[packageName] ?: 0 >= todayStart) {
-                                dailyUsage[packageName] = (dailyUsage[packageName] ?: 0) + duration
-                            }
-                        }
-                        
-                        lastEventTime[packageName] = eventTime
-                        lastEventType[packageName] = eventType
-                    }
-                }
-                
-                // Handle apps still in foreground
-                val currentlyInForeground = lastEventType.filter { it.value == UsageEvents.Event.MOVE_TO_FOREGROUND }
-                for ((packageName, _) in currentlyInForeground) {
-                    val foregroundStart = lastEventTime[packageName] ?: todayStart
-                    
-                    // Add to weekly usage
-                    val weeklyDuration = now - foregroundStart
-                    weeklyUsage[packageName] = (weeklyUsage[packageName] ?: 0) + weeklyDuration
-                    
-                    // Add to daily usage only if started today
-                    if (foregroundStart >= todayStart) {
-                        val dailyDuration = now - foregroundStart
-                        dailyUsage[packageName] = (dailyUsage[packageName] ?: 0) + dailyDuration
-                    }
-                }
-                
-                // Add minimal usage for recently used apps
-                for (packageName in recentlyUsedApps) {
-                    if (!weeklyUsage.containsKey(packageName) || weeklyUsage[packageName] == 0L) {
-                        weeklyUsage[packageName] = 60 * 1000L // 1 minute
-                        dailyUsage[packageName] = 60 * 1000L // 1 minute
-                    }
+            // Process weekly stats
+            weeklyStats?.forEach { stat ->
+                if (stat.totalTimeInForeground > 0) {
+                    weeklyUsage[stat.packageName] = stat.totalTimeInForeground
+                    Log.e(TAG, "📱 Weekly usage for ${stat.packageName}: ${stat.totalTimeInForeground/1000}s")
                 }
             }
             
             // Convert to AppUsage objects
             val result = mutableListOf<AppUsage>()
             
-            for (packageName in weeklyUsage.keys) {
+            // Combine daily and weekly stats
+            val allPackages = (dailyUsage.keys + weeklyUsage.keys).toSet()
+            
+            for (packageName in allPackages) {
                 try {
                     val appInfo = packageManager.getApplicationInfo(packageName, 0)
                     val isSystemApp = (appInfo.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0
@@ -220,12 +194,14 @@ class AppUsageService : Service() {
                                 weeklyMinutes = weekly
                             )
                         )
+                        Log.e(TAG, "📱 Added app usage: $appName - daily=$daily min, weekly=$weekly min")
                     }
                 } catch (e: Exception) {
-                    Log.e(TAG, "Error processing app $packageName", e)
+                    Log.e(TAG, "❌ Error processing app $packageName", e)
                 }
             }
             
+            Log.e(TAG, "✅ Successfully collected usage data for ${result.size} apps")
             return result
         } catch (e: Exception) {
             Log.e(TAG, "❌ Error getting app usage stats", e)
@@ -277,71 +253,94 @@ class AppUsageService : Service() {
                 .collection("stats")
                 .document("daily")
             
-            var previousLastDailyReset: Long = 0
-            try {
-                val currentDoc = docRef.get().result
-                if (currentDoc != null && currentDoc.exists()) {
-                    previousLastDailyReset = currentDoc.getLong("lastDailyReset") ?: 0L
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error retrieving current document: ${e.message}", e)
-                // Continue with default value if we can't get the current document
-            }
-            
-            // Create the final data to store
-            val dataToStore = hashMapOf(
-                "apps" to appsData,
-                "totalDailyMinutes" to totalDailyMinutes,
-                "totalAppWeeklyUsage" to totalWeeklyMinutes,
-                "lastUpdated" to System.currentTimeMillis(),
-                "lastDailyReset" to previousLastDailyReset,
-                "appCount" to usageData.size,
-                "dataSource" to "REAL_DEVICE_DATA"
-            )
-            
-            // Store the data to Firestore
-            Log.e(TAG, "🔥 Writing to Firestore path: appUsage/$childId/stats/daily")
-            Log.e(TAG, "📊 Total stats: daily=${totalDailyMinutes}m, weekly=${totalWeeklyMinutes}m, count=${usageData.size}")
-            
-            // Use a transaction to ensure data is properly saved
-            firestore.runTransaction { transaction ->
-                val docRef = firestore.collection("appUsage")
-                    .document(childId)
-                    .collection("stats")
-                    .document("daily")
-                
-                // Set data in transaction
-                transaction.set(docRef, dataToStore)
-            }.addOnSuccessListener {
-                Log.e(TAG, "✅ Successfully updated app usage data in Firestore")
-                
-                // Verify the data was written correctly by reading it back
-                firestore.collection("appUsage")
-                    .document(childId)
-                    .collection("stats")
-                    .document("daily")
-                    .get()
-                    .addOnSuccessListener { document ->
-                        if (document.exists()) {
-                            @Suppress("UNCHECKED_CAST")
-                            val apps = document.get("apps") as? Map<String, Any>
-                            val count = apps?.size ?: 0
-                            val total = document.getLong("totalAppWeeklyUsage") ?: 0
+            // Get the current document asynchronously
+            docRef.get()
+                .addOnSuccessListener { document ->
+                    var previousLastDailyReset: Long = 0
+                    if (document.exists()) {
+                        previousLastDailyReset = document.getLong("lastDailyReset") ?: 0L
+                        Log.e(TAG, "📄 Found existing document with lastDailyReset=$previousLastDailyReset")
+                    } else {
+                        Log.e(TAG, "📄 No existing document found, will create new one")
+                    }
+                    
+                    // Create the final data to store
+                    val dataToStore = hashMapOf(
+                        "apps" to appsData,
+                        "totalDailyMinutes" to totalDailyMinutes,
+                        "totalAppWeeklyUsage" to totalWeeklyMinutes,
+                        "lastUpdated" to System.currentTimeMillis(),
+                        "lastDailyReset" to previousLastDailyReset,
+                        "appCount" to usageData.size,
+                        "dataSource" to "REAL_DEVICE_DATA"
+                    )
+                    
+                    // Store the data to Firestore
+                    Log.e(TAG, "🔥 Writing to Firestore path: appUsage/$childId/stats/daily")
+                    Log.e(TAG, "📊 Total stats: daily=${totalDailyMinutes}m, weekly=${totalWeeklyMinutes}m, count=${usageData.size}")
+                    
+                    // First try a direct set operation
+                    docRef.set(dataToStore)
+                        .addOnSuccessListener {
+                            Log.e(TAG, "✅ Successfully updated app usage data in Firestore")
                             
-                            Log.e(TAG, "✅ Verification successful - data was saved: count=$count, totalWeekly=$total")
-                        } else {
-                            Log.e(TAG, "❌ Verification failed - document doesn't exist after saving")
+                            // Verify the data was written correctly by reading it back
+                            docRef.get()
+                                .addOnSuccessListener { verifyDoc ->
+                                    if (verifyDoc.exists()) {
+                                        @Suppress("UNCHECKED_CAST")
+                                        val apps = verifyDoc.get("apps") as? Map<String, Any>
+                                        val count = apps?.size ?: 0
+                                        val total = verifyDoc.getLong("totalAppWeeklyUsage") ?: 0
+                                        
+                                        Log.e(TAG, "✅ Verification successful - data was saved: count=$count, totalWeekly=$total")
+                                    } else {
+                                        Log.e(TAG, "❌ Verification failed - document doesn't exist after saving")
+                                    }
+                                }
+                                .addOnFailureListener { e ->
+                                    Log.e(TAG, "❌ Verification failed: ${e.message}", e)
+                                }
                         }
-                    }
-                    .addOnFailureListener { e ->
-                        Log.e(TAG, "❌ Verification failed: ${e.message}", e)
-                    }
-            }.addOnFailureListener { e ->
-                Log.e(TAG, "❌ Failed to update app usage data: ${e.message}", e)
-                if (e.message?.contains("permission_denied") == true) {
-                    Log.e(TAG, "❌ Permission denied - check Firestore security rules")
+                        .addOnFailureListener { e ->
+                            Log.e(TAG, "❌ Failed to update app usage data: ${e.message}", e)
+                            if (e.message?.contains("permission_denied") == true) {
+                                Log.e(TAG, "❌ Permission denied - check Firestore security rules")
+                            }
+                            
+                            // If direct set fails, try a transaction as fallback
+                            Log.e(TAG, "🔄 Attempting to save data using transaction as fallback")
+                            firestore.runTransaction { transaction ->
+                                transaction.set(docRef, dataToStore)
+                            }.addOnSuccessListener {
+                                Log.e(TAG, "✅ Successfully saved data using transaction")
+                            }.addOnFailureListener { e ->
+                                Log.e(TAG, "❌ Transaction also failed: ${e.message}", e)
+                            }
+                        }
                 }
-            }
+                .addOnFailureListener { e ->
+                    Log.e(TAG, "❌ Error retrieving current document: ${e.message}", e)
+                    // If we can't get the current document, proceed with default values
+                    val dataToStore = hashMapOf(
+                        "apps" to appsData,
+                        "totalDailyMinutes" to totalDailyMinutes,
+                        "totalAppWeeklyUsage" to totalWeeklyMinutes,
+                        "lastUpdated" to System.currentTimeMillis(),
+                        "lastDailyReset" to 0L,
+                        "appCount" to usageData.size,
+                        "dataSource" to "REAL_DEVICE_DATA"
+                    )
+                    
+                    // Try to save the data anyway
+                    docRef.set(dataToStore)
+                        .addOnSuccessListener {
+                            Log.e(TAG, "✅ Successfully saved initial app usage data")
+                        }
+                        .addOnFailureListener { e ->
+                            Log.e(TAG, "❌ Failed to save initial app usage data: ${e.message}", e)
+                        }
+                }
         } catch (e: Exception) {
             Log.e(TAG, "❌ Error updating Firestore with usage data: ${e.message}", e)
         }

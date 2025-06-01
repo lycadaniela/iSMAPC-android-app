@@ -156,22 +156,8 @@ fun AppUsageScreen(childId: String, childName: String, isChildDevice: Boolean) {
     var appUsageList by remember { mutableStateOf<List<AppUsage>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
-    var isSampleData by remember { mutableStateOf(false) }
     var totalAppUsage by remember { mutableStateOf<Long>(0) }
     var lastUpdated by remember { mutableStateOf<Long?>(null) }
-    
-    LaunchedEffect(childId) {
-        try {
-            val usageData = getAppUsageStats(context, firestore, childId)
-            appUsageList = usageData
-            isLoading = false
-            errorMessage = null
-        } catch (e: Exception) {
-            Log.e(TAG, "Error fetching app usage stats", e)
-            errorMessage = "Error loading app usage data"
-            isLoading = false
-        }
-    }
     
     // Set up a snapshot listener for real-time updates
     DisposableEffect(childId) {
@@ -190,6 +176,9 @@ fun AppUsageScreen(childId: String, childName: String, isChildDevice: Boolean) {
 
             if (snapshot != null && snapshot.exists()) {
                 try {
+                    // Get last updated timestamp
+                    lastUpdated = snapshot.getLong("lastUpdated")
+                    
                     // Process apps data
                     @Suppress("UNCHECKED_CAST")
                     val appsData = snapshot.get("apps") as? Map<String, Map<String, Any>>
@@ -201,32 +190,23 @@ fun AppUsageScreen(childId: String, childName: String, isChildDevice: Boolean) {
                             val weeklyMinutes = (appData["weeklyMinutes"] as? Number)?.toLong() ?: 0L
                             val packageName = (appData["packageName"] as? String) ?: "unknown.package.$appName"
                             
-                            // Skip apps with less than 10 minutes of weekly usage
-                            if (weeklyMinutes < 10) {
-                                continue
-                            }
-                            
-                            // Add a sample data indicator to the name if needed
-                            val displayName = if (isSampleData && !appName.contains("[SAMPLE]")) {
-                                "$appName [SAMPLE]"
-                            } else {
-                                appName
-                            }
-                            
-                            newAppUsageList.add(
-                                AppUsage(
-                                    name = displayName,
-                                    packageName = packageName,
-                                    dailyMinutes = dailyMinutes,
-                                    weeklyMinutes = weeklyMinutes
+                            // Include all apps with any usage
+                            if (dailyMinutes > 0 || weeklyMinutes > 0) {
+                                newAppUsageList.add(
+                                    AppUsage(
+                                        name = appName,
+                                        packageName = packageName,
+                                        dailyMinutes = dailyMinutes,
+                                        weeklyMinutes = weeklyMinutes
+                                    )
                                 )
-                            )
+                            }
                         }
                         
                         // Calculate total usage
                         totalAppUsage = newAppUsageList.sumOf { it.weeklyMinutes }
                         
-                        // Update the app usage list
+                        // Update the app usage list, sorted by daily usage
                         appUsageList = newAppUsageList.sortedByDescending { it.dailyMinutes }
                         Log.e(TAG, "Updated app usage list with ${newAppUsageList.size} apps")
                         
@@ -367,6 +347,17 @@ fun AppUsageScreen(childId: String, childName: String, isChildDevice: Boolean) {
                         color = MaterialTheme.colorScheme.error
                     )
                 }
+            } else if (appUsageList.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "No app usage data available",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             } else {
                 Column(
                     modifier = Modifier
@@ -374,12 +365,12 @@ fun AppUsageScreen(childId: String, childName: String, isChildDevice: Boolean) {
                         .padding(horizontal = 16.dp)
                 ) {
                     Text(
-                        text = "App Breakdown",
+                        text = "App Usage Details",
                         style = MaterialTheme.typography.titleLarge,
                         color = Color(0xFFE0852D),
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(bottom = 8.dp)
                     )
-                    Spacer(modifier = Modifier.height(16.dp))
                     
                     appUsageList.forEach { appUsage ->
                         Card(
@@ -674,9 +665,10 @@ private suspend fun getAppUsageStats(context: Context, firestore: FirebaseFirest
             set(Calendar.MILLISECOND, 0)
         }.timeInMillis
         
-        // Get the start of the current week (Monday)
+        // Get the start of the current week (Sunday)
         val weekStart = calendar.apply {
-            add(Calendar.DAY_OF_WEEK, -calendar.get(Calendar.DAY_OF_WEEK) + Calendar.MONDAY)
+            // Go back to the start of the week (Sunday)
+            add(Calendar.DAY_OF_WEEK, -(get(Calendar.DAY_OF_WEEK) - Calendar.SUNDAY))
             set(Calendar.HOUR_OF_DAY, 0)
             set(Calendar.MINUTE, 0)
             set(Calendar.SECOND, 0)
@@ -685,7 +677,11 @@ private suspend fun getAppUsageStats(context: Context, firestore: FirebaseFirest
         
         val now = System.currentTimeMillis()
         
-        Log.e(TAG, "Querying usage events from ${Date(weekStart)} (Monday) to ${Date(now)}")
+        Log.e(TAG, "⏰ Time ranges:")
+        Log.e(TAG, "  - Today start: ${Date(todayStart)}")
+        Log.e(TAG, "  - Week start: ${Date(weekStart)}")
+        Log.e(TAG, "  - Now: ${Date(now)}")
+        Log.e(TAG, "  - Current day of week: ${calendar.get(Calendar.DAY_OF_WEEK)}")
         
         // Make sure we have the right permission
         val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
@@ -695,84 +691,48 @@ private suspend fun getAppUsageStats(context: Context, firestore: FirebaseFirest
             context.packageName
         )
         if (mode != AppOpsManager.MODE_ALLOWED) {
-            Log.e(TAG, " DO NOT HAVE USAGE STATS PERMISSION! This is likely why we're not getting real data.")
+            Log.e(TAG, "❌ DO NOT HAVE USAGE STATS PERMISSION! This is likely why we're not getting real data.")
             Log.e(TAG, "Please ensure the user has granted usage stats permission in device settings.")
             return emptyList()
         } else {
-            Log.e(TAG, " Have usage stats permission")
+            Log.e(TAG, "✅ Have usage stats permission")
         }
         
-        // Get some device info for debugging
+        // Get device info for debugging
         val deviceManufacturer = android.os.Build.MANUFACTURER
         val deviceModel = android.os.Build.MODEL
         val androidVersion = android.os.Build.VERSION.RELEASE
         Log.e(TAG, "Device info: $deviceManufacturer $deviceModel, Android $androidVersion")
         
-        // Get only the current week's stats
-        val weeklyStats = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_WEEKLY, weekStart, now)
-        
-        // Process stats
+        // Initialize usage maps
         val dailyUsage = mutableMapOf<String, Long>()
         val weeklyUsage = mutableMapOf<String, Long>()
         
-        if (weeklyStats.isNotEmpty()) {
-            for (stat in weeklyStats) {
-                val packageName = stat.packageName
-                val totalTimeMs = stat.totalTimeInForeground
-                
-                if (totalTimeMs > 0) {
-                    weeklyUsage[packageName] = totalTimeMs
-                    
-                    // Calculate daily usage as the average of the week's usage
-                    dailyUsage[packageName] = totalTimeMs / 7
-                }
+        // Get daily stats directly from UsageStatsManager
+        val dailyStats = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, todayStart, now)
+        Log.e(TAG, "📊 Found ${dailyStats?.size ?: 0} apps with daily stats")
+        
+        // Process daily stats
+        dailyStats?.forEach { stat ->
+            if (stat.totalTimeInForeground > 0) {
+                dailyUsage[stat.packageName] = stat.totalTimeInForeground
+                Log.e(TAG, "📱 Daily usage for ${stat.packageName}: ${stat.totalTimeInForeground/1000}s")
             }
         }
         
-        // Always use the event-based approach to catch recent activity
-        // Query from the start of the week to now
+        // Get usage events for the entire week
         val events = usageStatsManager.queryEvents(weekStart, now)
-        
-        // Check if we need to reset weekly usage data
-        val document = firestore.collection("appUsage")
-            .document(childId)
-            .collection("stats")
-            .document("daily")
-            .get()
-            .await()
-            
-        val lastUpdated = document.getLong("lastWeeklyReset") ?: 0L
-        val shouldReset = lastUpdated < weekStart
-        if (shouldReset) {
-            Log.e(TAG, "Resetting weekly usage data for new week")
-            // Reset all weekly usage data in Firestore
-            firestore.collection("appUsage")
-                .document(childId)
-                .collection("stats")
-                .document("daily")
-                .update(mapOf(
-                    "lastWeeklyReset" to weekStart,
-                    "apps" to mapOf<String, Any>()
-                ))
-                .await()
-        }
-        
-        if (events == null) {
-            Log.e(TAG, "Failed to get usage events - null returned")
-        } else if (!events.hasNextEvent()) {
-            Log.e(TAG, "No usage events found despite having permission. The device may not track usage stats.")
-        } else {
+        if (events != null) {
             val event = UsageEvents.Event()
-            
-            // Track app usage
             val lastEventTime = mutableMapOf<String, Long>()
             val lastEventType = mutableMapOf<String, Int>()
-            val recentlyUsedApps = mutableSetOf<String>() // Track recently used apps even without duration
+            val recentlyUsedApps = mutableSetOf<String>()
             
             var eventCount = 0
             var foregroundEvents = 0
             var backgroundEvents = 0
-            var otherEvents = 0
+            
+            Log.e(TAG, "📊 Processing events from ${Date(weekStart)} to ${Date(now)}")
             
             while (events.hasNextEvent()) {
                 events.getNextEvent(event)
@@ -782,21 +742,18 @@ private suspend fun getAppUsageStats(context: Context, firestore: FirebaseFirest
                 val eventTime = event.timeStamp
                 val eventType = event.eventType
                 
-                // Track event types for debugging
                 when (eventType) {
-                    UsageEvents.Event.MOVE_TO_FOREGROUND -> foregroundEvents++
+                    UsageEvents.Event.MOVE_TO_FOREGROUND -> {
+                        foregroundEvents++
+                        // Track recently used apps
+                        if (eventTime > (now - 10 * 60 * 1000)) {
+                            recentlyUsedApps.add(packageName)
+                        }
+                    }
                     UsageEvents.Event.MOVE_TO_BACKGROUND -> backgroundEvents++
-                    else -> otherEvents++
                 }
                 
-                // Track any app that was brought to foreground recently as "used"
-                if (eventType == UsageEvents.Event.MOVE_TO_FOREGROUND && eventTime > (now - 10 * 60 * 1000)) {
-                    // If app was used in the last 10 minutes, consider it used even without duration
-                    recentlyUsedApps.add(packageName)
-                    Log.e(TAG, "Recently used app detected: $packageName")
-                }
-                
-                // Handle MOVE_TO_FOREGROUND and MOVE_TO_BACKGROUND events
+                // Calculate usage duration
                 if (eventType == UsageEvents.Event.MOVE_TO_FOREGROUND || 
                     eventType == UsageEvents.Event.MOVE_TO_BACKGROUND) {
                     
@@ -819,62 +776,69 @@ private suspend fun getAppUsageStats(context: Context, firestore: FirebaseFirest
                 }
             }
             
-            // Add recently used apps that don't have duration yet
+            Log.e(TAG, "📊 Processed $eventCount events (Foreground: $foregroundEvents, Background: $backgroundEvents)")
+            
+            // Add minimal usage for recently used apps
             for (packageName in recentlyUsedApps) {
                 if (!weeklyUsage.containsKey(packageName) || weeklyUsage[packageName] == 0L) {
-                    // Add with a minimal duration of 1 minute to ensure it shows up
-                    weeklyUsage[packageName] = 60 * 1000L // 1 minute in milliseconds
-                    dailyUsage[packageName] = 60 * 1000L // 1 minute in milliseconds
-                    Log.e(TAG, "Added minimal usage for recently used app: $packageName")
+                    weeklyUsage[packageName] = 60 * 1000L // 1 minute
+                    dailyUsage[packageName] = 60 * 1000L // 1 minute
+                    Log.e(TAG, "📱 Added minimal usage for recently used app: $packageName")
                 }
             }
-            
-            Log.e(TAG, "Processed $eventCount events (Foreground: $foregroundEvents, Background: $backgroundEvents, Other: $otherEvents)")
         }
         
-        Log.e(TAG, "Found ${weeklyUsage.size} apps with usage data")
-        
-        // Convert to AppUsage objects and don't filter system apps yet
+        // Convert to AppUsage objects
         val result = mutableListOf<AppUsage>()
+        val allPackages = (dailyUsage.keys + weeklyUsage.keys).toSet()
         
-        weeklyUsage.keys.forEach { packageName ->
+        for (packageName in allPackages) {
             try {
-                // Try to get app info
                 val appInfo = packageManager.getApplicationInfo(packageName, 0)
                 val isSystemApp = (appInfo.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0
                 val appName = packageManager.getApplicationLabel(appInfo).toString()
                 
-                val daily = TimeUnit.MILLISECONDS.toMinutes(dailyUsage[packageName] ?: 0)
+                // Get daily usage directly from UsageStatsManager for this specific app
+                val appDailyStats = usageStatsManager.queryUsageStats(
+                    UsageStatsManager.INTERVAL_DAILY,
+                    todayStart,
+                    now
+                )?.find { it.packageName == packageName }
+                
+                val daily = if (appDailyStats != null) {
+                    TimeUnit.MILLISECONDS.toMinutes(appDailyStats.totalTimeInForeground)
+                } else {
+                    TimeUnit.MILLISECONDS.toMinutes(dailyUsage[packageName] ?: 0)
+                }
+                
                 val weekly = TimeUnit.MILLISECONDS.toMinutes(weeklyUsage[packageName] ?: 0)
                 
-                // Only include apps with at least 5 minutes of weekly usage
-                if (weekly >= 5) {
+                // Include all apps with any usage
+                if (daily > 0 || weekly > 0) {
                     result.add(
                         AppUsage(
                             name = if (isSystemApp) "$appName (System)" else appName,
                             packageName = packageName,
-                            dailyMinutes = Math.max(daily, 1), // Ensure at least 1 minute
+                            dailyMinutes = daily,
                             weeklyMinutes = weekly
                         )
                     )
-                    
-                    Log.e(TAG, "Added app: ${appName}, isSystem: $isSystemApp, Daily: $daily min, Weekly: $weekly min")
+                    Log.e(TAG, "📱 Added app: $appName - Daily: $daily min, Weekly: $weekly min")
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Error processing app $packageName: ${e.message}")
+                Log.e(TAG, "❌ Error processing app $packageName: ${e.message}")
             }
         }
         
-        // Filter out system apps for the final result, but only if we have enough user apps
+        // Filter out system apps if we have enough user apps
         val userApps = result.filter { !it.name.contains("(System)") }
         val finalResult = if (userApps.size >= 3) userApps else result
         
-        Log.e(TAG, "Final result: ${finalResult.size} apps")
-        
+        Log.e(TAG, "✅ Final result: ${finalResult.size} apps")
         Log.e(TAG, "========== COMPLETED APP USAGE DATA COLLECTION ==========")
         return finalResult
     } catch (e: Exception) {
-        Log.e(TAG, "Error getting app usage stats", e)
+        Log.e(TAG, "❌ Error getting app usage stats", e)
         Log.e(TAG, "Exception details:", e)
         throw e
     }
