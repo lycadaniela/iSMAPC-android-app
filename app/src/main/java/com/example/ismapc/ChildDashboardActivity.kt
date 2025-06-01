@@ -112,7 +112,7 @@ fun ChildDashboardScreen(childId: String) {
             }
 
             // Generate suggestions directly
-            val geminiService = GeminiContentService()
+            val geminiService = GeminiContentService(context)
             suggestions = geminiService.generateSuggestions(childId)
             
             // Sort suggestions by category
@@ -134,7 +134,7 @@ fun ChildDashboardScreen(childId: String) {
         if (refreshState.value) {
             try {
                 // Generate new suggestions directly
-                val geminiService = GeminiContentService()
+                val geminiService = GeminiContentService(context)
                 suggestions = geminiService.generateSuggestions(childId)
                 
                 // Sort suggestions by category

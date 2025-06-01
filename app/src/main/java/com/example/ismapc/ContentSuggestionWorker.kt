@@ -25,7 +25,7 @@ class ContentSuggestionWorker(
     private val TAG = "ContentSuggestionWorker"
     private val firestore = FirebaseFirestore.getInstance()
     private val auth = FirebaseAuth.getInstance()
-    private val geminiService = GeminiContentService()
+    private val geminiService = GeminiContentService(context)
 
     override suspend fun doWork(): Result {
         try {
@@ -141,7 +141,7 @@ class ContentSuggestionWorker(
     
     companion object {
         // Schedule intervals
-        val REFRESH_INTERVAL_HOURS = 24L // Generate new suggestions once per day
+        val REFRESH_INTERVAL_HOURS = 6L // Generate new suggestions every 6 hours
         
         // Worker tag for identification
         const val WORKER_TAG = "content_suggestion_worker"
