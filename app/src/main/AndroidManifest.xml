@@ -171,6 +171,12 @@
             android:name=".ParentEditProfileActivity"
             android:exported="false" />
 
+        <activity
+            android:name=".FAQActivity"
+            android:exported="false"
+            android:label="FAQ"
+            android:theme="@style/Theme.ISMAPC" />
+
         <service
             android:name=".ScreenTimeService"
             android:enabled="true"

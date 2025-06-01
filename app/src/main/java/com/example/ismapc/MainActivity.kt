@@ -1018,8 +1018,13 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                             modifier = Modifier
                                 .weight(1f)
                                 .clickable {
-                                    val intent = Intent(context, InfoActivity::class.java)
-                                    context.startActivity(intent)
+                                    try {
+                                        val intent = Intent(context, FAQActivity::class.java)
+                                        context.startActivity(intent)
+                                    } catch (e: Exception) {
+                                        Log.e("MainActivity", "Error launching FAQ screen", e)
+                                        Toast.makeText(context, "Error opening FAQ screen", Toast.LENGTH_SHORT).show()
+                                    }
                                 },
                             colors = CardDefaults.cardColors(
                                 containerColor = MaterialTheme.colorScheme.tertiaryContainer
