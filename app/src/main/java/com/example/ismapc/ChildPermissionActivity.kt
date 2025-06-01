@@ -33,6 +33,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.graphics.vector.ImageVector
 import android.util.Log
+import androidx.compose.ui.graphics.Color
 
 class ChildPermissionActivity : ComponentActivity() {
     val requiredPermissions = arrayOf(
@@ -243,7 +244,7 @@ fun ChildPermissionScreen(activity: ChildPermissionActivity) {
             imageVector = Icons.Filled.Lock,
             contentDescription = null,
             modifier = Modifier.size(48.dp),
-            tint = MaterialTheme.colorScheme.primary
+            tint = Color(0xFFE0852D)
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -253,13 +254,13 @@ fun ChildPermissionScreen(activity: ChildPermissionActivity) {
             style = MaterialTheme.typography.headlineMedium.copy(
                 fontWeight = FontWeight.Bold
             ),
-            color = MaterialTheme.colorScheme.primary
+            color = Color(0xFFE0852D)
         )
 
         Text(
             text = "Please grant the following permissions to enable all features",
             style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+            color = Color(0xFF333333),
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
         )
@@ -299,7 +300,7 @@ fun ChildPermissionScreen(activity: ChildPermissionActivity) {
                 Button(
                     onClick = { currentStep-- },
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.secondary
+                        containerColor = Color(0xFFE0852D).copy(alpha = 0.7f)
                     )
                 ) {
                     Text("Previous")
@@ -324,7 +325,10 @@ fun ChildPermissionScreen(activity: ChildPermissionActivity) {
                     1 -> hasUsagePermission
                     2 -> hasOverlayPermission
                     else -> false
-                }
+                },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFFE0852D)
+                )
             ) {
                 Text(if (currentStep == 2) "Finish" else "Next")
             }
@@ -388,7 +392,7 @@ fun PermissionStep(
             .padding(vertical = 8.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (isGranted) 
-                MaterialTheme.colorScheme.primaryContainer 
+                Color(0xFFE0852D).copy(alpha = 0.1f)
             else 
                 MaterialTheme.colorScheme.surfaceVariant
         )
@@ -404,9 +408,9 @@ fun PermissionStep(
                 contentDescription = null,
                 modifier = Modifier.size(48.dp),
                 tint = if (isGranted) 
-                    MaterialTheme.colorScheme.primary 
+                    Color(0xFFE0852D)
                 else 
-                    MaterialTheme.colorScheme.onSurfaceVariant
+                    Color.White
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -415,9 +419,9 @@ fun PermissionStep(
                 text = title,
                 style = MaterialTheme.typography.titleLarge,
                 color = if (isGranted) 
-                    MaterialTheme.colorScheme.onPrimaryContainer 
+                    Color(0xFFE0852D)
                 else 
-                    MaterialTheme.colorScheme.onSurfaceVariant
+                    Color.White
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -427,9 +431,9 @@ fun PermissionStep(
                 style = MaterialTheme.typography.bodyLarge,
                 textAlign = TextAlign.Center,
                 color = if (isGranted) 
-                    MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f) 
+                    Color(0xFF666666)
                 else 
-                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    Color.White
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -439,12 +443,15 @@ fun PermissionStep(
                 enabled = !isGranted,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = if (isGranted) 
-                        MaterialTheme.colorScheme.primary 
+                        Color(0xFFE0852D)
                     else 
-                        MaterialTheme.colorScheme.secondary
+                        Color(0xFFE0852D).copy(alpha = 0.7f)
                 )
             ) {
-                Text(if (isGranted) "Granted" else "Grant Permission")
+                Text(
+                    if (isGranted) "Granted" else "Grant Permission",
+                    color = Color.White
+                )
             }
         }
     }
