@@ -34,18 +34,40 @@ import androidx.compose.foundation.clickable
 import androidx.compose.ui.graphics.vector.ImageVector
 import android.util.Log
 import androidx.compose.ui.graphics.Color
+import android.os.Build
 
 class ChildPermissionActivity : ComponentActivity() {
-    val requiredPermissions = arrayOf(
-        Manifest.permission.ACCESS_FINE_LOCATION,
-        Manifest.permission.ACCESS_COARSE_LOCATION,
-        Manifest.permission.FOREGROUND_SERVICE_LOCATION,
-        Manifest.permission.FOREGROUND_SERVICE_DATA_SYNC
-    )
+    val requiredPermissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+        arrayOf(
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION,
+            Manifest.permission.FOREGROUND_SERVICE_LOCATION,
+            Manifest.permission.FOREGROUND_SERVICE_DATA_SYNC,
+            Manifest.permission.FOREGROUND_SERVICE_SPECIAL_USE
+        )
+    } else {
+        arrayOf(
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION
+        )
+    }
+
+    // Add notification permission for Android 13 and above
+    val notificationPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        arrayOf(Manifest.permission.POST_NOTIFICATIONS)
+    } else {
+        emptyArray()
+    }
 
     var currentPermissionStep = 0
 
     private val permissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        checkLocationPermissionAndProceed()
+    }
+
+    private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
         checkLocationPermissionAndProceed()
@@ -67,6 +89,20 @@ class ChildPermissionActivity : ComponentActivity() {
 
     fun requestPermissions() {
         currentPermissionStep = 0
+        
+        // Request notification permission first for Android 13+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val notificationPermissionsToRequest = notificationPermission.filter {
+                ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+            }.toTypedArray()
+
+            if (notificationPermissionsToRequest.isNotEmpty()) {
+                notificationPermissionLauncher.launch(notificationPermissionsToRequest)
+                return
+            }
+        }
+
+        // Request other permissions
         val permissionsToRequest = requiredPermissions.filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }.toTypedArray()
@@ -81,6 +117,19 @@ class ChildPermissionActivity : ComponentActivity() {
     private fun checkLocationPermissionAndProceed() {
         val allLocationPermissionsGranted = requiredPermissions.all {
             ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
+        }
+
+        // For Android 13+, also check notification permission
+        val notificationPermissionGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            notificationPermission.all {
+                ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
+            }
+        } else {
+            true
+        }
+
+        if (allLocationPermissionsGranted && notificationPermissionGranted) {
+            checkUsageStatsAndProceed()
         }
     }
 

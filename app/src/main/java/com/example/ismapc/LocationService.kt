@@ -166,22 +166,25 @@ class LocationService : Service() {
             Manifest.permission.ACCESS_COARSE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
         
-        val foregroundLocationGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+        // Check foreground service permissions based on Android version
+        val foregroundServiceGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             ActivityCompat.checkSelfPermission(
                 this,
                 Manifest.permission.FOREGROUND_SERVICE_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED &&
+            ActivityCompat.checkSelfPermission(
+                this,
+                Manifest.permission.FOREGROUND_SERVICE
             ) == PackageManager.PERMISSION_GRANTED
         } else {
-            true // For older Android versions
+            ActivityCompat.checkSelfPermission(
+                this,
+                Manifest.permission.FOREGROUND_SERVICE
+            ) == PackageManager.PERMISSION_GRANTED
         }
         
-        val foregroundServiceGranted = ActivityCompat.checkSelfPermission(
-            this,
-            Manifest.permission.FOREGROUND_SERVICE
-        ) == PackageManager.PERMISSION_GRANTED
-        
-        if (!fineLocationGranted || !coarseLocationGranted || !foregroundLocationGranted || !foregroundServiceGranted) {
-            Log.e(TAG, "Missing permissions: FineLocation=$fineLocationGranted, CoarseLocation=$coarseLocationGranted, ForegroundLocation=$foregroundLocationGranted, ForegroundService=$foregroundServiceGranted")
+        if (!fineLocationGranted || !coarseLocationGranted || !foregroundServiceGranted) {
+            Log.e(TAG, "Missing permissions: FineLocation=$fineLocationGranted, CoarseLocation=$coarseLocationGranted, ForegroundService=$foregroundServiceGranted")
             
             // Show a notification to prompt user to grant permissions
             val notification = NotificationCompat.Builder(this, CHANNEL_ID)
@@ -201,23 +204,7 @@ class LocationService : Service() {
         val isGpsEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
         val isNetworkEnabled = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
         
-        if (!isGpsEnabled && !isNetworkEnabled) {
-            Log.e(TAG, "Location providers are disabled")
-            
-            // Show a notification to prompt user to enable location
-            val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-                .setContentTitle("Location Services Disabled")
-                .setContentText("Please enable location services in device settings")
-                .setSmallIcon(R.drawable.ic_launcher_foreground)
-                .setPriority(NotificationCompat.PRIORITY_HIGH)
-                .setAutoCancel(true)
-                .build()
-            startForeground(NOTIFICATION_ID, notification)
-            
-            return false
-        }
-        
-        return true
+        return isGpsEnabled || isNetworkEnabled
     }
 
     private fun createNotificationChannel() {

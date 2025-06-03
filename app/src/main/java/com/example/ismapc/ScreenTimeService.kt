@@ -372,8 +372,9 @@ class ScreenTimeService : Service() {
             return false
         }
 
-        // Check foreground service permissions for Android 14 and above
+        // Check foreground service permissions based on Android version
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            // For Android 14 and above, check specific foreground service permissions
             if (ActivityCompat.checkSelfPermission(
                     this,
                     Manifest.permission.FOREGROUND_SERVICE_SPECIAL_USE
@@ -384,6 +385,16 @@ class ScreenTimeService : Service() {
                 ) != PackageManager.PERMISSION_GRANTED
             ) {
                 Log.e(TAG, "Foreground service permissions not granted")
+                return false
+            }
+        } else {
+            // For older Android versions, only check basic foreground service permission
+            if (ActivityCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.FOREGROUND_SERVICE
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                Log.e(TAG, "Foreground service permission not granted")
                 return false
             }
         }
