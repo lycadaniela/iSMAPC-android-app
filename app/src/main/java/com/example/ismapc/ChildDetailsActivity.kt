@@ -217,18 +217,79 @@ fun ChildDetailsScreen(
     // Fetch location when Location button is clicked
     LaunchedEffect(showLocationMap) {
         if (showLocationMap && childId.isNotBlank()) {
-            firestore.collection("locations")
-                .document(childId)
-                .get()
-                .addOnSuccessListener { document ->
-                    if (document.exists()) {
-                        val latitude = document.getDouble("latitude")
-                        val longitude = document.getDouble("longitude")
-                        if (latitude != null && longitude != null) {
-                            currentLocation = GeoPoint(latitude, longitude)
+            var retryCount = 0
+            val maxRetries = 3
+            val retryDelay = 1000L // 1 second delay between retries
+
+            fun fetchLocation() {
+                firestore.collection("locations")
+                    .document(childId)
+                    .get()
+                    .addOnSuccessListener { document ->
+                        if (document.exists()) {
+                            val latitude = document.getDouble("latitude")
+                            val longitude = document.getDouble("longitude")
+                            val timestamp = document.getTimestamp("timestamp")
+                            
+                            if (latitude != null && longitude != null) {
+                                // Check if location data is recent (within last 5 minutes)
+                                val isRecent = timestamp?.let {
+                                    val fiveMinutesAgo = System.currentTimeMillis() - (5 * 60 * 1000)
+                                    it.seconds * 1000 > fiveMinutesAgo
+                                } ?: false
+
+                                if (isRecent) {
+                                    currentLocation = GeoPoint(latitude, longitude)
+                                    Log.d("ChildDetails", "Location fetched successfully: $latitude, $longitude")
+                                } else {
+                                    Log.w("ChildDetails", "Location data is too old")
+                                    if (retryCount < maxRetries) {
+                                        retryCount++
+                                        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                                            fetchLocation()
+                                        }, retryDelay)
+                                    } else {
+                                        Toast.makeText(context, "Unable to fetch recent location", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            } else {
+                                Log.e("ChildDetails", "Location data is incomplete")
+                                if (retryCount < maxRetries) {
+                                    retryCount++
+                                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                                        fetchLocation()
+                                    }, retryDelay)
+                                } else {
+                                    Toast.makeText(context, "Location data is incomplete", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        } else {
+                            Log.e("ChildDetails", "No location document found")
+                            if (retryCount < maxRetries) {
+                                retryCount++
+                                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                                    fetchLocation()
+                                }, retryDelay)
+                            } else {
+                                Toast.makeText(context, "No location data available", Toast.LENGTH_SHORT).show()
+                            }
                         }
                     }
-                }
+                    .addOnFailureListener { e ->
+                        Log.e("ChildDetails", "Error fetching location", e)
+                        if (retryCount < maxRetries) {
+                            retryCount++
+                            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                                fetchLocation()
+                            }, retryDelay)
+                        } else {
+                            Toast.makeText(context, "Failed to fetch location: ${e.message}", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+            }
+
+            // Start the initial fetch
+            fetchLocation()
         }
     }
 
@@ -387,11 +448,26 @@ fun ChildDetailsScreen(
                     )
 
                     // Child Email
-                    Text(
-                        text = childEmail,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.Black
-                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Email,
+                            contentDescription = "Email",
+                            tint = Color(0xFF666666),
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = childEmail,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color(0xFF666666)
+                        )
+                    }
                 }
             }
 

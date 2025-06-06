@@ -209,7 +209,34 @@ class LoginActivity : ComponentActivity() {
                                             finish()
                                         }
                                     } else {
-                                        Toast.makeText(context, "Incorrect email or password", Toast.LENGTH_LONG).show()
+                                        // Check if the account is in the deletion requests
+                                        val db = FirebaseFirestore.getInstance()
+                                        db.collection("deletionRequests")
+                                            .whereEqualTo("parentEmail", email)
+                                            .get()
+                                            .addOnSuccessListener { deletionDocs ->
+                                                if (!deletionDocs.isEmpty) {
+                                                    Toast.makeText(context, "This account has been deleted. Please sign up again.", Toast.LENGTH_LONG).show()
+                                                } else {
+                                                    // Also check child accounts
+                                                    db.collection("deletionRequests")
+                                                        .whereEqualTo("childEmail", email)
+                                                        .get()
+                                                        .addOnSuccessListener { childDeletionDocs ->
+                                                            if (!childDeletionDocs.isEmpty) {
+                                                                Toast.makeText(context, "This account has been deleted. Please sign up again.", Toast.LENGTH_LONG).show()
+                                                            } else {
+                                                                Toast.makeText(context, "Incorrect email or password", Toast.LENGTH_LONG).show()
+                                                            }
+                                                        }
+                                                        .addOnFailureListener {
+                                                            Toast.makeText(context, "Incorrect email or password", Toast.LENGTH_LONG).show()
+                                                        }
+                                                }
+                                            }
+                                            .addOnFailureListener {
+                                                Toast.makeText(context, "Incorrect email or password", Toast.LENGTH_LONG).show()
+                                            }
                                     }
                                 }
                         },
