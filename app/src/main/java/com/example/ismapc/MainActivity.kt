@@ -1144,6 +1144,7 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                             val intent = Intent(context, ChildDetailsActivity::class.java)
                                             intent.putExtra("childId", child["documentId"] as String)
                                             intent.putExtra("childName", child["fullName"] as String)
+                                            intent.putExtra("childEmail", child["email"] as String)
                                             context.startActivity(intent)
                                         }
                                     },
