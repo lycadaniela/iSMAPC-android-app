@@ -68,6 +68,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import com.example.ismapc.ui.theme.Orange
 import com.example.ismapc.ui.theme.DarkOrange
+import android.os.Process
+import android.provider.Settings
+import android.app.AppOpsManager
 
 class LoginActivity : ComponentActivity() {
     private lateinit var auth: FirebaseAuth
@@ -126,6 +129,26 @@ class LoginActivity : ComponentActivity() {
                                 .get()
                                 .addOnSuccessListener { childDoc ->
                                     if (childDoc.exists()) {
+                                        // User is a child, check permissions before starting service
+                                        val appOps = getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+                                        val mode = appOps.checkOpNoThrow(
+                                            AppOpsManager.OPSTR_GET_USAGE_STATS,
+                                            Process.myUid(),
+                                            this.packageName
+                                        )
+                                        val hasUsagePermission = mode == AppOpsManager.MODE_ALLOWED
+                                        val hasOverlayPermission = Settings.canDrawOverlays(this)
+
+                                        if (!hasUsagePermission || !hasOverlayPermission) {
+                                            // Navigate to permission screen first
+                                            startActivity(Intent(this, ChildPermissionActivity::class.java))
+                                        } else {
+                                            // Start app usage service only if permissions are granted
+                                            Log.d("LoginActivity", "Email login: User is a child, starting AppUsageService")
+                                            startAppUsageService()
+                                        }
+                                        
+                                        // Proceed to MainActivity
                                         startActivity(Intent(this, MainActivity::class.java))
                                         finish()
                                     } else {
@@ -190,19 +213,29 @@ class LoginActivity : ComponentActivity() {
                                                 .get()
                                                 .addOnSuccessListener { childDoc ->
                                                     if (childDoc.exists()) {
-                                                        // User is a child, start app usage service
-                                                        Log.d("LoginActivity", "Email login: User is a child, starting AppUsageService")
-                                                        startAppUsageService()
+                                                        // User is a child, check permissions before starting service
+                                                        val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+                                                        val mode = appOps.checkOpNoThrow(
+                                                            AppOpsManager.OPSTR_GET_USAGE_STATS,
+                                                            Process.myUid(),
+                                                            context.packageName
+                                                        )
+                                                        val hasUsagePermission = mode == AppOpsManager.MODE_ALLOWED
+                                                        val hasOverlayPermission = Settings.canDrawOverlays(context)
+
+                                                        if (!hasUsagePermission || !hasOverlayPermission) {
+                                                            // Navigate to permission screen first
+                                                            startActivity(Intent(context, ChildPermissionActivity::class.java))
+                                                        } else {
+                                                            // Start app usage service only if permissions are granted
+                                                            Log.d("LoginActivity", "Email login: User is a child, starting AppUsageService")
+                                                            startAppUsageService()
+                                                        }
+                                                        
+                                                        // Proceed to MainActivity
+                                                        startActivity(Intent(context, MainActivity::class.java))
+                                                        finish()
                                                     }
-                                                    
-                                                    // Proceed to MainActivity
-                                                    startActivity(Intent(context, MainActivity::class.java))
-                                                    finish()
-                                                }
-                                                .addOnFailureListener {
-                                                    // Just proceed to MainActivity on failure
-                                                    startActivity(Intent(context, MainActivity::class.java))
-                                                    finish()
                                                 }
                                         } else {
                                             startActivity(Intent(context, MainActivity::class.java))
@@ -307,11 +340,26 @@ class LoginActivity : ComponentActivity() {
                                         .addOnSuccessListener { childDoc ->
                                             Log.d("LoginActivity", "Child doc exists: ${childDoc.exists()}")
                                             if (childDoc.exists()) {
-                                                // User is a child, start app usage service and proceed to MainActivity
-                                                Log.d("LoginActivity", "User is a child, starting AppUsageService")
-                                                startAppUsageService()
+                                                // User is a child, check permissions before starting service
+                                                val appOps = getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+                                                val mode = appOps.checkOpNoThrow(
+                                                    AppOpsManager.OPSTR_GET_USAGE_STATS,
+                                                    Process.myUid(),
+                                                    this.packageName
+                                                )
+                                                val hasUsagePermission = mode == AppOpsManager.MODE_ALLOWED
+                                                val hasOverlayPermission = Settings.canDrawOverlays(this)
+
+                                                if (!hasUsagePermission || !hasOverlayPermission) {
+                                                    // Navigate to permission screen first
+                                                    startActivity(Intent(this, ChildPermissionActivity::class.java))
+                                                } else {
+                                                    // Start app usage service only if permissions are granted
+                                                    Log.d("LoginActivity", "Email login: User is a child, starting AppUsageService")
+                                                    startAppUsageService()
+                                                }
                                                 
-                                                Log.d("LoginActivity", "User is a child, proceeding to MainActivity")
+                                                // Proceed to MainActivity
                                                 startActivity(Intent(this, MainActivity::class.java))
                                                 finish()
                                             } else {
