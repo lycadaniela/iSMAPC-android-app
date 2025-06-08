@@ -18,16 +18,49 @@ import com.example.ismapc.ui.theme.ISMAPCTheme
 import android.view.View
 import android.view.WindowManager
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.util.Log
+import android.content.Context
+import android.app.ActivityManager
 
 class AppLockScreenActivity : ComponentActivity() {
+    private val TAG = "AppLockScreenActivity"
+    private val handler = Handler(Looper.getMainLooper())
+    private var isScreenOff = false
+    private val checkForegroundRunnable = object : Runnable {
+        override fun run() {
+            if (!isFinishing && !isScreenOff) {
+                checkAndBringToFront()
+                handler.postDelayed(this, 50) // Check every 50ms
+            }
+        }
+    }
+
+    private fun checkAndBringToFront() {
+        val am = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        val tasks = am.getRunningTasks(1)
+        if (tasks.isNotEmpty() && tasks[0].topActivity?.packageName != packageName) {
+            // If our app is not in foreground, bring it back
+            val intent = Intent(this, AppLockScreenActivity::class.java)
+            intent.addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK or
+                Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or
+                Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED or
+                Intent.FLAG_ACTIVITY_CLEAR_TOP
+            )
+            startActivity(intent)
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Log.d(TAG, "Activity onCreate")
         
-        // Set window flags to ensure the activity appears immediately
+        // Set window flags to prevent system UI access and app minimization
         window.addFlags(
-            WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
             WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD or
-            WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
+            WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
             WindowManager.LayoutParams.FLAG_ALLOW_LOCK_WHILE_SCREEN_ON or
             WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
@@ -36,7 +69,10 @@ class AppLockScreenActivity : ComponentActivity() {
             WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
             WindowManager.LayoutParams.FLAG_LAYOUT_INSET_DECOR or
             WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM or
-            WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH
+            WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH or
+            WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+            WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD or
+            WindowManager.LayoutParams.FLAG_ALLOW_LOCK_WHILE_SCREEN_ON
         )
 
         // Hide system UI elements
@@ -86,17 +122,94 @@ class AppLockScreenActivity : ComponentActivity() {
                 }
             }
         }
+
+        // Start checking if app is in foreground
+        handler.post(checkForegroundRunnable)
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) {
+            // Re-hide system UI elements when window gains focus
+            window.decorView.systemUiVisibility = (
+                View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                or View.SYSTEM_UI_FLAG_FULLSCREEN
+                or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                or View.SYSTEM_UI_FLAG_LOW_PROFILE
+            )
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        isScreenOff = false
+        // Re-apply window flags and system UI visibility
+        window.addFlags(
+            WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD or
+            WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+            WindowManager.LayoutParams.FLAG_ALLOW_LOCK_WHILE_SCREEN_ON or
+            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+            WindowManager.LayoutParams.FLAG_SECURE or
+            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+        )
+        window.decorView.systemUiVisibility = (
+            View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+            or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+            or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+            or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+            or View.SYSTEM_UI_FLAG_FULLSCREEN
+            or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+            or View.SYSTEM_UI_FLAG_LOW_PROFILE
+        )
     }
 
     override fun onBackPressed() {
-        // Prevent back navigation
-        // Instead, send user to home screen
-        val homeIntent = Intent(Intent.ACTION_MAIN).apply {
-            addCategory(Intent.CATEGORY_HOME)
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        // Prevent back button from closing the activity
+        Log.d(TAG, "Back button pressed - ignoring")
+    }
+
+    override fun onPause() {
+        super.onPause()
+        Log.d(TAG, "Activity onPause")
+        isScreenOff = true
+        // Only bring activity back to front if we're not finishing
+        if (!isFinishing) {
+            val intent = Intent(this, AppLockScreenActivity::class.java)
+            intent.addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK or
+                Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or
+                Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED or
+                Intent.FLAG_ACTIVITY_CLEAR_TOP
+            )
+            startActivity(intent)
         }
-        startActivity(homeIntent)
-        finish()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        Log.d(TAG, "Activity onStop")
+        isScreenOff = true
+        // Bring activity back to front when screen is turned on
+        if (!isFinishing) {
+            val intent = Intent(this, AppLockScreenActivity::class.java)
+            intent.addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK or
+                Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or
+                Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED or
+                Intent.FLAG_ACTIVITY_CLEAR_TOP
+            )
+            startActivity(intent)
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        Log.d(TAG, "Activity onDestroy")
+        handler.removeCallbacks(checkForegroundRunnable)
     }
 }
 

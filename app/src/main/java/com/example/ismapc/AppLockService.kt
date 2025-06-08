@@ -91,7 +91,8 @@ class AppLockService : Service() {
 
     private fun restartService() {
         try {
-            val intent = Intent(applicationContext, AppLockService::class.java)
+            val intent = Intent(this, AppLockService::class.java)
+            stopSelf()
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 startForegroundService(intent)
             } else {
@@ -177,24 +178,34 @@ class AppLockService : Service() {
 
     private fun getCurrentApp(): String? {
         try {
-            val time = System.currentTimeMillis()
-            val usageEvents = usageStatsManager?.queryEvents(time - 1000, time)
-            if (usageEvents == null) {
-                Log.e(TAG, "UsageStatsManager is null")
-                return null
-            }
-
-            val event = UsageEvents.Event()
-            var lastMoveToForeground: UsageEvents.Event? = null
-
-            while (usageEvents.hasNextEvent()) {
-                usageEvents.getNextEvent(event)
-                if (event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND) {
-                    lastMoveToForeground = event
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                // Use UsageStatsManager for Android 10 and above
+                val usageStatsManager = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+                val time = System.currentTimeMillis()
+                val stats = usageStatsManager.queryUsageStats(
+                    UsageStatsManager.INTERVAL_DAILY,
+                    time - 1000 * 1000,
+                    time
+                )
+                return stats?.maxByOrNull { it.lastTimeUsed }?.packageName
+            } else {
+                // For older versions, use a combination of UsageStatsManager and AccessibilityService
+                val usageStatsManager = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+                val time = System.currentTimeMillis()
+                val usageEvents = usageStatsManager.queryEvents(time - 1000, time)
+                
+                var lastMoveToForeground: UsageEvents.Event? = null
+                val event = UsageEvents.Event()
+                
+                while (usageEvents.hasNextEvent()) {
+                    usageEvents.getNextEvent(event)
+                    if (event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND) {
+                        lastMoveToForeground = event
+                    }
                 }
+                
+                return lastMoveToForeground?.packageName
             }
-
-            return lastMoveToForeground?.packageName
         } catch (e: Exception) {
             Log.e(TAG, "Error getting current app: ${e.message}")
             return null
@@ -208,13 +219,15 @@ class AppLockService : Service() {
                        Intent.FLAG_ACTIVITY_CLEAR_TOP or 
                        Intent.FLAG_ACTIVITY_SINGLE_TOP or
                        Intent.FLAG_ACTIVITY_NO_ANIMATION or
-                       Intent.FLAG_ACTIVITY_NO_HISTORY
-                addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION)
+                       Intent.FLAG_ACTIVITY_NO_HISTORY or
+                       Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED
             }
             startActivity(intent)
             Log.d(TAG, "Lock screen shown")
         } catch (e: Exception) {
             Log.e(TAG, "Error showing lock screen: ${e.message}")
+            // Try to restart the service if showing lock screen fails
+            restartService()
         }
     }
 
@@ -261,15 +274,15 @@ class AppLockService : Service() {
                         if (e is kotlinx.coroutines.CancellationException) {
                             throw e
                         }
+                        // Add a small delay before retrying on error
+                        delay(1000)
                     }
                     
                     delay(10) // Reduce base delay to 10ms for more frequent checks
                 }
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                Log.d(TAG, "Monitoring coroutine cancelled")
-                throw e
             } catch (e: Exception) {
                 Log.e(TAG, "Fatal error in monitoring: ${e.message}")
+                // Try to restart the service on fatal errors
                 restartService()
             }
         }
