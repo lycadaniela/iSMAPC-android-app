@@ -42,7 +42,17 @@ class LocationService : Service() {
 
         override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
         override fun onProviderEnabled(provider: String) {}
-        override fun onProviderDisabled(provider: String) {}
+        override fun onProviderDisabled(provider: String) {
+            // Show notification when location is disabled
+            val notification = NotificationCompat.Builder(this@LocationService, CHANNEL_ID)
+                .setContentTitle("Location Services Disabled")
+                .setContentText("Please enable location services in device settings")
+                .setSmallIcon(R.drawable.ic_launcher_foreground)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setAutoCancel(true)
+                .build()
+            startForeground(NOTIFICATION_ID, notification)
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -97,6 +107,7 @@ class LocationService : Service() {
                     if (childDoc.exists()) {
                         // User is a child
                         Log.d(TAG, "User verified as child")
+                        isInitialized = true
                         
                         // Check for location providers
                         val isGpsEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
@@ -114,25 +125,7 @@ class LocationService : Service() {
                                 .setAutoCancel(true)
                                 .build()
                             startForeground(NOTIFICATION_ID, notification)
-                            stopSelf()
                             return@addOnSuccessListener
-                        }
-
-                        // Check for required permissions
-                        if (!hasRequiredPermissions()) {
-                            Log.e(TAG, "Required permissions not granted")
-                            stopSelf()
-                            return@addOnSuccessListener
-                        }
-
-                        // Initialize service
-                        isInitialized = true
-                        acquireWakeLock()
-                        
-                        // Start location updates if we have permissions
-                        if (hasRequiredPermissions()) {
-                            startLocationUpdates()
-                            isRunning = true
                         }
                     } else {
                         Log.e(TAG, "User is not a child")
@@ -140,11 +133,11 @@ class LocationService : Service() {
                     }
                 }
                 .addOnFailureListener { e ->
-                    Log.e(TAG, "Error checking user type", e)
+                    Log.e(TAG, "Error verifying user: ${e.message}")
                     stopSelf()
                 }
         } catch (e: Exception) {
-            Log.e(TAG, "Error in initializeService", e)
+            Log.e(TAG, "Error in initializeService: ${e.message}")
             stopSelf()
         }
     }
@@ -152,6 +145,7 @@ class LocationService : Service() {
     override fun onCreate() {
         super.onCreate()
         Log.d(TAG, "Service onCreate")
+        acquireWakeLock()
     }
 
     private fun hasRequiredPermissions(): Boolean {
@@ -296,26 +290,6 @@ class LocationService : Service() {
                     Log.d(TAG, "Location saved successfully")
                 }
                 .addOnFailureListener { e ->
-                    Log.e(TAG, "Error saving location", e)
-                }
-
-            firestore.collection("locations")
-                .document(currentUser.uid)
-                .collection("history")
-                .add(locationData)
-                .addOnSuccessListener { documentReference ->
-                    Log.d(TAG, "Location data saved successfully to document: ${documentReference.id}")
-                    // Verify the data was saved
-                    documentReference.get()
-                        .addOnSuccessListener { doc ->
-                            if (doc.exists()) {
-                                Log.d(TAG, "Verified saved data: ${doc.data}")
-                            } else {
-                                Log.e(TAG, "Document does not exist after saving!")
-                            }
-                        }
-                }
-                .addOnFailureListener { e ->
                     Log.e(TAG, "Error saving location data", e)
                     Log.e(TAG, "Error details: ${e.message}")
                 }
@@ -350,7 +324,18 @@ class LocationService : Service() {
         }
     }
 
-    override fun onBind(intent: Intent?): IBinder? = null
+    private fun releaseWakeLock() {
+        try {
+            wakeLock?.let {
+                if (it.isHeld) {
+                    it.release()
+                    Log.d(TAG, "WakeLock released")
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error releasing WakeLock: ${e.message}")
+        }
+    }
 
     override fun onDestroy() {
         super.onDestroy()
@@ -358,14 +343,21 @@ class LocationService : Service() {
             isRunning = false
             isInitialized = false
             locationManager.removeUpdates(locationListener)
-            wakeLock?.let {
-                if (it.isHeld) {
-                    it.release()
-                }
-            }
+            releaseWakeLock()
             Log.d(TAG, "Service destroyed")
         } catch (e: Exception) {
             Log.e(TAG, "Error in onDestroy", e)
         }
     }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        Log.d(TAG, "Task removed, restarting service")
+        // Restart the service if it gets killed
+        val restartServiceIntent = Intent(applicationContext, LocationService::class.java)
+        restartServiceIntent.setPackage(packageName)
+        startService(restartServiceIntent)
+    }
+
+    override fun onBind(intent: Intent?): IBinder? = null
 } 
