@@ -99,12 +99,29 @@ service cloud.firestore {
         isParentOfChild(childId)
       );
       allow write: if isAuthenticated() && (
-        request.auth.uid == childId
+        request.auth.uid == childId ||
+        isParentOfChild(childId)
       );
       allow delete: if isAuthenticated() && (
         request.auth.uid == childId ||
         isParentOfChild(childId)
       );
+      
+      // History subcollection
+      match /history/{documentId} {
+        allow read: if isAuthenticated() && (
+          request.auth.uid == childId ||
+          isParentOfChild(childId)
+        );
+        allow write: if isAuthenticated() && (
+          request.auth.uid == childId ||
+          isParentOfChild(childId)
+        );
+        allow delete: if isAuthenticated() && (
+          request.auth.uid == childId ||
+          isParentOfChild(childId)
+        );
+      }
     }
 
     // Installed apps data
