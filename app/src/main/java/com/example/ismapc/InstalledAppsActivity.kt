@@ -365,7 +365,7 @@ private fun AppCard(
             .padding(vertical = 4.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (isLocked) 
-                MaterialTheme.colorScheme.errorContainer 
+                Color(0xFFFFE0E0) // Light red background for locked apps
             else 
                 MaterialTheme.colorScheme.surface
         )
