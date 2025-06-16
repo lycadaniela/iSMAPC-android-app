@@ -180,6 +180,15 @@ service cloud.firestore {
       );
     }
 
+    // Device controls collection
+    match /deviceControls/{childId} {
+      allow read: if isAuthenticated() && (
+        request.auth.uid == childId ||
+        isParentOfChild(childId)
+      );
+      allow write: if isAuthenticated() && isParentOfChild(childId);
+    }
+
     // Deletion requests collection
     match /deletionRequests/{userId} {
       allow read: if isAuthenticated() && (
@@ -208,15 +217,6 @@ service cloud.firestore {
     // Allow listing collections
     match /users/{document=**} {
       allow list: if isAuthenticated();
-    }
-
-    // Device controls collection
-    match /deviceControls/{childId} {
-      allow read: if isAuthenticated() && (
-        request.auth.uid == childId ||
-        isParentOfChild(childId)
-      );
-      allow write: if isAuthenticated() && isParentOfChild(childId);
     }
 
     // Default deny

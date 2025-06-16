@@ -70,11 +70,36 @@ class MainActivity : ComponentActivity() {
         val context = LocalContext.current
         var hasUsagePermission by remember { mutableStateOf(false) }
         var serviceStarted by remember { mutableStateOf(false) }
-        var locationServiceStarted by remember { mutableStateOf(false) }
         var isLogoutEnabled by remember { mutableStateOf(true) }
         val firestore = FirebaseFirestore.getInstance()
         val auth = FirebaseAuth.getInstance()
         val childId = auth.currentUser?.uid ?: ""
+
+        // Check permissions and start services
+        LaunchedEffect(Unit) {
+            val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+            val mode = appOps.checkOpNoThrow(
+                AppOpsManager.OPSTR_GET_USAGE_STATS,
+                Process.myUid(),
+                context.packageName
+            )
+            hasUsagePermission = mode == AppOpsManager.MODE_ALLOWED
+
+            if (!hasUsagePermission || !Settings.canDrawOverlays(context)) {
+                // Navigate to permission screen if permissions are not granted
+                (context as? Activity)?.let { activity ->
+                    activity.startActivity(Intent(context, ChildPermissionActivity::class.java))
+                }
+            } else {
+                // Start LocationService
+                val locationIntent = Intent(context, LocationService::class.java)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.startForegroundService(locationIntent)
+                } else {
+                    context.startService(locationIntent)
+                }
+            }
+        }
 
         // Listen for device controls changes
         LaunchedEffect(childId) {
@@ -154,15 +179,6 @@ class MainActivity : ComponentActivity() {
                     text = "Connected Successfully",
                     style = MaterialTheme.typography.headlineMedium,
                     color = MaterialTheme.colorScheme.primary
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Location service status
-                Text(
-                    text = if (locationServiceStarted) "Location tracking: Active" else "Location tracking: Inactive",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = if (locationServiceStarted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
                 )
 
                 Spacer(modifier = Modifier.height(32.dp))
@@ -1663,11 +1679,36 @@ fun ChildMainScreen(onLogout: () -> Unit) {
     val context = LocalContext.current
     var hasUsagePermission by remember { mutableStateOf(false) }
     var serviceStarted by remember { mutableStateOf(false) }
-    var locationServiceStarted by remember { mutableStateOf(false) }
     var isLogoutEnabled by remember { mutableStateOf(true) }
     val firestore = FirebaseFirestore.getInstance()
     val auth = FirebaseAuth.getInstance()
     val childId = auth.currentUser?.uid ?: ""
+
+    // Check permissions and start services
+    LaunchedEffect(Unit) {
+        val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+        val mode = appOps.checkOpNoThrow(
+            AppOpsManager.OPSTR_GET_USAGE_STATS,
+            Process.myUid(),
+            context.packageName
+        )
+        hasUsagePermission = mode == AppOpsManager.MODE_ALLOWED
+
+        if (!hasUsagePermission || !Settings.canDrawOverlays(context)) {
+            // Navigate to permission screen if permissions are not granted
+            (context as? Activity)?.let { activity ->
+                activity.startActivity(Intent(context, ChildPermissionActivity::class.java))
+            }
+        } else {
+            // Start LocationService
+            val locationIntent = Intent(context, LocationService::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(locationIntent)
+            } else {
+                context.startService(locationIntent)
+            }
+        }
+    }
 
     // Listen for device controls changes
     LaunchedEffect(childId) {
@@ -1747,15 +1788,6 @@ fun ChildMainScreen(onLogout: () -> Unit) {
                 text = "Connected Successfully",
                 style = MaterialTheme.typography.headlineMedium,
                 color = MaterialTheme.colorScheme.primary
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Location service status
-            Text(
-                text = if (locationServiceStarted) "Location tracking: Active" else "Location tracking: Inactive",
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (locationServiceStarted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
             )
 
             Spacer(modifier = Modifier.height(32.dp))

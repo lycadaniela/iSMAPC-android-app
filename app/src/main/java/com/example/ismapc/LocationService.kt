@@ -34,6 +34,7 @@ class LocationService : Service() {
     private var isRunning = false
     private var wakeLock: PowerManager.WakeLock? = null
     private var isInitialized = false
+    private var isInitializing = false
 
     private val locationListener = object : LocationListener {
         override fun onLocationChanged(location: Location) {
@@ -57,7 +58,8 @@ class LocationService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         try {
-            if (!isInitialized) {
+            if (!isInitialized && !isInitializing) {
+                isInitializing = true
                 initializeService()
             }
             
@@ -108,6 +110,7 @@ class LocationService : Service() {
                         // User is a child
                         Log.d(TAG, "User verified as child")
                         isInitialized = true
+                        isInitializing = false
                         
                         // Check for location providers
                         val isGpsEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
@@ -127,17 +130,26 @@ class LocationService : Service() {
                             startForeground(NOTIFICATION_ID, notification)
                             return@addOnSuccessListener
                         }
+
+                        // Start location updates if we have permissions
+                        if (hasRequiredPermissions()) {
+                            startLocationUpdates()
+                            isRunning = true
+                        }
                     } else {
                         Log.e(TAG, "User is not a child")
+                        isInitializing = false
                         stopSelf()
                     }
                 }
                 .addOnFailureListener { e ->
                     Log.e(TAG, "Error verifying user: ${e.message}")
+                    isInitializing = false
                     stopSelf()
                 }
         } catch (e: Exception) {
             Log.e(TAG, "Error in initializeService: ${e.message}")
+            isInitializing = false
             stopSelf()
         }
     }
@@ -339,14 +351,14 @@ class LocationService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        try {
-            isRunning = false
-            isInitialized = false
-            locationManager.removeUpdates(locationListener)
-            releaseWakeLock()
-            Log.d(TAG, "Service destroyed")
-        } catch (e: Exception) {
-            Log.e(TAG, "Error in onDestroy", e)
+        Log.d(TAG, "Service destroyed")
+        releaseWakeLock()
+        if (isRunning) {
+            try {
+                locationManager.removeUpdates(locationListener)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error removing location updates", e)
+            }
         }
     }
 
