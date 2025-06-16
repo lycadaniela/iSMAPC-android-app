@@ -159,6 +159,8 @@ fun ChildDetailsScreen(
     var showLocationMap by remember { mutableStateOf(false) }
     var installedApps by remember { mutableStateOf<List<Map<String, Any>>>(emptyList()) }
     var currentLocation by remember { mutableStateOf<GeoPoint?>(null) }
+    var isLogoutEnabled by remember { mutableStateOf(true) }
+    var isUpdating by remember { mutableStateOf(false) }
     
     // Calculate screen time percentage and format time
     val screenTimePercentage = remember(screenTime) {
@@ -291,6 +293,16 @@ fun ChildDetailsScreen(
             // Start the initial fetch
             fetchLocation()
         }
+    }
+
+    // Load initial logout control state
+    LaunchedEffect(childId) {
+        firestore.collection("deviceControls")
+            .document(childId)
+            .get()
+            .addOnSuccessListener { document ->
+                isLogoutEnabled = document.getBoolean("logoutEnabled") ?: true
+            }
     }
 
     Scaffold(
@@ -574,6 +586,38 @@ fun ChildDetailsScreen(
                         intent.putExtra("childName", childName)
                         context.startActivity(intent)
                     }
+                )
+            }
+
+            // Add this inside the Column where other controls are
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Allow Logout",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+                Switch(
+                    checked = isLogoutEnabled,
+                    onCheckedChange = { newValue ->
+                        isUpdating = true
+                        firestore.collection("deviceControls")
+                            .document(childId)
+                            .set(mapOf("logoutEnabled" to newValue))
+                            .addOnSuccessListener {
+                                isLogoutEnabled = newValue
+                                isUpdating = false
+                            }
+                            .addOnFailureListener {
+                                isUpdating = false
+                                Toast.makeText(context, "Failed to update logout control", Toast.LENGTH_SHORT).show()
+                            }
+                    },
+                    enabled = !isUpdating
                 )
             }
         }

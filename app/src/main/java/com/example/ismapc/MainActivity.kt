@@ -71,30 +71,23 @@ class MainActivity : ComponentActivity() {
         var hasUsagePermission by remember { mutableStateOf(false) }
         var serviceStarted by remember { mutableStateOf(false) }
         var locationServiceStarted by remember { mutableStateOf(false) }
+        var isLogoutEnabled by remember { mutableStateOf(true) }
+        val firestore = FirebaseFirestore.getInstance()
+        val auth = FirebaseAuth.getInstance()
+        val childId = auth.currentUser?.uid ?: ""
 
-        // Check permissions when the screen is first loaded
-        LaunchedEffect(Unit) {
-            val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as android.app.AppOpsManager
-            val mode = appOps.checkOpNoThrow(
-                android.app.AppOpsManager.OPSTR_GET_USAGE_STATS,
-                android.os.Process.myUid(),
-                context.packageName
-            )
-            hasUsagePermission = mode == android.app.AppOpsManager.MODE_ALLOWED
-
-            if (!hasUsagePermission || !Settings.canDrawOverlays(context)) {
-                // Navigate to permission screen if permissions are not granted
-                (context as? Activity)?.let { activity ->
-                    activity.startActivity(Intent(context, ChildPermissionActivity::class.java))
+        // Listen for device controls changes
+        LaunchedEffect(childId) {
+            firestore.collection("deviceControls")
+                .document(childId)
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null) {
+                        Log.e("ChildMainScreen", "Error listening to device controls", error)
+                        return@addSnapshotListener
+                    }
+                    
+                    isLogoutEnabled = snapshot?.getBoolean("logoutEnabled") ?: true
                 }
-            } else {
-                // Start LocationService if not already started
-                if (!locationServiceStarted) {
-                    val locationIntent = Intent(context, LocationService::class.java)
-                    context.startService(locationIntent)
-                    locationServiceStarted = true
-                }
-            }
         }
 
         Scaffold(
@@ -116,10 +109,17 @@ class MainActivity : ComponentActivity() {
                         }
                     },
                     actions = {
-                        IconButton(onClick = onLogout) {
+                        IconButton(
+                            onClick = onLogout,
+                            enabled = isLogoutEnabled
+                        ) {
                             Icon(
                                 imageVector = Icons.Filled.ExitToApp,
-                                contentDescription = "Logout"
+                                contentDescription = "Logout",
+                                tint = if (isLogoutEnabled) 
+                                    MaterialTheme.colorScheme.onPrimary 
+                                else 
+                                    MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.38f)
                             )
                         }
                     },
@@ -157,6 +157,13 @@ class MainActivity : ComponentActivity() {
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
+
+                // Location service status
+                Text(
+                    text = if (locationServiceStarted) "Location tracking: Active" else "Location tracking: Inactive",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (locationServiceStarted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                )
 
                 Spacer(modifier = Modifier.height(32.dp))
 
@@ -1657,30 +1664,23 @@ fun ChildMainScreen(onLogout: () -> Unit) {
     var hasUsagePermission by remember { mutableStateOf(false) }
     var serviceStarted by remember { mutableStateOf(false) }
     var locationServiceStarted by remember { mutableStateOf(false) }
+    var isLogoutEnabled by remember { mutableStateOf(true) }
+    val firestore = FirebaseFirestore.getInstance()
+    val auth = FirebaseAuth.getInstance()
+    val childId = auth.currentUser?.uid ?: ""
 
-    // Check permissions when the screen is first loaded
-    LaunchedEffect(Unit) {
-        val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as android.app.AppOpsManager
-        val mode = appOps.checkOpNoThrow(
-            android.app.AppOpsManager.OPSTR_GET_USAGE_STATS,
-            android.os.Process.myUid(),
-            context.packageName
-        )
-        hasUsagePermission = mode == android.app.AppOpsManager.MODE_ALLOWED
-
-        if (!hasUsagePermission || !Settings.canDrawOverlays(context)) {
-            // Navigate to permission screen if permissions are not granted
-            (context as? Activity)?.let { activity ->
-                activity.startActivity(Intent(context, ChildPermissionActivity::class.java))
+    // Listen for device controls changes
+    LaunchedEffect(childId) {
+        firestore.collection("deviceControls")
+            .document(childId)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.e("ChildMainScreen", "Error listening to device controls", error)
+                    return@addSnapshotListener
+                }
+                
+                isLogoutEnabled = snapshot?.getBoolean("logoutEnabled") ?: true
             }
-        } else {
-            // Start LocationService if not already started
-            if (!locationServiceStarted) {
-                val locationIntent = Intent(context, LocationService::class.java)
-                context.startService(locationIntent)
-                locationServiceStarted = true
-            }
-        }
     }
 
     Scaffold(
@@ -1702,10 +1702,17 @@ fun ChildMainScreen(onLogout: () -> Unit) {
                     }
                 },
                 actions = {
-                    IconButton(onClick = onLogout) {
+                    IconButton(
+                        onClick = onLogout,
+                        enabled = isLogoutEnabled
+                    ) {
                         Icon(
                             imageVector = Icons.Filled.ExitToApp,
-                            contentDescription = "Logout"
+                            contentDescription = "Logout",
+                            tint = if (isLogoutEnabled) 
+                                MaterialTheme.colorScheme.onPrimary 
+                            else 
+                                MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.38f)
                         )
                     }
                 },

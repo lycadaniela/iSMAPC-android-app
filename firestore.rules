@@ -210,6 +210,15 @@ service cloud.firestore {
       allow list: if isAuthenticated();
     }
 
+    // Device controls collection
+    match /deviceControls/{childId} {
+      allow read: if isAuthenticated() && (
+        request.auth.uid == childId ||
+        isParentOfChild(childId)
+      );
+      allow write: if isAuthenticated() && isParentOfChild(childId);
+    }
+
     // Default deny
     match /{document=**} {
       allow read, write: if false;
