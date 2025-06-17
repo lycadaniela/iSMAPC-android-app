@@ -29,7 +29,7 @@ class LocationService : Service() {
     private val TAG = "LocationService"
     private val NOTIFICATION_ID = 2
     private val CHANNEL_ID = "LocationServiceChannel"
-    private val UPDATE_INTERVAL = 5 * 60 * 1000L // 5 minutes
+    private val UPDATE_INTERVAL = 60 * 1000L // 1 minute
     private val MIN_DISTANCE = 10f // 10 meters
     private var isRunning = false
     private var wakeLock: PowerManager.WakeLock? = null
