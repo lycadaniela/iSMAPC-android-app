@@ -120,7 +120,7 @@ private fun FAQScreenContent(
                     // Child Device Setup
                     FAQItemContent(
                         question = "How do I set up my child's device?",
-                        answer = "1. Install ISMAPC on your child's device\n2. Open the app and log in with your child's account\n3. Grant the following permissions when prompted:\n   • Usage Access (for screen time monitoring)\n   • Location (for location tracking)\n   • Overlay Permission (for app locking)\n   • Notification Access (for alerts)\n4. Once all permissions are granted, the app will automatically start monitoring the device"
+                        answer = "1. Install ISMAPC on your child's device\n2. Open the app and log in with your child's account\n3. Grant the following permissions when prompted:\n   • Usage Access (for screen time monitoring)\n   • Location (for location tracking)\n   • Overlay Permission (for app locking)\n   • Notification Access (for alerts)\n   • Battery Optimization (for background monitoring)\n4. After granting all permissions, close the app completely\n5. Reopen the app to ensure all permissions are properly initialized\n6. The app will then automatically start monitoring the device"
                     )
 
                     Divider(modifier = Modifier.padding(vertical = 16.dp))
@@ -128,7 +128,15 @@ private fun FAQScreenContent(
                     // Account Setup
                     FAQItemContent(
                         question = "How do I add a child to my account?",
-                        answer = "1. Go to the 'Add Child' section in the app\n2. Provide your child's name and email\n3. Create a password for your child's account\n4. Optionally add a profile picture\n5. Complete the setup process\nOnce created, your child can log in to their account using these credentials."
+                        answer = "1. Go to the 'Add Child' section in the app\n2. Provide your child's name and email\n3. Create a password for your child's account\n4. Optionally add a profile picture\n5. Complete the setup process\n6. Sign out of your parent account\n7. Sign back in to your parent account to access all features\n8. For the child's device, you (the parent) will need to sign in using the child's credentials you just created"
+                    )
+
+                    Divider(modifier = Modifier.padding(vertical = 16.dp))
+
+                    // Child Details Access
+                    FAQItemContent(
+                        question = "How do I access my child's details?",
+                        answer = "1. Go to the main screen where your children are listed\n2. Tap on your child's card\n3. This will open the child details page where you can see:\n   • Screen time usage\n   • App usage statistics\n   • Location information\n   • Device status\n   • Allow logout toggle (controls whether the child can log out of the app)\n   • And more detailed information"
                     )
 
                     Divider(modifier = Modifier.padding(vertical = 16.dp))
@@ -136,15 +144,7 @@ private fun FAQScreenContent(
                     // Screen Time Monitoring
                     FAQItemContent(
                         question = "How does screen time monitoring work?",
-                        answer = "1. ISMAPC automatically tracks your child's device usage\n2. View daily and weekly reports in the dashboard\n3. Set time limits for:\n   • Overall device usage\n   • Specific apps\n   • Time of day restrictions\n4. Receive notifications when limits are reached\n5. Access detailed breakdowns of app usage and duration"
-                    )
-
-                    Divider(modifier = Modifier.padding(vertical = 16.dp))
-
-                    // App Usage Tracking
-                    FAQItemContent(
-                        question = "Can I see which apps my child is using?",
-                        answer = "1. Access the app usage section in your child's profile\n2. View a list of all installed apps\n3. See detailed statistics including:\n   • Daily usage time\n   • Frequency of use\n   • Last used timestamp\n4. Identify potentially problematic apps\n5. Guide your child towards more productive app choices"
+                        answer = "1. ISMAPC automatically tracks your child's device usage\n2. View daily device usage reports in the dashboard\n3. Access separate daily and weekly reports for:\n   • Overall device usage\n   • Individual app usage\n4. See detailed breakdowns of app usage and duration"
                     )
 
                     Divider(modifier = Modifier.padding(vertical = 16.dp))
@@ -152,7 +152,7 @@ private fun FAQScreenContent(
                     // Location Tracking
                     FAQItemContent(
                         question = "How accurate is the location tracking?",
-                        answer = "1. ISMAPC uses multiple location services:\n   • GPS for high accuracy\n   • Network location as backup\n2. Location accuracy depends on:\n   • GPS signal strength\n   • Network connectivity\n   • Device settings\n3. Real-time updates are provided\n4. View location history in the dashboard\n5. Set up geofencing alerts for specific areas"
+                        answer = "1. ISMAPC uses multiple location services:\n   • GPS for high accuracy\n   • Network location as backup\n2. Location accuracy depends on:\n   • GPS signal strength\n   • Network connectivity\n   • Device settings\n3. Real-time updates are provided in the dashboard"
                     )
 
                     Divider(modifier = Modifier.padding(vertical = 16.dp))
@@ -169,14 +169,6 @@ private fun FAQScreenContent(
                     FAQItemContent(
                         question = "How do I lock or unlock specific apps?",
                         answer = "1. Go to your child's details page\n2. Navigate to the 'Installed Apps' section\n3. Find the app you want to lock/unlock\n4. Tap the lock icon next to the app\n5. The app will be locked/unlocked immediately\nNote: When an app is locked:\n   • Your child won't be able to open it\n   • They'll see a lock screen when trying to access it\n   • You can unlock it anytime from your parent dashboard"
-                    )
-
-                    Divider(modifier = Modifier.padding(vertical = 16.dp))
-
-                    // Child Details Access
-                    FAQItemContent(
-                        question = "How do I access my child's details?",
-                        answer = "1. Go to the main screen where your children are listed\n2. Tap on your child's card\n3. This will open the child details page where you can see:\n   • Screen time usage\n   • App usage statistics\n   • Location history\n   • Device status\n   • And more detailed information"
                     )
 
                     Divider(modifier = Modifier.padding(vertical = 16.dp))

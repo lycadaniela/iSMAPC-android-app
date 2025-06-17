@@ -206,8 +206,8 @@ fun AppUsageScreen(childId: String, childName: String, isChildDevice: Boolean) {
                         // Calculate total usage
                         totalAppUsage = newAppUsageList.sumOf { it.weeklyMinutes }
                         
-                        // Update the app usage list, sorted by daily usage
-                        appUsageList = newAppUsageList.sortedByDescending { it.dailyMinutes }
+                        // Update the app usage list, sorted alphabetically by name
+                        appUsageList = newAppUsageList.sortedBy { it.name }
                         Log.e(TAG, "Updated app usage list with ${newAppUsageList.size} apps")
                         
                         // Clear loading and error states
