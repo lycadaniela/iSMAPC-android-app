@@ -318,6 +318,11 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun checkAndRequestPermissions() {
+        // Don't check if we're already checking permissions
+        if (ChildPermissionActivity.isCheckingPermissions) {
+            return
+        }
+
         val appOps = getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
         val mode = appOps.checkOpNoThrow(
             AppOpsManager.OPSTR_GET_USAGE_STATS,

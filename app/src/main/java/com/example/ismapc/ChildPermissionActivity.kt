@@ -37,6 +37,10 @@ import androidx.compose.ui.graphics.Color
 import android.os.Build
 
 class ChildPermissionActivity : ComponentActivity() {
+    companion object {
+        var isCheckingPermissions = false
+    }
+
     val requiredPermissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
         arrayOf(
             Manifest.permission.ACCESS_FINE_LOCATION,
@@ -75,6 +79,15 @@ class ChildPermissionActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // If we're already checking permissions, finish this instance
+        if (isCheckingPermissions) {
+            finish()
+            return
+        }
+        
+        isCheckingPermissions = true
+        
         setContent {
             ISMAPCTheme {
                 Surface(
@@ -85,6 +98,11 @@ class ChildPermissionActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        isCheckingPermissions = false
     }
 
     fun requestPermissions() {

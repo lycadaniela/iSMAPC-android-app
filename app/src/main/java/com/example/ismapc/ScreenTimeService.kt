@@ -18,6 +18,8 @@ import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
+import android.provider.Settings
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
@@ -50,11 +52,12 @@ class ScreenTimeService : Service() {
     private var isNetworkAvailable = true
     private var updateJob: Job? = null
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private val CHECK_INTERVAL = 5 * 60 * 1000L // Check every 5 minutes
+    private val CHECK_INTERVAL = 60 * 1000L // Check every 1 minute
     private val TAG = "ScreenTimeService"
     private val NOTIFICATION_ID = 1
     private val CHANNEL_ID = "ScreenTimeServiceChannel"
     private var isRunning = false
+    private var isReceiverRegistered = false
 
     private val screenOnReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -66,6 +69,13 @@ class ScreenTimeService : Service() {
                 isScreenOn = false
                 // Save screen time when screen turns off
                 saveScreenTimeToFirestore()
+            } else if (intent?.action == Intent.ACTION_BOOT_COMPLETED ||
+                intent?.action == Intent.ACTION_MY_PACKAGE_REPLACED) {
+                Log.d(TAG, "Device rebooted or package replaced, restarting service")
+                // Restart the service if it gets killed
+                val restartServiceIntent = Intent(applicationContext, ScreenTimeService::class.java)
+                restartServiceIntent.setPackage(packageName)
+                startService(restartServiceIntent)
             }
         }
     }
@@ -75,6 +85,19 @@ class ScreenTimeService : Service() {
         Log.d(TAG, "Service onCreate")
         
         try {
+            // Request to ignore battery optimizations
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+                if (!powerManager.isIgnoringBatteryOptimizations(packageName)) {
+                    val intent = Intent().apply {
+                        action = Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
+                        data = android.net.Uri.parse("package:$packageName")
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    startActivity(intent)
+                }
+            }
+
             usageStatsManager = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
             connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
             firestore = FirebaseFirestore.getInstance()
@@ -95,43 +118,26 @@ class ScreenTimeService : Service() {
                 return
             }
 
-            // Verify user is a child
-            firestore.collection("users")
-                .document(currentUser.uid)
-                .get()
-                .addOnSuccessListener { userDoc ->
-                    if (userDoc.exists()) {
-                        val userType = userDoc.getString("type")
-                        if (userType == "child") {
-                            // User is a child, proceed with service
-                            startTime = System.currentTimeMillis()
-                            lastUpdateTime = startTime
-                            
-                            // Register screen state receiver
-                            val filter = IntentFilter().apply {
-                                addAction(Intent.ACTION_SCREEN_ON)
-                                addAction(Intent.ACTION_SCREEN_OFF)
-                            }
-                            registerReceiver(screenOnReceiver, filter)
-                            
-                            createNotificationChannel()
-                            startForeground(NOTIFICATION_ID, createNotification())
-                            
-                            setupNetworkCallback()
-                            startPeriodicUpdates()
-                        } else {
-                            Log.e(TAG, "User is not a child")
-                            stopSelf()
-                        }
-                    } else {
-                        Log.e(TAG, "User document not found")
-                        stopSelf()
-                    }
+            // Register screen state receiver
+            try {
+                val filter = IntentFilter().apply {
+                    addAction(Intent.ACTION_SCREEN_ON)
+                    addAction(Intent.ACTION_SCREEN_OFF)
+                    addAction(Intent.ACTION_BOOT_COMPLETED)
+                    addAction(Intent.ACTION_MY_PACKAGE_REPLACED)
                 }
-                .addOnFailureListener { e ->
-                    Log.e(TAG, "Error checking user type", e)
-                    stopSelf()
-                }
+                registerReceiver(screenOnReceiver, filter)
+                isReceiverRegistered = true
+                Log.d(TAG, "Screen state receiver registered successfully")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error registering screen state receiver: ${e.message}")
+            }
+
+            createNotificationChannel()
+            startForeground(NOTIFICATION_ID, createNotification())
+            
+            setupNetworkCallback()
+            startPeriodicUpdates()
         } catch (e: Exception) {
             Log.e(TAG, "Error in onCreate", e)
             stopSelf()
@@ -295,111 +301,138 @@ class ScreenTimeService : Service() {
             
             Log.d(TAG, "Screen time data to save: ${screenTime / (1000 * 60)} minutes for ${Date(todayStart)}")
             Log.d(TAG, "Document ID: $documentId")
-            Log.d(TAG, "Screen time data: $screenTimeData")
 
-            // Save directly under screentime/childID
-            firestore.collection("screenTime")
-                .document(documentId)
-                .set(screenTimeData)
-                .addOnSuccessListener {
-                    Log.d(TAG, "✅ Screen time saved successfully: ${screenTime / (1000 * 60)} minutes")
-                    // Verify the data was saved
-                    firestore.collection("screenTime")
-                        .document(documentId)
-                        .get()
-                        .addOnSuccessListener { doc ->
-                            if (doc.exists()) {
-                                val savedScreenTime = doc.getLong("screenTime") ?: 0L
-                                val savedDayTimestamp = doc.getLong("dayTimestamp") ?: 0L
-                                val savedScreenTimeMinutes = doc.getLong("screenTimeMinutes") ?: 0L
-                                val savedTimestamp = doc.getTimestamp("timestamp")?.toDate()
-                                
-                                // Verify all critical fields match
-                                if (savedScreenTime == screenTime && savedDayTimestamp == todayStart && 
-                                    savedScreenTimeMinutes == screenTime / (1000 * 60)) {
-                                    Log.d(TAG, "✅ Verified saved data matches: ${savedScreenTimeMinutes} minutes for ${Date(savedDayTimestamp)}")
-                                    Log.d(TAG, "✅ Timestamp verified: ${savedTimestamp}")
-                                } else {
-                                    Log.e(TAG, "❌ Data verification failed: Saved data doesn't match original values")
-                                }
-                            } else {
-                                Log.e(TAG, "❌ Document does not exist after saving!")
-                            }
-                        }
-                }
-                .addOnFailureListener { e ->
-                    Log.e(TAG, "❌ Error saving screen time to document: $documentId", e)
-                    Log.e(TAG, "Error details: ${e.message}")
-                    Log.e(TAG, "Error cause: ${e.cause}")
-                    Log.e(TAG, "Error stack trace: ${e.stackTraceToString()}")
-                }
+            // Save directly under screentime/childID with retry mechanism
+            saveWithRetry(documentId, screenTimeData)
         } catch (e: Exception) {
             Log.e(TAG, "❌ Error in saveScreenTimeToFirestore", e)
             Log.e(TAG, "Error details: ${e.message}")
         }
     }
 
-    private fun startPeriodicUpdates() {
-        updateJob?.cancel()
-        updateJob = scope.launch {
-            while (isActive) {
-                try {
-                    if (isNetworkAvailable) {
-                        saveScreenTimeToFirestore()
-                        Log.d(TAG, "Screen time updated successfully")
-                    } else {
-                        Log.d(TAG, "Network not available, skipping update")
+    private fun saveWithRetry(documentId: String, screenTimeData: Map<String, Any>, retryCount: Int = 0) {
+        if (retryCount >= 3) {
+            Log.e(TAG, "Max retry attempts reached for saving screen time")
+            return
+        }
+
+        try {
+            firestore.collection("screenTime")
+                .document(documentId)
+                .set(screenTimeData)
+                .addOnSuccessListener {
+                    Log.d(TAG, "✅ Screen time saved successfully on attempt ${retryCount + 1}")
+                }
+                .addOnFailureListener { e ->
+                    Log.e(TAG, "❌ Error saving screen time on attempt ${retryCount + 1}: ${e.message}")
+                    // Wait for 2 seconds before next retry
+                    scope.launch {
+                        delay(2000)
+                        saveWithRetry(documentId, screenTimeData, retryCount + 1)
                     }
-                    delay(CHECK_INTERVAL)
+                }
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error in saveWithRetry", e)
+        }
+    }
+
+    private fun startPeriodicUpdates() {
+        try {
+            updateJob?.cancel()
+            updateJob = scope.launch {
+                try {
+                    while (isActive) {
+                        try {
+                            if (isNetworkAvailable) {
+                                saveScreenTimeToFirestore()
+                                Log.d(TAG, "Screen time updated successfully")
+                            } else {
+                                Log.d(TAG, "Network not available, skipping update")
+                            }
+                            delay(CHECK_INTERVAL)
+                        } catch (e: Exception) {
+                            if (e is kotlinx.coroutines.CancellationException) {
+                                Log.d(TAG, "Update job was cancelled normally")
+                                break
+                            }
+                            Log.e(TAG, "Error in update job", e)
+                            // Wait a bit before retrying on error
+                            delay(5000)
+                        }
+                    }
                 } catch (e: Exception) {
-                    Log.e(TAG, "Error in update job", e)
-                    delay(5000) // Wait 5 seconds before retrying
+                    if (e is kotlinx.coroutines.CancellationException) {
+                        Log.d(TAG, "Update job was cancelled normally")
+                    } else {
+                        Log.e(TAG, "Fatal error in update job", e)
+                    }
                 }
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error starting periodic updates", e)
         }
     }
 
     private fun hasRequiredPermissions(): Boolean {
-        // Check usage stats permission
-        val appOps = getSystemService(Context.APP_OPS_SERVICE) as android.app.AppOpsManager
-        val mode = appOps.checkOpNoThrow(
-            android.app.AppOpsManager.OPSTR_GET_USAGE_STATS,
-            android.os.Process.myUid(),
-            packageName
-        )
-        if (mode != android.app.AppOpsManager.MODE_ALLOWED) {
-            Log.e(TAG, "Usage stats permission not granted")
-            return false
-        }
+        try {
+            // Check usage stats permission
+            val appOps = getSystemService(Context.APP_OPS_SERVICE) as android.app.AppOpsManager
+            val mode = appOps.checkOpNoThrow(
+                android.app.AppOpsManager.OPSTR_GET_USAGE_STATS,
+                android.os.Process.myUid(),
+                packageName
+            )
+            if (mode != android.app.AppOpsManager.MODE_ALLOWED) {
+                Log.e(TAG, "Usage stats permission not granted")
+                return false
+            }
 
-        // Check foreground service permissions based on Android version
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            // For Android 14 and above, check specific foreground service permissions
+            // Check foreground service permissions based on Android version
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                // For Android 14 and above
+                if (ActivityCompat.checkSelfPermission(
+                        this,
+                        Manifest.permission.FOREGROUND_SERVICE_SPECIAL_USE
+                    ) != PackageManager.PERMISSION_GRANTED ||
+                    ActivityCompat.checkSelfPermission(
+                        this,
+                        Manifest.permission.FOREGROUND_SERVICE_DATA_SYNC
+                    ) != PackageManager.PERMISSION_GRANTED
+                ) {
+                    Log.e(TAG, "Foreground service permissions not granted")
+                    return false
+                }
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                // For Android 10 and above
+                if (ActivityCompat.checkSelfPermission(
+                        this,
+                        Manifest.permission.FOREGROUND_SERVICE
+                    ) != PackageManager.PERMISSION_GRANTED
+                ) {
+                    Log.e(TAG, "Foreground service permission not granted")
+                    return false
+                }
+            }
+
+            // For older devices, check basic permissions
             if (ActivityCompat.checkSelfPermission(
                     this,
-                    Manifest.permission.FOREGROUND_SERVICE_SPECIAL_USE
+                    Manifest.permission.INTERNET
                 ) != PackageManager.PERMISSION_GRANTED ||
                 ActivityCompat.checkSelfPermission(
                     this,
-                    Manifest.permission.FOREGROUND_SERVICE_DATA_SYNC
+                    Manifest.permission.ACCESS_NETWORK_STATE
                 ) != PackageManager.PERMISSION_GRANTED
             ) {
-                Log.e(TAG, "Foreground service permissions not granted")
+                Log.e(TAG, "Basic network permissions not granted")
                 return false
             }
-        } else {
-            // For older Android versions, only check basic foreground service permission
-            if (ActivityCompat.checkSelfPermission(
-                    this,
-                    Manifest.permission.FOREGROUND_SERVICE
-                ) != PackageManager.PERMISSION_GRANTED
-            ) {
-                Log.e(TAG, "Foreground service permission not granted")
-                return false
-            }
-        }
 
-        return true
+            return true
+        } catch (e: Exception) {
+            Log.e(TAG, "Error checking permissions: ${e.message}")
+            return false
+        }
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -407,9 +440,17 @@ class ScreenTimeService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         try {
-            updateJob?.cancel()
+            // Cancel the job gracefully
+            updateJob?.let { job ->
+                if (job.isActive) {
+                    job.cancel()
+                }
+            }
             scope.cancel()
-            unregisterReceiver(screenOnReceiver)
+            if (isReceiverRegistered) {
+                unregisterReceiver(screenOnReceiver)
+                isReceiverRegistered = false
+            }
             networkCallback?.let { connectivityManager.unregisterNetworkCallback(it) }
         } catch (e: Exception) {
             Log.e(TAG, "Error in onDestroy", e)
@@ -424,7 +465,19 @@ class ScreenTimeService : Service() {
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error in onStartCommand: ${e.message}")
+            // Try to restart the service if it fails
+            stopSelf()
+            startService(Intent(this, ScreenTimeService::class.java))
         }
         return START_STICKY
+    }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        Log.d(TAG, "Task removed, restarting service")
+        // Restart the service if it gets killed
+        val restartServiceIntent = Intent(applicationContext, ScreenTimeService::class.java)
+        restartServiceIntent.setPackage(packageName)
+        startService(restartServiceIntent)
     }
 } 
