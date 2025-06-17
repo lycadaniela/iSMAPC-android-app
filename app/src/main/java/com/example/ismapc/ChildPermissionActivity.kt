@@ -35,6 +35,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import android.util.Log
 import androidx.compose.ui.graphics.Color
 import android.os.Build
+import android.os.PowerManager
 
 class ChildPermissionActivity : ComponentActivity() {
     companion object {
@@ -152,6 +153,35 @@ class ChildPermissionActivity : ComponentActivity() {
     }
 
     private fun checkUsageStatsAndProceed() {
+        if (checkUsageStatsPermission()) {
+            checkBatteryOptimizationAndProceed()
+        }
+    }
+
+    private fun checkBatteryOptimizationAndProceed() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+            if (!powerManager.isIgnoringBatteryOptimizations(packageName)) {
+                currentPermissionStep = 3
+                return
+            }
+        }
+        checkOverlayAndProceed()
+    }
+
+    private fun checkUsageStatsPermission(): Boolean {
+        try {
+            val appOps = getSystemService(APP_OPS_SERVICE) as AppOpsManager
+            val mode = appOps.checkOpNoThrow(
+                AppOpsManager.OPSTR_GET_USAGE_STATS,
+                android.os.Process.myUid(),
+                packageName
+            )
+            return mode == AppOpsManager.MODE_ALLOWED
+        } catch (e: Exception) {
+            Log.e("ChildPermissionActivity", "Error checking usage stats: ${e.message}")
+            return false
+        }
     }
 
     private fun checkOverlayAndProceed() {
@@ -180,21 +210,6 @@ class ChildPermissionActivity : ComponentActivity() {
             }
         } catch (e: Exception) {
             Log.e("ChildPermissionActivity", "Error checking permissions: ${e.message}")
-        }
-    }
-
-    private fun checkUsageStatsPermission(): Boolean {
-        try {
-            val appOps = getSystemService(APP_OPS_SERVICE) as AppOpsManager
-            val mode = appOps.checkOpNoThrow(
-                AppOpsManager.OPSTR_GET_USAGE_STATS,
-                android.os.Process.myUid(),
-                packageName
-            )
-            return mode == AppOpsManager.MODE_ALLOWED
-        } catch (e: Exception) {
-            Log.e("ChildPermissionActivity", "Error checking usage stats: ${e.message}")
-            return false
         }
     }
 
@@ -229,6 +244,17 @@ class ChildPermissionActivity : ComponentActivity() {
         }
     }
 
+    fun openBatteryOptimizationSettings() {
+        currentPermissionStep = 3
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val intent = Intent().apply {
+                action = Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
+                data = Uri.parse("package:$packageName")
+            }
+            startActivity(intent)
+        }
+    }
+
     override fun onResume() {
         super.onResume()
         // Remove the permission checking here since it's handled by the periodic check
@@ -242,6 +268,7 @@ fun ChildPermissionScreen(activity: ChildPermissionActivity) {
     var currentStep by remember { mutableStateOf(0) }
     var hasLocationPermission by remember { mutableStateOf(false) }
     var hasUsagePermission by remember { mutableStateOf(false) }
+    var hasBatteryOptimization by remember { mutableStateOf(false) }
     var hasOverlayPermission by remember { mutableStateOf(false) }
     var allPermissionsGranted by remember { mutableStateOf(false) }
 
@@ -267,11 +294,19 @@ fun ChildPermissionScreen(activity: ChildPermissionActivity) {
             )
             hasUsagePermission = mode == AppOpsManager.MODE_ALLOWED
 
+            // Check battery optimization
+            hasBatteryOptimization = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+                powerManager.isIgnoringBatteryOptimizations(context.packageName)
+            } else {
+                true
+            }
+
             // Check overlay permission
             hasOverlayPermission = Settings.canDrawOverlays(context)
 
             // Check if all permissions are granted
-            allPermissionsGranted = hasLocationPermission && hasUsagePermission && hasOverlayPermission
+            allPermissionsGranted = hasLocationPermission && hasUsagePermission && hasBatteryOptimization && hasOverlayPermission
         } catch (e: Exception) {
             Log.e("ChildPermissionScreen", "Error checking permissions: ${e.message}")
         }
@@ -299,7 +334,7 @@ fun ChildPermissionScreen(activity: ChildPermissionActivity) {
     ) {
         // Progress indicator
         LinearProgressIndicator(
-            progress = (currentStep + 1) / 3f,
+            progress = (currentStep + 1) / 4f,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = 32.dp),
@@ -348,7 +383,13 @@ fun ChildPermissionScreen(activity: ChildPermissionActivity) {
                     activity.openUsageAccessSettings()
                 }
             )
-            2 -> OverlayPermissionStep(
+            2 -> BatteryOptimizationStep(
+                isGranted = hasBatteryOptimization,
+                onGrant = {
+                    activity.openBatteryOptimizationSettings()
+                }
+            )
+            3 -> OverlayPermissionStep(
                 isGranted = hasOverlayPermission,
                 onGrant = {
                     activity.openOverlaySettings()
@@ -378,7 +419,7 @@ fun ChildPermissionScreen(activity: ChildPermissionActivity) {
 
             Button(
                 onClick = { 
-                    if (currentStep == 2) {
+                    if (currentStep == 3) {
                         // Check if all permissions are granted before finishing
                         if (allPermissionsGranted) {
                             activity.finish()
@@ -390,14 +431,15 @@ fun ChildPermissionScreen(activity: ChildPermissionActivity) {
                 enabled = when (currentStep) {
                     0 -> hasLocationPermission
                     1 -> hasUsagePermission
-                    2 -> hasOverlayPermission
+                    2 -> hasBatteryOptimization
+                    3 -> hasOverlayPermission
                     else -> false
                 },
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color(0xFFE0852D)
                 )
             ) {
-                Text(if (currentStep == 2) "Finish" else "Next")
+                Text(if (currentStep == 3) "Finish" else "Next")
             }
         }
     }
@@ -426,6 +468,20 @@ fun UsageAccessStep(
         title = "Usage Access",
         description = "This permission helps monitor your app usage and screen time. It allows your parents to see how much time you spend on different apps.",
         icon = Icons.Outlined.Info,
+        isGranted = isGranted,
+        onGrant = onGrant
+    )
+}
+
+@Composable
+fun BatteryOptimizationStep(
+    isGranted: Boolean,
+    onGrant: () -> Unit
+) {
+    PermissionStep(
+        title = "Battery Optimization",
+        description = "This permission ensures the app can track screen time even when the device is in battery saving mode. It helps maintain accurate usage monitoring.",
+        icon = Icons.Outlined.BatteryChargingFull,
         isGranted = isGranted,
         onGrant = onGrant
     )
