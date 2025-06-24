@@ -36,6 +36,8 @@ import android.util.Log
 import androidx.compose.ui.graphics.Color
 import android.os.Build
 import android.os.PowerManager
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.window.Dialog
 
 class ChildPermissionActivity : ComponentActivity() {
     companion object {
@@ -271,6 +273,7 @@ fun ChildPermissionScreen(activity: ChildPermissionActivity) {
     var hasBatteryOptimization by remember { mutableStateOf(false) }
     var hasOverlayPermission by remember { mutableStateOf(false) }
     var allPermissionsGranted by remember { mutableStateOf(false) }
+    var showRestartPopup by remember { mutableStateOf(false) }
 
     // Update current step when activity's step changes
     LaunchedEffect(activity.currentPermissionStep) {
@@ -322,6 +325,13 @@ fun ChildPermissionScreen(activity: ChildPermissionActivity) {
         while (!allPermissionsGranted) {
             checkAllPermissions()
             kotlinx.coroutines.delay(500) // Check every 500ms
+        }
+    }
+
+    // Show restart popup when all permissions are granted
+    LaunchedEffect(allPermissionsGranted) {
+        if (allPermissionsGranted) {
+            showRestartPopup = true
         }
     }
 
@@ -442,6 +452,16 @@ fun ChildPermissionScreen(activity: ChildPermissionActivity) {
                 Text(if (currentStep == 3) "Finish" else "Next")
             }
         }
+    }
+
+    // Show restart popup when all permissions are granted
+    if (showRestartPopup) {
+        RestartPopup(
+            onDismiss = {
+                showRestartPopup = false
+                activity.finish()
+            }
+        )
     }
 }
 
@@ -575,6 +595,67 @@ fun PermissionStep(
                     if (isGranted) "Granted" else "Grant Permission",
                     color = Color.White
                 )
+            }
+        }
+    }
+}
+
+@Composable
+fun RestartPopup(
+    onDismiss: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            shape = MaterialTheme.shapes.medium,
+            color = MaterialTheme.colorScheme.surface
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // Success Icon
+                Icon(
+                    imageVector = Icons.Default.CheckCircle,
+                    contentDescription = "Success",
+                    tint = Color(0xFF4CAF50),
+                    modifier = Modifier
+                        .size(64.dp)
+                        .padding(bottom = 16.dp)
+                )
+                
+                Text(
+                    text = "All Permissions Granted!",
+                    style = MaterialTheme.typography.titleLarge,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+                
+                Text(
+                    text = "To make all permissions work properly, please close the app and open it again. This is a one-time thing only.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    textAlign = TextAlign.Center,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 24.dp)
+                )
+                
+                Button(
+                    onClick = onDismiss,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFE0852D)
+                    )
+                ) {
+                    Text(
+                        "Got it!",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                }
             }
         }
     }

@@ -39,6 +39,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import coil.compose.AsyncImage
@@ -60,6 +61,7 @@ class ChildSignUpActivity : ComponentActivity() {
     private lateinit var profilePictureManager: ProfilePictureManager
     private val RC_SIGN_IN = 9001
     private var showParentEmailDialog by mutableStateOf(false)
+    private var showParentSignInPopup by mutableStateOf(false)
     private var pendingGoogleToken: String? = null
     private var parentEmail: String? = null
     private var selectedImageUri: Uri? = null
@@ -78,6 +80,27 @@ class ChildSignUpActivity : ComponentActivity() {
                                 modifier = Modifier.fillMaxSize(),
                                 color = MaterialTheme.colorScheme.background
                             ) {
+                                if (showParentEmailDialog) {
+                                    ParentEmailDialog(
+                                        onDismiss = { showParentEmailDialog = false },
+                                        onConfirm = { email ->
+                                            showParentEmailDialog = false
+                                            pendingGoogleToken?.let { token ->
+                                                firebaseAuthWithGoogle(token, email)
+                                            }
+                                        }
+                                    )
+                                }
+                                
+                                if (showParentSignInPopup) {
+                                    ParentSignInPopup(
+                                        onDismiss = {
+                                            showParentSignInPopup = false
+                                            finish()
+                                        }
+                                    )
+                                }
+                                
                                 ChildSignUpScreen(
                                     onBack = { finish() },
                                     onImageSelect = { openImagePicker() },
@@ -113,8 +136,8 @@ class ChildSignUpActivity : ComponentActivity() {
                                                                 Log.d("ChildSignUp", "Child profile created successfully")
                                                                 // Sign out the child account
                                                                 auth.signOut()
-                                                                // Return to parent dashboard
-                                                                finish()
+                                                                // Show popup to inform parent to sign in and out
+                                                                showParentSignInPopup = true
                                                             }
                                                             .addOnFailureListener { e ->
                                                                 Log.e("ChildSignUp", "Error creating child profile", e)
@@ -184,6 +207,15 @@ class ChildSignUpActivity : ComponentActivity() {
                         )
                     }
                     
+                    if (showParentSignInPopup) {
+                        ParentSignInPopup(
+                            onDismiss = {
+                                showParentSignInPopup = false
+                                finish()
+                            }
+                        )
+                    }
+                    
                     ChildSignUpScreen(
                         onBack = { finish() },
                         onImageSelect = { openImagePicker() },
@@ -219,8 +251,8 @@ class ChildSignUpActivity : ComponentActivity() {
                                                     Log.d("ChildSignUp", "Child profile created successfully")
                                                     // Sign out the child account
                                                     auth.signOut()
-                                                    // Return to parent dashboard
-                                                    finish()
+                                                    // Show popup to inform parent to sign in and out
+                                                    showParentSignInPopup = true
                                                 }
                                                 .addOnFailureListener { e ->
                                                     Log.e("ChildSignUp", "Error creating child profile", e)
@@ -301,8 +333,8 @@ class ChildSignUpActivity : ComponentActivity() {
                             .addOnSuccessListener {
                                 // Sign out the child account
                                 auth.signOut()
-                                // Return to parent dashboard
-                                finish()
+                                // Show popup to inform parent to sign in and out
+                                showParentSignInPopup = true
                             }
                             .addOnFailureListener { e ->
                                 Toast.makeText(this, "Failed to save user data: ${e.message}", Toast.LENGTH_LONG).show()
@@ -388,6 +420,67 @@ fun ParentEmailDialog(
                     ) {
                         Text("Continue")
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ParentSignInPopup(
+    onDismiss: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            shape = MaterialTheme.shapes.medium,
+            color = MaterialTheme.colorScheme.surface
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // Success Icon
+                Icon(
+                    imageVector = Icons.Default.CheckCircle,
+                    contentDescription = "Success",
+                    tint = Color(0xFF4CAF50),
+                    modifier = Modifier
+                        .size(64.dp)
+                        .padding(bottom = 16.dp)
+                )
+                
+                Text(
+                    text = "Child Account Created Successfully!",
+                    style = MaterialTheme.typography.titleLarge,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+                
+                Text(
+                    text = "To ensure all functions work properly, please sign out and sign back in to your parent account.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    textAlign = TextAlign.Center,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 24.dp)
+                )
+                
+                Button(
+                    onClick = onDismiss,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFE0852D)
+                    )
+                ) {
+                    Text(
+                        "Got it!",
+                        style = MaterialTheme.typography.titleMedium
+                    )
                 }
             }
         }
