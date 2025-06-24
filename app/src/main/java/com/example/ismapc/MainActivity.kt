@@ -534,6 +534,8 @@ fun ParentMainScreen(onLogout: () -> Unit) {
     var showSettingsMenu by remember { mutableStateOf(false) }
     var showDeleteAccountDialog by remember { mutableStateOf(false) }
     var isDeletingAccount by remember { mutableStateOf(false) }
+    var showDeleteChildDialog by remember { mutableStateOf(false) }
+    var selectedChildToDelete by remember { mutableStateOf<String?>(null) }
 
     // Function to delete parent account and associated child accounts
     fun deleteParentAccount() {
@@ -1217,140 +1219,8 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                                         IconButton(
                                             onClick = {
                                                 val childId = child["documentId"] as String
-                                                val batch = FirebaseFirestore.getInstance().batch()
-                                                val firestore = FirebaseFirestore.getInstance()
-                                                val auth = FirebaseAuth.getInstance()
-
-                                                // First verify that the current user is a parent
-                                                firestore.collection(MainActivity.USERS_COLLECTION)
-                                                    .document(MainActivity.PARENTS_COLLECTION)
-                                                    .collection(auth.currentUser?.uid ?: "")
-                                                    .document(MainActivity.PROFILE_DOCUMENT)
-                                                    .get()
-                                                    .addOnSuccessListener { parentDoc ->
-                                                        if (!parentDoc.exists()) {
-                                                            Toast.makeText(context, "Error: You don't have permission to delete this account", Toast.LENGTH_SHORT).show()
-                                                            return@addOnSuccessListener
-                                                        }
-
-                                                        // Create a deletion request document
-                                                        val deletionRequest = hashMapOf(
-                                                            "childId" to childId,
-                                                            "parentId" to auth.currentUser?.uid,
-                                                            "parentEmail" to auth.currentUser?.email,
-                                                            "childName" to (child["fullName"] as? String ?: "Unknown"),
-                                                            "childEmail" to (child["email"] as? String ?: "Unknown"),
-                                                            "requestedAt" to FieldValue.serverTimestamp(),
-                                                            "status" to "pending",
-                                                            "type" to "child_account_deletion",
-                                                            "verificationData" to hashMapOf(
-                                                                "parentName" to (parentDoc.getString("fullName") ?: "Unknown"),
-                                                                "parentPhone" to (parentDoc.getString("phoneNumber") ?: "Unknown"),
-                                                                "requestSource" to "parent_dashboard",
-                                                                "deviceInfo" to hashMapOf(
-                                                                    "model" to Build.MODEL,
-                                                                    "manufacturer" to Build.MANUFACTURER,
-                                                                    "androidVersion" to Build.VERSION.RELEASE
-                                                                )
-                                                            )
-                                                        )
-
-                                                        // Add the deletion request to a special collection
-                                                        firestore.collection("deletionRequests")
-                                                            .document(childId)
-                                                            .set(deletionRequest)
-                                                            .addOnSuccessListener {
-                                                                Log.d("ChildDeletion", "Deletion request created successfully for child: ${child["fullName"]}")
-                                                                
-                                                                // Delete child's profile
-                                                                val profileRef = firestore
-                                                                    .collection(MainActivity.USERS_COLLECTION)
-                                                                    .document(MainActivity.CHILD_COLLECTION)
-                                                                    .collection("profile")
-                                                                    .document(childId)
-                                                                batch.delete(profileRef)
-
-                                                                // Delete child's data from other collections
-                                                                val collectionsToDelete = listOf(
-                                                                    "screenTime",
-                                                                    "locations",
-                                                                    "installedApps",
-                                                                    "lockedApps",
-                                                                    "contentFiltering",
-                                                                    "contentToFilter",
-                                                                    "deviceLocks",
-                                                                    "appUsage"
-                                                                )
-
-                                                                // Create a list to track all async operations
-                                                                val deleteOperations = mutableListOf<Task<QuerySnapshot>>()
-
-                                                                collectionsToDelete.forEach { collectionName ->
-                                                                    try {
-                                                                        // Delete documents where childId matches
-                                                                        val queryTask = firestore.collection(collectionName)
-                                                                            .whereEqualTo("childId", childId)
-                                                                            .get()
-                                                                            .addOnSuccessListener { docs ->
-                                                                                docs.forEach { doc ->
-                                                                                    batch.delete(doc.reference)
-                                                                                }
-                                                                            }
-                                                                            .addOnFailureListener { e ->
-                                                                                Log.w("ChildDeletion", "Error querying collection $collectionName: ${e.message}")
-                                                                            }
-                                                                        deleteOperations.add(queryTask)
-
-                                                                        // Also delete documents where the document ID is the childId
-                                                                        batch.delete(firestore.collection(collectionName).document(childId))
-                                                                    } catch (e: Exception) {
-                                                                        Log.w("ChildDeletion", "Error processing collection $collectionName: ${e.message}")
-                                                                    }
-                                                                }
-
-                                                                // Wait for all queries to complete before committing the batch
-                                                                Tasks.whenAll(deleteOperations)
-                                                                    .addOnSuccessListener {
-                                                                        // Now commit the batch
-                                                                        batch.commit()
-                                                                            .addOnSuccessListener {
-                                                                                Toast.makeText(context, "Child account deletion request submitted. The account will be permanently deleted within 24 hours.", Toast.LENGTH_LONG).show()
-                                                                            }
-                                                                            .addOnFailureListener { e ->
-                                                                                Log.e("ChildDeletion", "Error committing batch: ${e.message}")
-                                                                                if (e.message?.contains("permission denied") == true) {
-                                                                                    Toast.makeText(context, "Error: You don't have permission to delete this account", Toast.LENGTH_SHORT).show()
-                                                                                } else {
-                                                                                    Toast.makeText(context, "Error deleting child account: ${e.message}", Toast.LENGTH_SHORT).show()
-                                                                                }
-                                                                            }
-                                                                    }
-                                                                    .addOnFailureListener { e ->
-                                                                        Log.e("ChildDeletion", "Error preparing deletion: ${e.message}")
-                                                                        // Even if some queries failed, try to commit the batch anyway
-                                                                        batch.commit()
-                                                                            .addOnSuccessListener {
-                                                                                Toast.makeText(context, "Child account deletion request submitted with some warnings", Toast.LENGTH_LONG).show()
-                                                                            }
-                                                                            .addOnFailureListener { commitError ->
-                                                                                Log.e("ChildDeletion", "Error committing batch after query failures: ${commitError.message}")
-                                                                                if (commitError.message?.contains("permission denied") == true) {
-                                                                                    Toast.makeText(context, "Error: You don't have permission to delete this account", Toast.LENGTH_SHORT).show()
-                                                                                } else {
-                                                                                    Toast.makeText(context, "Error deleting child account: ${commitError.message}", Toast.LENGTH_SHORT).show()
-                                                                                }
-                                                                            }
-                                                                    }
-                                                            }
-                                                            .addOnFailureListener { e ->
-                                                                Log.e("ChildDeletion", "Error creating deletion request: ${e.message}")
-                                                                Toast.makeText(context, "Error submitting deletion request: ${e.message}", Toast.LENGTH_SHORT).show()
-                                                            }
-                                                    }
-                                                    .addOnFailureListener { e ->
-                                                        Log.e("ChildDeletion", "Error verifying parent status: ${e.message}")
-                                                        Toast.makeText(context, "Error: Unable to verify permissions", Toast.LENGTH_SHORT).show()
-                                                    }
+                                                selectedChildToDelete = childId
+                                                showDeleteChildDialog = true
                                             }
                                         ) {
                                             Icon(
@@ -1476,6 +1346,194 @@ fun ParentMainScreen(onLogout: () -> Unit) {
                     onClick = {
                         if (!isDeletingAccount) {
                             showDeleteAccountDialog = false
+                        }
+                    },
+                    enabled = !isDeletingAccount
+                ) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Child Delete Confirmation Dialog
+    if (showDeleteChildDialog && selectedChildToDelete != null) {
+        AlertDialog(
+            onDismissRequest = {
+                if (!isDeletingAccount) {
+                    showDeleteChildDialog = false
+                    selectedChildToDelete = null
+                }
+            },
+            title = {
+                Text(
+                    "Delete Child Account",
+                    style = MaterialTheme.typography.headlineSmall
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        "Are you sure you want to delete this child account? This action cannot be undone and will:",
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        "• Delete this child's account",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    Text(
+                        "• Permanently delete all data for this child",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        "Note: The account will be permanently deleted within 24 hours after submitting the request.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        // Run the original child deletion logic for selectedChildToDelete
+                        val childId = selectedChildToDelete
+                        if (childId != null) {
+                            val batch = FirebaseFirestore.getInstance().batch()
+                            val firestore = FirebaseFirestore.getInstance()
+                            val auth = FirebaseAuth.getInstance()
+                            firestore.collection(MainActivity.USERS_COLLECTION)
+                                .document(MainActivity.PARENTS_COLLECTION)
+                                .collection(auth.currentUser?.uid ?: "")
+                                .document(MainActivity.PROFILE_DOCUMENT)
+                                .get()
+                                .addOnSuccessListener { parentDoc ->
+                                    if (!parentDoc.exists()) {
+                                        Toast.makeText(context, "Error: You don't have permission to delete this account", Toast.LENGTH_SHORT).show()
+                                        showDeleteChildDialog = false
+                                        selectedChildToDelete = null
+                                        return@addOnSuccessListener
+                                    }
+                                    val deletionRequest = hashMapOf(
+                                        "childId" to childId,
+                                        "parentId" to auth.currentUser?.uid,
+                                        "parentEmail" to auth.currentUser?.email,
+                                        "childName" to (childrenData.find { it["documentId"] == childId }?.get("fullName") as? String ?: "Unknown"),
+                                        "childEmail" to (childrenData.find { it["documentId"] == childId }?.get("email") as? String ?: "Unknown"),
+                                        "requestedAt" to FieldValue.serverTimestamp(),
+                                        "status" to "pending",
+                                        "type" to "child_account_deletion",
+                                        "verificationData" to hashMapOf(
+                                            "parentName" to (parentDoc.getString("fullName") ?: "Unknown"),
+                                            "parentPhone" to (parentDoc.getString("phoneNumber") ?: "Unknown"),
+                                            "requestSource" to "parent_dashboard",
+                                            "deviceInfo" to hashMapOf(
+                                                "model" to Build.MODEL,
+                                                "manufacturer" to Build.MANUFACTURER,
+                                                "androidVersion" to Build.VERSION.RELEASE
+                                            )
+                                        )
+                                    )
+                                    firestore.collection("deletionRequests")
+                                        .document(childId)
+                                        .set(deletionRequest)
+                                        .addOnSuccessListener {
+                                            Log.d("ChildDeletion", "Deletion request created successfully for child: $childId")
+                                            val profileRef = firestore
+                                                .collection(MainActivity.USERS_COLLECTION)
+                                                .document(MainActivity.CHILD_COLLECTION)
+                                                .collection("profile")
+                                                .document(childId)
+                                            batch.delete(profileRef)
+                                            val collectionsToDelete = listOf(
+                                                "screenTime",
+                                                "locations",
+                                                "installedApps",
+                                                "lockedApps",
+                                                "contentFiltering",
+                                                "contentToFilter",
+                                                "deviceLocks",
+                                                "appUsage"
+                                            )
+                                            val deleteOperations = mutableListOf<Task<QuerySnapshot>>()
+                                            collectionsToDelete.forEach { collectionName ->
+                                                try {
+                                                    val queryTask = firestore.collection(collectionName)
+                                                        .whereEqualTo("childId", childId)
+                                                        .get()
+                                                        .addOnSuccessListener { docs ->
+                                                            docs.forEach { doc ->
+                                                                batch.delete(doc.reference)
+                                                            }
+                                                        }
+                                                        .addOnFailureListener { e ->
+                                                            Log.w("ChildDeletion", "Error querying collection $collectionName: ${e.message}")
+                                                        }
+                                                    deleteOperations.add(queryTask)
+                                                    batch.delete(firestore.collection(collectionName).document(childId))
+                                                } catch (e: Exception) {
+                                                    Log.w("ChildDeletion", "Error processing collection $collectionName: ${e.message}")
+                                                }
+                                            }
+                                            Tasks.whenAll(deleteOperations)
+                                                .addOnSuccessListener {
+                                                    batch.commit()
+                                                        .addOnSuccessListener {
+                                                            Toast.makeText(context, "Child account deletion request submitted. The account will be permanently deleted within 24 hours.", Toast.LENGTH_LONG).show()
+                                                            showDeleteChildDialog = false
+                                                            selectedChildToDelete = null
+                                                        }
+                                                        .addOnFailureListener { e ->
+                                                            Log.e("ChildDeletion", "Error committing batch: ${e.message}")
+                                                            Toast.makeText(context, "Error deleting child account: ${e.message}", Toast.LENGTH_SHORT).show()
+                                                        }
+                                                }
+                                                .addOnFailureListener { e ->
+                                                    Log.e("ChildDeletion", "Error preparing deletion: ${e.message}")
+                                                    batch.commit()
+                                                        .addOnSuccessListener {
+                                                            Toast.makeText(context, "Child account deletion request submitted", Toast.LENGTH_LONG).show()
+                                                            showDeleteChildDialog = false
+                                                            selectedChildToDelete = null
+                                                        }
+                                                        .addOnFailureListener { commitError ->
+                                                            Log.e("ChildDeletion", "Error committing batch after query failures: ${commitError.message}")
+                                                            Toast.makeText(context, "Error deleting child account: ${commitError.message}", Toast.LENGTH_SHORT).show()
+                                                        }
+                                                }
+                                        }
+                                        .addOnFailureListener { e ->
+                                            Log.e("ChildDeletion", "Error creating deletion request: ${e.message}")
+                                            Toast.makeText(context, "Error submitting deletion request: ${e.message}", Toast.LENGTH_SHORT).show()
+                                            showDeleteChildDialog = false
+                                            selectedChildToDelete = null
+                                        }
+                                }
+                                .addOnFailureListener { e ->
+                                    Log.e("ChildDeletion", "Error verifying parent status: ${e.message}")
+                                    Toast.makeText(context, "Error: Unable to verify permissions", Toast.LENGTH_SHORT).show()
+                                    showDeleteChildDialog = false
+                                    selectedChildToDelete = null
+                                }
+                        }
+                    },
+                    enabled = !isDeletingAccount
+                ) {
+                    Text(
+                        "Delete Child Account",
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        if (!isDeletingAccount) {
+                            showDeleteChildDialog = false
+                            selectedChildToDelete = null
                         }
                     },
                     enabled = !isDeletingAccount
