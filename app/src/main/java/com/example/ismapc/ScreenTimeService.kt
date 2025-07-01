@@ -202,60 +202,47 @@ class ScreenTimeService : Service() {
         calendar.set(Calendar.MILLISECOND, 0)
         val startOfDay = calendar.timeInMillis
 
-        Log.d(TAG, "⏰ DAILY RESET CHECK: Calculating screen time from ${Date(startOfDay)} to ${Date(currentTime)}")
+        Log.d(TAG, "⏰ DAILY RESET CHECK: Calculating screen time from "+Date(startOfDay)+" to "+Date(currentTime))
 
         try {
-            // CRITICAL FIX: Only query events from today, not all usage stats
-            // This ensures we're only counting today's screen time
             val events = usageStatsManager.queryEvents(startOfDay, currentTime)
-            
             if (events != null && events.hasNextEvent()) {
                 var totalTime = 0L
+                var deviceInUse = false
+                var sessionStart = 0L
+                val foregroundApps = mutableSetOf<String>()
                 val event = UsageEvents.Event()
-                val lastEventTime = mutableMapOf<String, Long>()
-                val lastEventType = mutableMapOf<String, Int>()
-                
-                Log.d(TAG, "Processing ONLY today's events for accurate screen time")
-                
+
                 while (events.hasNextEvent()) {
                     events.getNextEvent(event)
-                    
-                    val packageName = event.packageName
                     val eventTime = event.timeStamp
                     val eventType = event.eventType
-                    
-                    // Skip any events from before today
-                    if (eventTime < startOfDay) {
-                        continue
-                    }
-                    
-                    // Track foreground/background transitions to calculate actual usage time
-                    if (eventType == UsageEvents.Event.MOVE_TO_FOREGROUND || 
-                        eventType == UsageEvents.Event.MOVE_TO_BACKGROUND) {
-                        
-                        if (lastEventType[packageName] == UsageEvents.Event.MOVE_TO_FOREGROUND && 
-                            eventType == UsageEvents.Event.MOVE_TO_BACKGROUND) {
-                            
-                            val duration = eventTime - (lastEventTime[packageName] ?: eventTime)
-                            totalTime += duration
+                    val packageName = event.packageName
+
+                    if (eventTime < startOfDay) continue
+
+                    if (eventType == UsageEvents.Event.MOVE_TO_FOREGROUND) {
+                        foregroundApps.add(packageName)
+                        if (!deviceInUse) {
+                            deviceInUse = true
+                            sessionStart = eventTime
                         }
-                        
-                        lastEventTime[packageName] = eventTime
-                        lastEventType[packageName] = eventType
+                    } else if (eventType == UsageEvents.Event.MOVE_TO_BACKGROUND) {
+                        foregroundApps.remove(packageName)
+                        if (deviceInUse && foregroundApps.isEmpty()) {
+                            deviceInUse = false
+                            totalTime += (eventTime - sessionStart)
+                        }
                     }
                 }
-                
-                // Account for apps still in foreground
-                val currentlyInForeground = lastEventType.filter { it.value == UsageEvents.Event.MOVE_TO_FOREGROUND }
-                for ((packageName, _) in currentlyInForeground) {
-                    val foregroundStart = lastEventTime[packageName] ?: startOfDay
-                    if (foregroundStart >= startOfDay) {
-                        val duration = currentTime - foregroundStart
-                        totalTime += duration
-                    }
+                // If still in use at the end of the day, add up to now
+                if (deviceInUse) {
+                    totalTime += (currentTime - sessionStart)
                 }
-                
-                Log.d(TAG, "Total screen time calculated from events: ${totalTime / (1000 * 60)} minutes")
+                // Cap at 24 hours (just in case)
+                val maxMillis = 24 * 60 * 60 * 1000L
+                if (totalTime > maxMillis) totalTime = maxMillis
+                Log.d(TAG, "Total device screen time: "+(totalTime / (1000 * 60))+" minutes")
                 return totalTime
             } else {
                 Log.d(TAG, "No usage events found for today")

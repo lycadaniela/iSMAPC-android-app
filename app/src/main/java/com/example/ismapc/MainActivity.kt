@@ -460,7 +460,6 @@ class MainActivity : ComponentActivity() {
             if (userType == "child") {
                 Log.d("MainActivity", "Stopping child services in onDestroy")
                 stopService(Intent(this, LocationService::class.java))
-                stopService(Intent(this, ScreenTimeService::class.java))
                 stopService(Intent(this, AppLockService::class.java))
                 stopService(Intent(this, InstalledAppsService::class.java))
                 stopService(Intent(this, DeviceLockService::class.java))
