@@ -62,6 +62,7 @@ import android.os.Build
 import com.google.android.gms.tasks.Task
 import com.google.android.gms.tasks.Tasks
 import com.google.firebase.firestore.QuerySnapshot
+import androidx.work.WorkInfo
 
 class MainActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3Api::class)
@@ -277,6 +278,27 @@ class MainActivity : ComponentActivity() {
         } catch (e: Exception) {
             handleError("Error in onCreate", e)
         }
+
+        if (userType == "child") {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                scheduleLocationWorker(this)
+            } else {
+                val locationIntent = Intent(this, LocationService::class.java)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    startForegroundService(locationIntent)
+                } else {
+                    startService(locationIntent)
+                }
+            }
+        }
+
+        // Debug: Observe WorkManager status for 'location_worker'
+        WorkManager.getInstance(this).getWorkInfosForUniqueWorkLiveData("location_worker")
+            .observe(this) { workInfos ->
+                workInfos?.forEach { workInfo ->
+                    Log.d("WorkManagerStatus", "location_worker State: ${workInfo.state}")
+                }
+            }
     }
 
     private fun initializeUI() {
@@ -425,30 +447,12 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-
-        // Check if user is a child and restart services if needed
         if (userType == "child") {
-            val appOps = getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
-            val mode = appOps.checkOpNoThrow(
-                AppOpsManager.OPSTR_GET_USAGE_STATS,
-                Process.myUid(),
-                packageName
-            )
-
-            // Only start services if we have permissions
-            if (mode == AppOpsManager.MODE_ALLOWED) {
-                Log.d("MainActivity", "Child account resumed, ensuring services are running")
-                startAppUsageService()
-                startService(Intent(this, InstalledAppsService::class.java))
-
-                // Ensure DeviceLockService is running
-                val deviceLockIntent = Intent(this, DeviceLockService::class.java)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    startForegroundService(deviceLockIntent)
-                } else {
-                    startService(deviceLockIntent)
-                }
-                Log.d("MainActivity", "DeviceLockService restarted in onResume")
+            val locationIntent = Intent(this, LocationService::class.java)
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                startForegroundService(locationIntent)
+            } else {
+                startService(locationIntent)
             }
         }
     }
@@ -516,6 +520,16 @@ class MainActivity : ComponentActivity() {
         } catch (e: Exception) {
             Log.e("MainActivity", "Error scheduling content suggestion worker", e)
         }
+    }
+
+    fun scheduleLocationWorker(context: Context) {
+        val workRequest = PeriodicWorkRequestBuilder<LocationWorker>(15, TimeUnit.MINUTES)
+            .build()
+        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+            "location_worker",
+            androidx.work.ExistingPeriodicWorkPolicy.KEEP,
+            workRequest
+        )
     }
 }
 
