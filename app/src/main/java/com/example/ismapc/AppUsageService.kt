@@ -189,12 +189,15 @@ class AppUsageService : Service() {
                     val appInfo = packageManager.getApplicationInfo(packageName, 0)
                     val isSystemApp = (appInfo.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0
                     val appName = packageManager.getApplicationLabel(appInfo).toString()
-                    
                     val daily = TimeUnit.MILLISECONDS.toMinutes(dailyUsage[packageName] ?: 0)
                     val weekly = TimeUnit.MILLISECONDS.toMinutes(weeklyUsage[packageName] ?: 0)
-                    
-                    // Only include non-system apps with any usage
-                    if (!isSystemApp && (daily > 0 || weekly > 0)) {
+
+                    // Check if the app is launchable (has a launcher intent)
+                    val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
+                    val isLaunchable = launchIntent != null
+
+                    // Include non-system apps, and system apps that are launchable, if they have usage
+                    if (((!isSystemApp) || (isSystemApp && isLaunchable)) && (daily > 0 || weekly > 0)) {
                         result.add(
                             AppUsage(
                                 name = appName,
