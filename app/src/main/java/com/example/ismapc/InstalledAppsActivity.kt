@@ -41,6 +41,7 @@ import kotlinx.coroutines.tasks.await
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toArgb
 import androidx.core.graphics.drawable.toBitmap
+import android.content.Intent
 
 class InstalledAppsActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -68,7 +69,18 @@ class InstalledAppsActivity : ComponentActivity() {
                                 .await()
                             if (appsDoc.exists()) {
                                 @Suppress("UNCHECKED_CAST")
-                                installedApps = appsDoc.get("apps") as? List<Map<String, Any>> ?: emptyList()
+                                val allApps = appsDoc.get("apps") as? List<Map<String, Any>> ?: emptyList()
+                                // Get all launcher apps
+                                val mainIntent = Intent(Intent.ACTION_MAIN, null)
+                                mainIntent.addCategory(Intent.CATEGORY_LAUNCHER)
+                                val resolveInfos = packageManager.queryIntentActivities(mainIntent, 0)
+                                val launcherPackages = resolveInfos.map { it.activityInfo.packageName }.toSet()
+                                // Only show non-system apps and launchable system apps
+                                installedApps = allApps.filter { app ->
+                                    val packageName = app["packageName"] as? String ?: return@filter false
+                                    val isSystemApp = app["isSystemApp"] as? Boolean ?: false
+                                    !isSystemApp || (isSystemApp && launcherPackages.contains(packageName))
+                                }
                             }
                             // Fetch icons for all apps
                             val iconMap = mutableMapOf<String, ImageBitmap?>()
@@ -259,11 +271,10 @@ fun InstalledAppsScreen(
                         .padding(horizontal = 16.dp)
                 ) {
                     // Show locked apps count if there are any
-                    val lockedAppsCount = filteredApps.count { 
-                        !(it["isSystemApp"] as? Boolean ?: false) && 
+                    val lockedAppsCount = filteredApps.count {
                         lockedApps.contains(it["packageName"] as? String)
                     }
-                    
+
                     if (lockedAppsCount > 0) {
                         Text(
                             text = "Locked Apps ($lockedAppsCount)",
@@ -272,10 +283,9 @@ fun InstalledAppsScreen(
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(bottom = 8.dp)
                         )
-                        
-                        // Display locked apps first
-                        filteredApps.filter { 
-                            !(it["isSystemApp"] as? Boolean ?: false) && 
+
+                        // Display locked apps first (including system apps)
+                        filteredApps.filter {
                             lockedApps.contains(it["packageName"] as? String)
                         }.forEach { app ->
                             AppCard(
@@ -298,7 +308,7 @@ fun InstalledAppsScreen(
                                 }
                             )
                         }
-                        
+
                         // Add divider after locked apps section
                         Divider(
                             modifier = Modifier
@@ -308,18 +318,17 @@ fun InstalledAppsScreen(
                             thickness = 1.dp
                         )
                     }
-                    
+
                     Text(
-                        text = "All Apps (${filteredApps.count { !(it["isSystemApp"] as? Boolean ?: false) }})",
+                        text = "All Apps (${filteredApps.size})",
                         style = MaterialTheme.typography.titleLarge,
                         color = Color(0xFFE0852D),
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(bottom = 16.dp)
                     )
-                    
-                    // Display remaining apps
-                    filteredApps.filter { 
-                        !(it["isSystemApp"] as? Boolean ?: false) && 
+
+                    // Display remaining apps (including system apps)
+                    filteredApps.filter {
                         !lockedApps.contains(it["packageName"] as? String)
                     }.forEach { app ->
                         AppCard(
@@ -357,6 +366,7 @@ private fun AppCard(
 ) {
     val appName = app["appName"] as? String ?: ""
     val packageName = app["packageName"] as? String ?: ""
+    val isSystemApp = app["isSystemApp"] as? Boolean ?: false
     var isUpdating by remember { mutableStateOf(false) }
     
     Card(
@@ -408,11 +418,13 @@ private fun AppCard(
                         )
                     }
                 }
-                Text(
-                    text = appName,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+                Column {
+                    Text(
+                        text = appName,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = if (isSystemApp) Color(0xFF607D8B) else MaterialTheme.colorScheme.onSurface
+                    )
+                }
             }
             
             Button(
